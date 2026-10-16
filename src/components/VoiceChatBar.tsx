@@ -76,7 +76,7 @@ export const VoiceChatBar: React.FC<VoiceChatBarProps> = ({
                     <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                   )}
                 </div>
-                <span>Voice Chat</span>
+                <span className="hidden sm:inline">Voice Chat</span>
                 {peers.length > 0 && (
                   <span className="text-[10px] bg-emerald-900/90 text-emerald-200 px-1 rounded-full font-mono font-bold">
                     {peers.length}

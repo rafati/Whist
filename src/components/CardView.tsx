@@ -92,8 +92,8 @@ export const CardView: React.FC<CardViewProps> = ({
   // Proportional standard card dimensions (classic 1 : 1.4 ratio)
   const sizeClasses = {
     xs: 'w-7 h-10 sm:w-8 sm:h-11 rounded-sm sm:rounded-md',
-    sm: 'landscape-compact-trick-card w-12 h-17 sm:w-14 sm:h-20 md:w-16 md:h-23 rounded-lg sm:rounded-xl',
-    hand: 'landscape-compact-card w-13 h-19 sm:w-16 sm:h-23 md:w-20 md:h-28 lg:w-23 lg:h-33 rounded-lg sm:rounded-xl',
+    sm: 'portrait-trick-card landscape-compact-trick-card w-12 h-17 sm:w-14 sm:h-20 md:w-16 md:h-23 rounded-lg sm:rounded-xl',
+    hand: 'portrait-hand-card landscape-compact-card w-13 h-19 sm:w-16 sm:h-23 md:w-20 md:h-28 lg:w-23 lg:h-33 rounded-lg sm:rounded-xl',
     md: 'w-16 h-23 sm:w-20 sm:h-28 rounded-xl',
     lg: 'w-20 h-28 sm:w-28 sm:h-39 rounded-2xl',
     xl: 'w-28 h-39 sm:w-36 sm:h-50 rounded-2xl',

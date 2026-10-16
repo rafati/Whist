@@ -448,7 +448,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               {isCelebrated && (
                 <div
                   className={`absolute left-1/2 -translate-x-1/2 z-40 whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-150 ${
-                    isDeclarer ? '-top-9' : '-top-5'
+                    isTopSeat ? 'top-full mt-1.5' : isDeclarer ? '-top-9' : '-top-5'
                   }`}
                 >
                   <span className="bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-black text-[9px] px-2 py-0.5 rounded-full shadow-lg border border-white flex items-center gap-1 animate-pulse">
@@ -460,7 +460,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
               {/* Bid Speech Bubble During & After Bidding */}
               {gameState.phase === 'bidding' ? (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none">
+                <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none`}>
                   {isCurrentBidder ? (
                     <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow animate-pulse">
                       Bidding...
@@ -478,7 +478,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   ) : null}
                 </div>
               ) : (gameState.phase === 'playing' || gameState.phase === 'declaring') && isDeclarer && seatBid ? (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none">
+                <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none`}>
                   <span className="bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow flex items-center gap-0.5">
                     <Crown className="w-2.5 h-2.5 text-slate-950" />
                     <span>Declarer ({seatBid.level}{seatBid.contractType === 'NT' ? 'NT' : 'S'})</span>
@@ -606,26 +606,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
   return (
     <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#07130e] table-felt-radial flex flex-col text-slate-100 overflow-clip select-none relative">
-      {/* Mobile Portrait Orientation Prompt Overlay (Only visible on <768px in portrait) */}
-      <div className="mobile-portrait-overlay fixed inset-0 z-50 bg-[#06110c]/95 backdrop-blur-lg flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-950/90 border border-emerald-500/50 flex items-center justify-center mb-4 shadow-xl">
-          <Smartphone className="w-8 h-8 text-amber-400 animate-pulse -rotate-90" />
-        </div>
-        <h2 className="text-lg font-bold font-serif-display text-white mb-2">
-          Rotate Device to Landscape
-        </h2>
-        <p className="text-xs text-slate-300 max-w-xs leading-relaxed mb-6">
-          Royal Whist is designed for <strong className="text-emerald-300">Mobile Landscape</strong> so all 4 seats and your 13-card hand fit comfortably in a single row.
-        </p>
-        <button
-          onClick={onLeaveRoom}
-          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-emerald-800/50 text-emerald-300 text-xs font-semibold rounded-xl flex items-center gap-2 cursor-pointer"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Return to Lobby</span>
-        </button>
-      </div>
-
       {/* Slim, Always-Visible Top HUD Bar */}
       <header className="landscape-compact-header h-10 sm:h-11 shrink-0 border-b border-emerald-900/50 bg-[#0a2016]/95 backdrop-blur-md px-2 sm:px-4 flex items-center justify-between gap-2 shadow-md z-30">
         {/* Left: Leave / Table Menu + Room Title */}
@@ -679,9 +659,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 {contractTeam === 'TeamA' ? 'T1' : 'T2'}({gameState.winningBid?.level}
                 {gameState.winningBid?.contractType === 'NT' ? 'NT' : 'S'}): {contractTricksWon}/{contractGoalTricks}
               </span>
-              <span className="text-slate-600">|</span>
-              <span className="font-mono text-slate-300" title="Defending team tricks won vs. tricks needed to set contract">
-                Def: {defenseTricksWon}/{defenseSetGoalTricks}
+              <span className="hidden sm:inline">
+                <span className="text-slate-600"> | </span>
+                <span className="font-mono text-slate-300" title="Defending team tricks won vs. tricks needed to set contract">
+                  Def: {defenseTricksWon}/{defenseSetGoalTricks}
+                </span>
               </span>
               <span className="text-slate-600">|</span>
               <span className="font-mono text-emerald-400 font-bold" title="Current trick">
@@ -857,30 +839,30 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
         onClick={() => {
           if (selectedCardId) setSelectedCardId(null);
         }}
-        className="flex-1 min-h-0 relative flex items-center justify-center p-1 sm:p-1.5 overflow-clip"
+        className="portrait-table-container flex-1 min-h-0 relative flex items-center justify-center p-1 sm:p-1.5 overflow-clip"
       >
         {/* Table Stage: Rich Hardwood Rail Borders with Casino Green Felt */}
-        <div className="landscape-compact-table-wrap relative w-full max-w-5xl h-full md:aspect-[16/10] rounded-[24px] sm:rounded-[36px] md:rounded-[52px] table-wood-rail table-brass-bevel p-1 sm:p-2.5 md:p-3.5 shadow-2xl overflow-visible flex items-center justify-center">
+        <div className="portrait-table-wrap landscape-compact-table-wrap relative w-full max-w-5xl h-full md:aspect-[16/10] rounded-[24px] sm:rounded-[36px] md:rounded-[52px] table-wood-rail table-brass-bevel p-1 sm:p-2.5 md:p-3.5 shadow-2xl overflow-visible flex items-center justify-center">
           {/* Inner Casino Green Felt Surface */}
-          <div className="landscape-compact-felt w-full h-full rounded-[20px] sm:rounded-[30px] md:rounded-[44px] table-felt-radial table-felt-rim table-felt-stitch relative flex items-center justify-center p-1 sm:p-2 overflow-visible">
+          <div className="portrait-felt landscape-compact-felt w-full h-full rounded-[20px] sm:rounded-[30px] md:rounded-[44px] table-felt-radial table-felt-rim table-felt-stitch relative flex items-center justify-center p-1 sm:p-2 overflow-visible">
             {/* Cardinal Seats (Dynamically oriented with active player at the bottom) */}
             {renderSeat(
               topSeat,
-              `landscape-seat-top top-1 sm:top-1.5 left-1/2 -translate-x-1/2 ${
+              `portrait-seat-top landscape-seat-top top-1 sm:top-1.5 left-1/2 -translate-x-1/2 ${
                 gameState.phase !== 'playing' ? 'landscape-console-top-seat' : ''
               }`
             )}
-            {renderSeat(leftSeat, 'landscape-seat-left left-1 sm:left-2 top-1/2 -translate-y-1/2')}
+            {renderSeat(leftSeat, 'portrait-seat-left landscape-seat-left left-1 sm:left-2 top-1/2 -translate-y-1/2')}
             {renderSeat(
               bottomSeat,
               `bottom-1 sm:bottom-1.5 left-1/2 -translate-x-1/2 ${
                 mySeat ? 'landscape-hide-bottom-seat' : ''
               } ${gameState.phase !== 'playing' ? 'landscape-console-bottom-seat' : ''}`
             )}
-            {renderSeat(rightSeat, 'landscape-seat-right right-1 sm:right-2 top-1/2 -translate-y-1/2')}
+            {renderSeat(rightSeat, 'portrait-seat-right landscape-seat-right right-1 sm:right-2 top-1/2 -translate-y-1/2')}
 
             {/* Center Table Stage */}
-            <div className="landscape-compact-center-stage relative w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 lg:w-80 lg:h-80 rounded-full border border-emerald-600/20 bg-black/25 flex items-center justify-center p-1 overflow-visible">
+            <div className="portrait-center-stage landscape-compact-center-stage relative w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 lg:w-80 lg:h-80 rounded-full border border-emerald-600/20 bg-black/25 flex items-center justify-center p-1 overflow-visible">
               <div className="absolute inset-0 pointer-events-none opacity-20 flex items-center justify-center">
                 <div className="w-full h-full rounded-full border border-dashed border-emerald-400 animate-spin [animation-duration:60s]" />
               </div>
@@ -1093,8 +1075,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
         gameState.phase === 'declaring' ||
         gameState.phase === 'playing') &&
         mySeat && (
-          <footer className="landscape-compact-hand-footer shrink-0 w-full max-w-5xl mx-auto px-1.5 sm:px-3 pb-1 sm:pb-1.5 z-20">
-            <div className="landscape-compact-hand-box bg-slate-950/92 backdrop-blur-md border border-emerald-800/40 rounded-xl sm:rounded-2xl px-2 py-1 sm:p-2 shadow-2xl">
+          <footer className="portrait-hand-footer landscape-compact-hand-footer shrink-0 w-full max-w-5xl mx-auto px-1.5 sm:px-3 pb-1 sm:pb-1.5 z-20">
+            <div className="portrait-hand-box landscape-compact-hand-box bg-slate-950/92 backdrop-blur-md border border-emerald-800/40 rounded-xl sm:rounded-2xl px-1.5 sm:px-2 py-1 sm:p-2 shadow-2xl">
               {/* Compact Hand Status Header Row */}
               <div className="flex items-center justify-between text-xs px-1 mb-0.5">
                 <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
@@ -1203,7 +1185,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               </div>
 
               {/* 13-Card Single-Row Spread */}
-              <div className="landscape-compact-hand-row flex justify-center items-center pt-1.5 pb-0.5 overflow-visible min-h-[82px] sm:min-h-[100px] md:min-h-[118px] lg:min-h-[140px]">
+              <div className="portrait-hand-row landscape-compact-hand-row flex justify-center items-center pt-1.5 pb-0.5 overflow-visible min-h-[82px] sm:min-h-[100px] md:min-h-[118px] lg:min-h-[140px]">
                 {sortedMyHand.length === 0 ? (
                   <div className="text-xs text-slate-500 py-2">All cards played for this round.</div>
                 ) : (
@@ -1223,7 +1205,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                       <div
                         key={card.id}
                         className={`
-                          landscape-compact-card-slot transition-all relative shrink-0
+                          portrait-card-slot landscape-compact-card-slot transition-all relative shrink-0
                           ${idx !== 0 ? '-ml-5 sm:-ml-6 md:-ml-8 lg:-ml-9' : ''}
                           ${
                             isJustPlayed
