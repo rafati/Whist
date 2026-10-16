@@ -1,0 +1,141 @@
+# Functional Specification: Remix Online Multiplayer Card Game
+
+**Version:** 3.0  
+**Status:** Implemented & Verified  
+**Primary Engine:** [gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts), [server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts)
+
+---
+
+## 1. Feature: Room Management & Player Seating
+
+### 1.1 Purpose & Expected Users
+Enables human players and AI bots to assemble at virtual tables in 2-versus-2 partnerships. Accessible to authenticated Google users and guest players.
+
+### 1.2 Access & Workflow
+1. Users view the list of active public tables in [Lobby.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/Lobby.tsx).
+2. Users can create a table by submitting a table name via `POST /api/rooms`. The host is automatically seated at `South` (Team 1).
+3. Alternatively, an unseated user can join an existing room and select an open seat (`Team 1 • Sit Here` or `Team 2 • Sit Here`).
+4. **Sit & Fill Bots**: A user can click "Sit & Fill Bots" in [VirtualTable.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/VirtualTable.tsx). If unseated, the user is seated in the first available slot, and all remaining empty seats are populated with bot profiles (`Bot Polaris`, `Bot Zephyr`, `Bot Atlas`, `Bot Orion`).
+
+### 1.3 Validation & Rules
+* A seat cannot be claimed if occupied by another human player ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L488)).
+* If a human user is already seated in seat $S_1$ and claims seat $S_2$, $S_1$ is vacated automatically.
+* Automatic Start Trigger: Once all 4 seats are occupied, the room automatically transitions from `'waiting'` to `'bidding'`, and Phase 1 begins ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L509-L515)).
+
+---
+
+## 2. Feature: Phase 1 — The Deal
+
+### 2.1 Sequence of Operations
+1. Shuffles a standard 52-card deck using Fisher-Yates ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L124-L132)).
+2. Distributes 13 cards each to North, West, South, and East.
+3. Automatically sorts each player's hand by suit (`Spades` > `Hearts` > `Clubs` > `Diamonds`) and rank descending ($A, K, Q, J, 10, \dots, 2$) ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L135-L153)).
+4. **Dealer Selection**:
+   * Round 1: Randomized dealer selected from `['North', 'West', 'South', 'East']`.
+   * Subsequent Rounds: Dealer rotates counter-clockwise: `North` $\rightarrow$ `West` $\rightarrow$ `South` $\rightarrow$ `East` $\rightarrow$ `North`.
+5. The auction opening bidder is assigned to the player to the immediate right of the dealer (`getNextSeat(dealer)`).
+
+---
+
+## 3. Feature: Phase 2 — The Auction (Bidding)
+
+### 3.1 Purpose & Workflow
+Players bid to determine the contract level, contract type, and which partnership will be the Declarer.
+
+### 3.2 Turn Sequence & Mechanics
+* Exactly **4 turns** in counter-clockwise order:
+  * Turn 1: Player to right of dealer (`getNextSeat(dealer)`)
+  * Turn 2: Partner of opening bidder (`getNextSeat(turn1)`)
+  * Turn 3: Opponent (`getNextSeat(turn2)`)
+  * Turn 4: Dealer (`dealer`)
+* Current state tracked by `gameState.auctionTurnsCount` (0 through 3).
+
+### 3.3 Valid Bid Hierarchy
+A bid consists of a Level (1 through 7) and a Contract Type (`Suit` or `NT`):
+$$\text{Rank} = \text{Level} \times 2 + (\text{ContractType} == \text{'NT'} ? 1 : 0)$$
+
+Hierarchy: `1 Suit < 1 NT < 2 Suit < 2 NT < 3 Suit < 3 NT < ... < 7 Suit < 7 NT`
+
+### 3.4 Dealer Strategic Privileges (Turn 4)
+The dealer on turn 4 has special strategic options ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L196-L225)):
+1. **Pass**: Accepts the leading bid from turns 1–3.
+2. **Match Suit**: Matches the highest numeric level to claim a Suit contract without increasing the level (e.g., if highest bid is `2 NT`, dealer can declare `2 Suit` with `isDealerPrivilegeMatch: true`).
+3. **Match NT**: Matches the highest numeric level to claim No Trump.
+4. **Exceed**: Submits a strictly higher bid.
+
+### 3.5 Auction Conclusion
+* **All 4 Players Pass**: The cards are reshuffled and re-dealt with the dealer rotating counter-clockwise ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L272-L278)).
+* **Winning Bid**: The highest bidder becomes the **Declarer**.
+  * If winning bid is `Suit`: Game transitions to `declaring` (Phase 3).
+  * If winning bid is `NT`: Game sets `trumpSuit = 'NT'` and transitions directly to `playing` (Phase 4). The Declarer leads the first trick.
+
+---
+
+## 4. Feature: Phase 3 — Trump Suit Declaration
+
+### 4.1 Workflow
+* Rendered via [SuitDeclarationModal.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/SuitDeclarationModal.tsx).
+* Only the **Declarer** can select the trump suit (♠ Spades, ♥ Hearts, ♦ Diamonds, ♣ Clubs).
+* Other players see a waiting indicator displaying the Declarer's team.
+* Once submitted via `declare_trump`:
+  * `gameState.trumpSuit` is set.
+  * Game transitions to `playing` (Phase 4).
+  * **Opening Turn**: The player to the **immediate right of the Declarer** (`getNextSeat(declarer)`) receives the opening turn ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L311)).
+
+---
+
+## 5. Feature: Phase 4 — Trick Play
+
+### 5.1 Play Order & Mandatory Follow
+* Players take turns playing one card in counter-clockwise rotation.
+* **Mandatory Follow Rule** ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L228-L233)):
+  * If the player holds at least one card in the suit led by the trick leader, they **must** play a card of that suit.
+  * If void in the led suit, the player may play any card (trump or discard).
+
+### 5.2 Trick Evaluation & Timing
+When the 4th card lands in the trick ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L347-L380)):
+1. The server pauses input (`currentTurn = null`) and broadcasts the completed trick.
+2. The client executes visual animations:
+   * 4th card glide: 400ms (`CARD_PLAY_DURATION_MS`)
+   * Review delay: 750ms (`TRICK_REVIEW_DELAY_MS`)
+   * Sweep animation to winner seat: 550ms (`TRICK_COLLECT_DURATION_MS`)
+   * Celebration badge highlight: 1000ms (`WINNER_CELEBRATION_DURATION_MS`)
+3. The server evaluates the winner using `evaluateTrickWinner()` after `SERVER_TRICK_RESOLVE_DELAY_MS` (1850ms):
+   * Highest trump card wins (if trump played in Suit game).
+   * Otherwise, highest card of led suit wins.
+4. Trick winner is awarded $+1$ trick in `tricksWonCount[winner]` and `teamTricksWon[winnerTeam]`.
+5. The winner leads the next trick.
+
+---
+
+## 6. Feature: Phase 5 — Scoring Engine
+
+Triggered after all 13 tricks have been played ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L289-L394)):
+
+### 6.1 Suit Contracts
+Let $L = \text{Bid Level}$, Required Tricks $= 6 + L$:
+* **Contract Made** ($\text{Tricks} \ge 6 + L$):
+  $$\text{Contract Team Delta} = \text{TricksWon} - 6$$
+  $$\text{Defending Team Delta} = 0$$
+* **Contract Set / Failed** ($\text{Tricks} < 6 + L$):
+  $$\text{Contract Team Delta} = -L$$
+  $$\text{Defending Team Delta} = \max(0, \text{DefendingTricksWon} - 6)$$
+
+### 6.2 No Trump (NT) Contracts (Doubled)
+* **Contract Made** ($\text{Tricks} \ge 6 + L$):
+  $$\text{Contract Team Delta} = (L \times 2) + \max(0, \text{TricksWon} - (6 + L))$$
+  $$\text{Defending Team Delta} = 0$$
+* **Contract Set / Failed** ($\text{Tricks} < 6 + L$):
+  $$\text{Contract Team Delta} = -(L \times 2)$$
+  $$\text{Defending Over 6} = \max(0, \text{DefendingTricksWon} - 6)$$
+  $$\text{Defending Team Delta} = \min(\text{Defending Over 6}, L) \times 2 + \max(0, \text{Defending Over 6} - L) \times 1$$
+
+---
+
+## 7. Feature: Victory and Elimination Conditions
+
+Evaluated via `checkMatchEnd()` ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L400-L449)):
+* **Victory Condition**: Reaching $\ge +11$ match points.
+* **Elimination Condition**: Dropping to $\le -11$ match points.
+* **Priority Rule**: If both teams trigger conditions simultaneously, $+11$ Victory takes precedence over $-11$ Elimination. If both teams exceed $+11$, the team with the higher score wins; if exactly tied, Team 1 holds victory precedence.
+* **Game Over Modal**: Displays confetti, final scores, and offers "Start New Match" ([GameOverModal.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/GameOverModal.tsx)).

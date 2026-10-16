@@ -1,0 +1,1 @@
+{"name":"Remix Online Multiplayer Card Game","description":"Online 4-player partnership card game with Google Sign-In, counter-clockwise bidding and trick-taking, and scoring engine.","requestFramePermissions":["identity-credentials-get","microphone"],"majorCapabilities":["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]}

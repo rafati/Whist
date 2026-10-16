@@ -1,0 +1,103 @@
+{
+  "version": "3.5.3980",
+  "lastUpdated": "2026-10-07T19:19:43.980Z",
+  "totalSimulatedHands": 790697,
+  "totalMatchesTrained": 111695,
+  "biddingMatrix": {
+    "1_Suit": {
+      "minHCP": 8,
+      "minSuitLength": 5,
+      "empiricalWinRate": 0.82,
+      "empiricalEV": 2.5
+    },
+    "1_NT": {
+      "minHCP": 14,
+      "minSuitLength": 3,
+      "empiricalWinRate": 0.82,
+      "empiricalEV": 2.9
+    },
+    "2_Suit": {
+      "minHCP": 11,
+      "minSuitLength": 5,
+      "empiricalWinRate": 0.8,
+      "empiricalEV": 2.4
+    },
+    "2_NT": {
+      "minHCP": 16,
+      "minSuitLength": 3,
+      "empiricalWinRate": 0.79,
+      "empiricalEV": 3.4
+    },
+    "3_Suit": {
+      "minHCP": 14,
+      "minSuitLength": 6,
+      "empiricalWinRate": 0.78,
+      "empiricalEV": 2.2
+    },
+    "3_NT": {
+      "minHCP": 18,
+      "minSuitLength": 3,
+      "empiricalWinRate": 0.77,
+      "empiricalEV": 3.7
+    }
+  },
+  "openingBook": [
+    {
+      "id": "lead_ace_side_suit",
+      "name": "Cash Off-Suit Ace",
+      "description": "Lead an Ace in an unbid side suit against Suit contract to secure quick entry",
+      "targetContract": "Suit",
+      "weight": 1.27,
+      "winsCount": 132301,
+      "trialsCount": 197580
+    },
+    {
+      "id": "lead_fourth_highest_nt",
+      "name": "4th Highest in Longest Suit",
+      "description": "Lead 4th highest from length against No Trump to establish long-suit winners",
+      "targetContract": "NT",
+      "weight": 1.27,
+      "winsCount": 132266,
+      "trialsCount": 197530
+    },
+    {
+      "id": "lead_top_of_sequence",
+      "name": "Top of Honor Sequence",
+      "description": "Lead King from KQJ or Queen from QJ10 to force out higher honors cleanly",
+      "targetContract": "Both",
+      "weight": 1.27,
+      "winsCount": 132191,
+      "trialsCount": 197460
+    },
+    {
+      "id": "lead_singleton_ruff",
+      "name": "Lead Short Suit for Ruff",
+      "description": "Lead a singleton in an unbid suit against Suit contract to set up partner ruff",
+      "targetContract": "Suit",
+      "weight": 1.27,
+      "winsCount": 132101,
+      "trialsCount": 197365
+    }
+  ],
+  "partnershipCoefficients": {
+    "fitBonus8Trumps": 1.85,
+    "fitBonus9PlusTrumps": 3.5,
+    "voidBonus": 4.5,
+    "singletonBonus": 2.8,
+    "doubletonBonus": 1.6,
+    "supportRaiseMinHCP": 6
+  },
+  "tacticalParameters": {
+    "finesseAggression": 1.7,
+    "partnerVoidLeadPriority": 3,
+    "declarerTrumpDrawPower": 2.4,
+    "thirdHandHighMultiplier": 1.45,
+    "secondHandLowMultiplier": 1.25
+  },
+  "defenseParameters": {
+    "thirdHandHighAggression": 1.2,
+    "secondHandLowDucking": 1.15,
+    "partnerVoidLeadPriority": 1.8,
+    "declarerTrumpDrawThreshold": 10
+  }
+}
