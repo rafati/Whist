@@ -160,7 +160,7 @@ export const GoogleAuthScreen: React.FC = () => {
           </div>
           <div className="bg-emerald-950/50 border border-emerald-800/40 rounded-2xl p-2.5 text-center">
             <Trophy className="w-4 h-4 text-amber-400 mx-auto mb-1" />
-            <div className="text-[11px] font-bold text-white leading-tight">Race to +11</div>
+            <div className="text-[11px] font-bold text-white leading-tight">Race to +10</div>
             <div className="text-[9px] text-emerald-300/70 mt-0.5">Suit & No-Trump</div>
           </div>
           <div className="bg-emerald-950/50 border border-emerald-800/40 rounded-2xl p-2.5 text-center">

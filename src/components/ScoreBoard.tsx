@@ -11,18 +11,18 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState, className = '
   const { TeamA, TeamB } = gameState.matchScores;
 
   const calculateProgress = (score: number) => {
-    // Score range is -11 to +11
-    // Progress towards +11 (0 to 11 is 0% to 100%)
+    // Score range is -10 to +10
+    // Progress towards +10 (0 to 10 is 0% to 100%)
     if (score > 0) {
-      return Math.min(100, Math.round((score / 11) * 100));
+      return Math.min(100, Math.round((score / 10) * 100));
     }
     return 0;
   };
 
   const calculateDanger = (score: number) => {
-    // Danger towards -11 (0 to -11 is 0% to 100%)
+    // Danger towards -10 (0 to -10 is 0% to 100%)
     if (score < 0) {
-      return Math.min(100, Math.round((Math.abs(score) / 11) * 100));
+      return Math.min(100, Math.round((Math.abs(score) / 10) * 100));
     }
     return 0;
   };
@@ -35,7 +35,7 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState, className = '
           <span>Match Standings</span>
         </div>
         <div className="text-[11px] text-slate-400">
-          Target: <strong className="text-emerald-300">+11</strong> | Elimination: <strong className="text-rose-400">-11</strong>
+          Target: <strong className="text-emerald-300">+10</strong> | Elimination: <strong className="text-rose-400">-10</strong>
         </div>
       </div>
 
@@ -50,11 +50,11 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState, className = '
             {TeamA >= 0 ? `+${TeamA}` : TeamA} <span className="text-xs font-normal text-slate-400">pts</span>
           </div>
 
-          {/* Progress bar towards +11 */}
+          {/* Progress bar towards +10 */}
           <div className="space-y-1">
             <div className="flex justify-between text-[10px] text-slate-400">
-              <span>Victory (+11)</span>
-              <span>{Math.max(0, TeamA)}/11</span>
+              <span>Victory (+10)</span>
+              <span>{Math.max(0, TeamA)}/10</span>
             </div>
             <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
               <div
@@ -71,7 +71,7 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState, className = '
                     <AlertTriangle className="w-2.5 h-2.5" />
                     <span>Elimination Danger</span>
                   </span>
-                  <span>{Math.abs(TeamA)}/11</span>
+                  <span>{Math.abs(TeamA)}/10</span>
                 </div>
                 <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                   <div
@@ -94,11 +94,11 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState, className = '
             {TeamB >= 0 ? `+${TeamB}` : TeamB} <span className="text-xs font-normal text-slate-400">pts</span>
           </div>
 
-          {/* Progress bar towards +11 */}
+          {/* Progress bar towards +10 */}
           <div className="space-y-1">
             <div className="flex justify-between text-[10px] text-slate-400">
-              <span>Victory (+11)</span>
-              <span>{Math.max(0, TeamB)}/11</span>
+              <span>Victory (+10)</span>
+              <span>{Math.max(0, TeamB)}/10</span>
             </div>
             <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
               <div
@@ -115,7 +115,7 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState, className = '
                     <AlertTriangle className="w-2.5 h-2.5" />
                     <span>Elimination Danger</span>
                   </span>
-                  <span>{Math.abs(TeamB)}/11</span>
+                  <span>{Math.abs(TeamB)}/10</span>
                 </div>
                 <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                   <div

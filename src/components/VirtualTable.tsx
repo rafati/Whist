@@ -639,7 +639,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
           <button
             onClick={() => setShowScoreModal(true)}
             className="flex items-center gap-1.5 bg-slate-950/90 hover:bg-slate-900 border border-emerald-800/60 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-mono transition-all cursor-pointer shrink-0"
-            title="View Full Match Standings (Target: +11)"
+            title="View Full Match Standings (Target: +10)"
           >
             <span className="text-emerald-400 font-bold">
               T1: {gameState.matchScores.TeamA >= 0 ? `+${gameState.matchScores.TeamA}` : gameState.matchScores.TeamA}

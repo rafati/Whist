@@ -238,11 +238,25 @@ function processBid(room: Room, bid: Bid) {
   if (bid.type === 'pass') {
     state.bids.push({ seat: currentSeat, type: 'pass' });
   } else {
+    const isDealerSuitMatch = Boolean(
+      isDealer &&
+      isFinalTurn &&
+      state.highestBid &&
+      state.highestBid.type === 'bid' &&
+      state.highestBid.level &&
+      bid.contractType === 'Suit' &&
+      bid.level === state.highestBid.level
+    );
+
     // Validate bid
-    if (isDealer && isFinalTurn && bid.isDealerPrivilegeMatch) {
-      // Dealer privilege match
-      state.bids.push(bid);
-      state.highestBid = bid;
+    if (isDealer && isFinalTurn && (bid.isDealerPrivilegeMatch || isDealerSuitMatch)) {
+      // Dealer privilege match: matches highest suit bid
+      const matchBid: Bid = {
+        ...bid,
+        isDealerPrivilegeMatch: true,
+      };
+      state.bids.push(matchBid);
+      state.highestBid = matchBid;
       state.highestBidder = currentSeat;
     } else {
       // Check higher
@@ -403,7 +417,7 @@ function resolveRoundEnd(room: Room) {
   state.matchScores.TeamB +=
     roundScore.contractTeam === 'TeamB' ? roundScore.scoreDeltaBidTeam : roundScore.scoreDeltaDefTeam;
 
-  // Check 2.7 Win/Loss Conditions (+11 victory, -11 elimination, +11 priority)
+  // Check 2.7 Win/Loss Conditions (+10 victory, -10 elimination, +10 priority)
   const matchEnd = checkMatchEnd(state.matchScores);
 
   if (matchEnd.isOver) {

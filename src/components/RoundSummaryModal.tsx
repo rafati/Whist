@@ -152,7 +152,7 @@ export const RoundSummaryModal: React.FC<RoundSummaryModalProps> = ({
         <div className="bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between gap-3">
           <div className="text-[11px] text-slate-400 leading-tight">
             <strong className="text-slate-200 block text-xs">Match Score</strong>
-            <span>First to +11 wins</span>
+            <span>First to +10 wins</span>
           </div>
 
           <div className="flex items-center gap-2.5">

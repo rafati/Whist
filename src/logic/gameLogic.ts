@@ -394,9 +394,9 @@ export function calculateRoundScores(
 }
 
 // 2.7 Win/Loss Conditions
-// Victory Condition: First team to reach +11 points.
-// Elimination Condition: First team to drop to -11 points.
-// Priority Rule: If a single round triggers both conditions, +11 (Victory) takes precedence.
+// Victory Condition: First team to reach +10 points.
+// Elimination Condition: First team to drop to -10 points.
+// Priority Rule: If a single round triggers both conditions, +10 (Victory) takes precedence.
 export function checkMatchEnd(scores: { TeamA: number; TeamB: number }): {
   isOver: boolean;
   winnerTeam: Team | null;
@@ -404,31 +404,31 @@ export function checkMatchEnd(scores: { TeamA: number; TeamB: number }): {
 } {
   const { TeamA, TeamB } = scores;
 
-  const teamAVictory = TeamA >= 11;
-  const teamBVictory = TeamB >= 11;
-  const teamAEliminated = TeamA <= -11;
-  const teamBEliminated = TeamB <= -11;
+  const teamAVictory = TeamA >= 10;
+  const teamBVictory = TeamB >= 10;
+  const teamAEliminated = TeamA <= -10;
+  const teamBEliminated = TeamB <= -10;
 
-  // Check victory conditions first (+11 takes precedence over -11)
+  // Check victory conditions first (+10 takes precedence over -10)
   if (teamAVictory && teamBVictory) {
     if (TeamA > TeamB) {
-      return { isOver: true, winnerTeam: 'TeamA', reason: `Team 1 reached +11 (${TeamA} pts) ahead of Team 2 (${TeamB} pts)` };
+      return { isOver: true, winnerTeam: 'TeamA', reason: `Team 1 reached +10 (${TeamA} pts) ahead of Team 2 (${TeamB} pts)` };
     } else if (TeamB > TeamA) {
-      return { isOver: true, winnerTeam: 'TeamB', reason: `Team 2 reached +11 (${TeamB} pts) ahead of Team 1 (${TeamA} pts)` };
+      return { isOver: true, winnerTeam: 'TeamB', reason: `Team 2 reached +10 (${TeamB} pts) ahead of Team 1 (${TeamA} pts)` };
     } else {
-      return { isOver: true, winnerTeam: 'TeamA', reason: `Both teams tied at +11. Team 1 holds victory precedence.` };
+      return { isOver: true, winnerTeam: 'TeamA', reason: `Both teams tied at +10. Team 1 holds victory precedence.` };
     }
   }
 
   if (teamAVictory) {
-    return { isOver: true, winnerTeam: 'TeamA', reason: `Team 1 reached +11 points (Score: ${TeamA})!` };
+    return { isOver: true, winnerTeam: 'TeamA', reason: `Team 1 reached +10 points (Score: ${TeamA})!` };
   }
 
   if (teamBVictory) {
-    return { isOver: true, winnerTeam: 'TeamB', reason: `Team 2 reached +11 points (Score: ${TeamB})!` };
+    return { isOver: true, winnerTeam: 'TeamB', reason: `Team 2 reached +10 points (Score: ${TeamB})!` };
   }
 
-  // Check elimination conditions (-11)
+  // Check elimination conditions (-10)
   if (teamAEliminated && teamBEliminated) {
     if (TeamA > TeamB) {
       return { isOver: true, winnerTeam: 'TeamA', reason: `Team 2 eliminated at ${TeamB} pts (Team 1: ${TeamA} pts).` };
@@ -438,11 +438,11 @@ export function checkMatchEnd(scores: { TeamA: number; TeamB: number }): {
   }
 
   if (teamAEliminated) {
-    return { isOver: true, winnerTeam: 'TeamB', reason: `Team 1 eliminated by reaching -11 points (Score: ${TeamA}). Team 2 Wins!` };
+    return { isOver: true, winnerTeam: 'TeamB', reason: `Team 1 eliminated by reaching -10 points (Score: ${TeamA}). Team 2 Wins!` };
   }
 
   if (teamBEliminated) {
-    return { isOver: true, winnerTeam: 'TeamA', reason: `Team 2 eliminated by reaching -11 points (Score: ${TeamB}). Team 1 Wins!` };
+    return { isOver: true, winnerTeam: 'TeamA', reason: `Team 2 eliminated by reaching -10 points (Score: ${TeamB}). Team 1 Wins!` };
   }
 
   return { isOver: false, winnerTeam: null, reason: null };
