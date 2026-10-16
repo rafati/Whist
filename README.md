@@ -101,8 +101,8 @@ Visit `http://localhost:3000` in your browser.
    * 13 tricks played in counter-clockwise order.
    * **Opening lead**: In NT games, the Declarer leads first; in Suit games, the player to the right of the Declarer leads first.
    * Players must follow the led suit if possible; otherwise, they may trump or discard.
-   * **Single-Tap / 1-Click Play**: Double-tap requirement has been removed on mobile touch devices. A single tap or desktop click on any eligible playable card immediately plays it.
-   * **Swipe-Up "Throw" Gesture**: On touchscreens, players can flick or swipe an eligible card upwards towards the center felt. The card follows finger displacement with a dynamic tilt and elevation, showing an animated `Throw ↑` badge before launching smoothly onto the table.
+   * **Single-Tap / 1-Click Play**: A single tap on mobile or single click on desktop instantly plays an eligible card, launching it smoothly from its hand slot directly onto the center felt.
+   * **Continuous Swipe-to-Throw & Mouse Drag**: Players can drag or swipe a card upwards all the way into the table playing area. The card tracks the pointer smoothly in real time. Releasing the card keeps it flying smoothly with momentum from its exact release point until it lands in the center trick, accompanied by a procedural felt snap sound. If the player changes their mind and drags the card back down towards their hand before releasing, the throw is cancelled and the card springs back into place. Both mobile touch swiping and desktop mouse dragging are supported.
    * **Clean Center Felt**: Redundant opponent card stacks and counters have been removed so the felt remains clean and focused on gameplay.
 5. **Scoring**:
    * Base threshold is 6 tricks. A contract of level $L$ requires $6 + L$ tricks.

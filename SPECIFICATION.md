@@ -84,6 +84,14 @@ Play proceeds strictly in a **Counter-Clockwise** direction across all phases:
    * In NT games: Trumping is disabled; highest card of the led suit wins.
 5. Exactly 13 tricks are played per round.
 
+#### 2.4.1 Continuous Swipe-to-Throw & Flight Animation Engine
+* **Unconstrained Swipe Dragging**: Cards in hand follow finger/mouse drag upward without artificial limits (up to -650px), enabling the card to follow the pointer directly into the center table felt.
+* **Commit on Release**: If released while swiped up toward or inside the playing area ($\Delta Y \le -40\text{px}$ or upward flick), the throw is committed.
+* **Continuous Release Trajectory**: The card does not snap back or pop into the center. Instead, an active flying overlay card initiates directly from the card's exact release screen coordinates and continues smoothly along its momentum vector until it lands on the bottom trick slot on the table.
+* **Pull-Back to Cancel**: If the player changes their mind while dragging and pulls the card back down towards their hand spread ($\Delta Y > -40\text{px}$), the throw is cancelled upon release and the card springs smoothly back into its hand slot.
+* **Desktop & Touch Parity**: Both mobile touch swipe-and-release and desktop mouse click-and-drag are supported, alongside instant 1-click/1-tap play.
+* **Procedural Audio Synthesis**: Native browser `AudioContext` synthesizes a realistic card friction slide and felt snap click upon landing.
+
 ### 2.5 Phase 5: Scoring Engine
 Scoring is calculated per round based on tricks won above the base threshold of 6 tricks ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L289-L394)). Let $L = \text{Bid Level}$, required tricks $= 6 + L$:
 

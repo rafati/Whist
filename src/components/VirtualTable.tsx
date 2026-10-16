@@ -33,6 +33,7 @@ import { VoiceChatBar } from './VoiceChatBar.tsx';
 import { ThrowableDock } from './ThrowableDock.tsx';
 import { ThrowableOverlay } from './ThrowableOverlay.tsx';
 import { useVoiceChat } from '../lib/useVoiceChat.ts';
+import { playCardSnapSound } from '../lib/throwSounds.ts';
 import {
   ArrowLeft,
   Bot,
@@ -54,10 +55,10 @@ import {
 // Physical flight offset vectors based on visual position
 function getVisualEntryVector(pos: 'bottom' | 'top' | 'left' | 'right'): { x: number; y: number; rotate: number } {
   switch (pos) {
-    case 'top': return { x: 0, y: -120, rotate: -4 };
-    case 'bottom': return { x: 0, y: 135, rotate: 4 };
-    case 'left': return { x: -135, y: 0, rotate: -6 };
-    case 'right': return { x: 135, y: 0, rotate: 6 };
+    case 'top': return { x: 0, y: -160, rotate: -4 };
+    case 'bottom': return { x: 0, y: 220, rotate: 4 };
+    case 'left': return { x: -180, y: 0, rotate: -6 };
+    case 'right': return { x: 180, y: 0, rotate: 6 };
   }
 }
 
@@ -108,6 +109,7 @@ interface TrickCardItemProps {
   winnerVisualPos: 'bottom' | 'top' | 'left' | 'right' | null;
   isWinningCard: boolean;
   isLeadCard: boolean;
+  isLocallyFlying?: boolean;
 }
 
 const TrickCardItem: React.FC<TrickCardItemProps> = ({
@@ -117,6 +119,7 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
   winnerVisualPos,
   isWinningCard,
   isLeadCard,
+  isLocallyFlying,
 }) => {
   const [hasEntered, setHasEntered] = useState(false);
 
@@ -138,6 +141,8 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
     transform = `translate3d(${gather.x}px, ${gather.y}px, 0) scale(0.35) rotate(${gather.rotate}deg)`;
     opacity = 0;
     transition = `transform ${ANIMATION_CONFIG.TRICK_COLLECT_DURATION_MS}ms ${ANIMATION_CONFIG.TRICK_SWEEP_EASING}, opacity ${ANIMATION_CONFIG.TRICK_COLLECT_DURATION_MS}ms ease-in`;
+  } else if (isLocallyFlying) {
+    opacity = 0;
   } else if (!hasEntered) {
     transform = `translate3d(${entry.x}px, ${entry.y}px, 0) scale(0.88) rotate(${entry.rotate}deg)`;
     opacity = 0.2;
@@ -154,6 +159,7 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
 
   return (
     <div
+      data-trick-slot={visualPos}
       style={{
         transform,
         opacity,
@@ -180,6 +186,21 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
     </div>
   );
 };
+
+interface FlyingCardState {
+  id: string;
+  card: Card;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startHeight: number;
+  targetX: number;
+  targetY: number;
+  targetWidth: number;
+  targetHeight: number;
+  duration: number;
+  isLanded: boolean;
+}
 
 interface VirtualTableProps {
   room: Room;
@@ -227,6 +248,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const [winnerInfo, setWinnerInfo] = useState<{ winner: Seat; winningCard: Card } | null>(null);
   const [celebratedSeat, setCelebratedSeat] = useState<Seat | null>(null);
   const [justPlayedHandCardId, setJustPlayedHandCardId] = useState<string | null>(null);
+  const [flyingCard, setFlyingCard] = useState<FlyingCardState | null>(null);
 
   // Interactive throwable objects state
   const [selectedThrowable, setSelectedThrowable] = useState<ThrowableObjectType | null>(null);
@@ -360,20 +382,102 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
   const currentLedSuit = displayTrick.length > 0 ? displayTrick[0].card.suit : null;
 
-  const executePlayCard = (card: Card) => {
+  const getTrickTargetRect = (visualPos: 'bottom' | 'top' | 'left' | 'right') => {
+    // 1. Try finding slot element directly in the DOM
+    const slotEl = document.querySelector(`[data-trick-slot="${visualPos}"]`);
+    if (slotEl) {
+      const rect = slotEl.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        return {
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+    }
+
+    // 2. Center stage / arena fallback calculation
+    const arenaEl = document.querySelector('[data-trick-arena]');
+    const cardW = 56;
+    const cardH = 80;
+    if (arenaEl) {
+      const arenaRect = arenaEl.getBoundingClientRect();
+      const centerX = arenaRect.left + arenaRect.width / 2;
+      const centerY = arenaRect.top + arenaRect.height / 2;
+      switch (visualPos) {
+        case 'bottom':
+          return { x: centerX - cardW / 2, y: arenaRect.bottom - cardH - 12, width: cardW, height: cardH };
+        case 'top':
+          return { x: centerX - cardW / 2, y: arenaRect.top + 12, width: cardW, height: cardH };
+        case 'left':
+          return { x: arenaRect.left + 12, y: centerY - cardH / 2, width: cardW, height: cardH };
+        case 'right':
+          return { x: arenaRect.right - cardW - 12, y: centerY - cardH / 2, width: cardW, height: cardH };
+      }
+    }
+
+    const w = typeof window !== 'undefined' ? window.innerWidth : 1000;
+    const h = typeof window !== 'undefined' ? window.innerHeight : 700;
+    return {
+      x: w * 0.5 - 28,
+      y: h * 0.54 - 40,
+      width: 56,
+      height: 80,
+    };
+  };
+
+  const handleCardInteraction = (card: Card, startRect?: DOMRect) => {
     if (!mySeat || !isMyTurnToPlay) return;
     if (!isCardLegal(card, myHand, currentLedSuit)) return;
+
+    // Calculate trajectory from startRect (or fallback from hand) to the trick center
+    const target = getTrickTargetRect('bottom');
+    const sRect = startRect || {
+      left: typeof window !== 'undefined' ? window.innerWidth * 0.5 - 32 : 500,
+      top: typeof window !== 'undefined' ? window.innerHeight - 100 : 600,
+      width: 64,
+      height: 92,
+    };
+
+    const dx = target.x - sRect.left;
+    const dy = target.y - sRect.top;
+    const dist = Math.hypot(dx, dy);
+    // Dynamic flight duration proportional to remaining distance (140ms base + dist scaling, capped at 380ms)
+    const flightDuration = Math.min(380, 140 + Math.round(dist * 0.8));
+
+    const flightId = `flight_${Date.now()}`;
+    setFlyingCard({
+      id: flightId,
+      card,
+      startX: sRect.left,
+      startY: sRect.top,
+      startWidth: sRect.width,
+      startHeight: sRect.height,
+      targetX: target.x,
+      targetY: target.y,
+      targetWidth: target.width,
+      targetHeight: target.height,
+      duration: flightDuration,
+      isLanded: false,
+    });
+
+    // Trigger transition on next animation frame
+    requestAnimationFrame(() => {
+      setFlyingCard((prev) => (prev && prev.id === flightId ? { ...prev, isLanded: true } : prev));
+    });
+
+    // Complete flight and play crisp card snap sound on landing
+    setTimeout(() => {
+      setFlyingCard((prev) => (prev && prev.id === flightId ? null : prev));
+      playCardSnapSound();
+    }, flightDuration);
+
     setJustPlayedHandCardId(card.id);
     playCard(room.id, mySeat, card);
     setTimeout(() => {
       setJustPlayedHandCardId(null);
-    }, ANIMATION_CONFIG.CARD_PLAY_DURATION_MS);
-  };
-
-  const handleCardInteraction = (card: Card) => {
-    if (!mySeat || !isMyTurnToPlay) return;
-    if (!isCardLegal(card, myHand, currentLedSuit)) return;
-    executePlayCard(card);
+    }, flightDuration + 100);
   };
 
   const handleSeatClick = (seat: Seat) => {
@@ -1107,7 +1211,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
               {/* Playing Phase: Current Trick Center Arena */}
               {gameState.phase === 'playing' && (
-                <div className="relative w-full h-full flex items-center justify-center">
+                <div data-trick-arena className="relative w-full h-full flex items-center justify-center">
                   {/* 4 Cards Placement in Trick with Smooth Play & Collect Animations */}
                   {displayTrick.map((played, idx) => {
                     const isWinningCard = Boolean(
@@ -1126,6 +1230,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         winnerVisualPos={winnerVisualPos}
                         isWinningCard={isWinningCard}
                         isLeadCard={idx === 0}
+                        isLocallyFlying={Boolean(flyingCard && flyingCard.card.id === played.card.id)}
                       />
                     );
                   })}
@@ -1332,7 +1437,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                       gameState.phase === 'playing' && isMyTurnToPlay && isLegal;
                     const isDimmed =
                       gameState.phase === 'playing' && isMyTurnToPlay && !isLegal;
-                    const isJustPlayed = justPlayedHandCardId === card.id;
+                    const isJustPlayed = justPlayedHandCardId === card.id || flyingCard?.card.id === card.id;
 
                     return (
                       <div
@@ -1342,7 +1447,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                           ${idx !== 0 ? '-ml-5 sm:-ml-6 md:-ml-8 lg:-ml-9' : ''}
                           ${
                             isJustPlayed
-                              ? '-translate-y-10 sm:-translate-y-12 scale-95 opacity-30 ring-2 ring-amber-400 z-40 duration-200 pointer-events-none'
+                              ? 'opacity-0 scale-90 pointer-events-none'
                               : canPlay
                               ? '-translate-y-2 sm:-translate-y-2.5 hover:-translate-y-4 hover:z-30 hover:scale-105 duration-150'
                               : ''
@@ -1354,14 +1459,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                           size="hand"
                           isPlayable={Boolean(canPlay && !isJustPlayed)}
                           isDimmed={isDimmed}
-                          onClick={() => {
+                          onClick={(e, startRect) => {
                             if (gameState.phase === 'playing') {
-                              handleCardInteraction(card);
+                              handleCardInteraction(card, startRect);
                             }
                           }}
-                          onSwipePlay={() => {
+                          onSwipePlay={(startRect) => {
                             if (gameState.phase === 'playing') {
-                              handleCardInteraction(card);
+                              handleCardInteraction(card, startRect);
                             }
                           }}
                         />
@@ -1382,6 +1487,32 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             onSelectItem={setSelectedThrowable}
             cooldownUntil={cooldownUntil}
           />
+        </div>
+      )}
+
+      {/* Active Flying Played Card Layer (Continuous release flight onto the table) */}
+      {flyingCard && (
+        <div
+          className="fixed pointer-events-none z-[80]"
+          style={{
+            left: flyingCard.startX,
+            top: flyingCard.startY,
+            width: flyingCard.startWidth,
+            height: flyingCard.startHeight,
+            transform: flyingCard.isLanded
+              ? `translate3d(${flyingCard.targetX - flyingCard.startX}px, ${flyingCard.targetY - flyingCard.startY}px, 0) scale(${flyingCard.targetWidth / flyingCard.startWidth}) rotate(3deg)`
+              : 'translate3d(0, 0, 0) scale(1) rotate(0deg)',
+            transition: flyingCard.isLanded
+              ? `transform ${flyingCard.duration}ms cubic-bezier(0.2, 0.85, 0.3, 1), box-shadow ${flyingCard.duration}ms ease`
+              : 'none',
+            transformOrigin: 'top left',
+            boxShadow: flyingCard.isLanded
+              ? '0 4px 12px rgba(0,0,0,0.45)'
+              : '0 24px 45px -8px rgba(0, 0, 0, 0.65), 0 0 25px rgba(245, 158, 11, 0.5)',
+            willChange: 'transform',
+          }}
+        >
+          <CardView card={flyingCard.card} size="hand" />
         </div>
       )}
 

@@ -164,3 +164,56 @@ export function playHitSound(objectType: ThrowableObjectType): void {
     console.debug('Hit sound suppressed:', e);
   }
 }
+
+/**
+ * Procedural Card Slide & Felt Snap Sound
+ */
+export function playCardSnapSound(): void {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    // 1. Friction slide noise / whoosh
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320, now);
+    osc.frequency.exponentialRampToValueAtTime(160, now + 0.1);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(900, now);
+    filter.Q.setValueAtTime(1.5, now);
+
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.18, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.13);
+
+    // 2. Felt snap tap
+    const snap = ctx.createOscillator();
+    const snapGain = ctx.createGain();
+    snap.type = 'sine';
+    snap.frequency.setValueAtTime(180, now + 0.04);
+    snap.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+
+    snapGain.gain.setValueAtTime(0.22, now + 0.04);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+    snap.connect(snapGain);
+    snapGain.connect(ctx.destination);
+    snap.start(now + 0.04);
+    snap.stop(now + 0.15);
+  } catch (e) {
+    console.debug('Card snap sound suppressed:', e);
+  }
+}
+

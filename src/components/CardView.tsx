@@ -9,8 +9,8 @@ export interface CardViewProps {
   isPlayable?: boolean;
   isSelected?: boolean;
   isDimmed?: boolean;
-  onClick?: (e?: React.MouseEvent<HTMLDivElement>) => void;
-  onSwipePlay?: () => void;
+  onClick?: (e?: React.MouseEvent<HTMLDivElement>, startRect?: DOMRect) => void;
+  onSwipePlay?: (startRect?: DOMRect) => void;
   size?: 'xs' | 'sm' | 'hand' | 'md' | 'lg' | 'xl';
   className?: string;
 }
@@ -91,103 +91,157 @@ export const CardView: React.FC<CardViewProps> = ({
   size = 'hand',
   className = '',
 }) => {
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const [dragOffset, setDragOffset] = useState<{ y: number; x: number } | null>(null);
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
-  const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const isDraggingRef = useRef(false);
+  const hasMovedRef = useRef(false);
   const touchHandledRef = useRef(false);
 
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+  // Common gesture start
+  const handleDragStart = (clientX: number, clientY: number) => {
     if (!isPlayable || isDimmed) return;
-    const touch = e.touches[0];
-    touchStartRef.current = {
-      x: touch.clientX,
-      y: touch.clientY,
+    dragStartRef.current = {
+      x: clientX,
+      y: clientY,
       time: Date.now(),
     };
-    lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+    isDraggingRef.current = true;
+    hasMovedRef.current = false;
   };
 
-  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!touchStartRef.current || !isPlayable || isDimmed) return;
-    const touch = e.touches[0];
-    const deltaY = touch.clientY - touchStartRef.current.y;
-    const deltaX = touch.clientX - touchStartRef.current.x;
-    lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+  // Common gesture move
+  const handleDragMove = (clientX: number, clientY: number) => {
+    if (!isDraggingRef.current || !dragStartRef.current) return;
+    const deltaY = clientY - dragStartRef.current.y;
+    const deltaX = clientX - dragStartRef.current.x;
 
-    // Follow upward swipe toward the table felt
+    if (Math.abs(deltaY) > 8 || Math.abs(deltaX) > 8) {
+      hasMovedRef.current = true;
+    }
+
     if (deltaY < 0) {
-      const clampedY = Math.max(-95, deltaY);
-      setDragOffset({ y: clampedY, x: deltaX * 0.25 });
+      // Extensive upward swipe toward and into playing area felt (up to -650px)
+      const clampedY = Math.max(-650, deltaY);
+      setDragOffset({ y: clampedY, x: deltaX * 0.75 });
     } else {
-      // Small resistance when dragged downward
-      setDragOffset({ y: Math.min(15, deltaY * 0.15), x: 0 });
+      // Downward resistance
+      setDragOffset({ y: Math.min(25, deltaY * 0.2), x: deltaX * 0.3 });
     }
   };
 
-  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!touchStartRef.current || !isPlayable || isDimmed) {
-      touchStartRef.current = null;
-      lastTouchRef.current = null;
+  // Common gesture end
+  const handleDragEnd = (clientX: number, clientY: number, e?: React.SyntheticEvent) => {
+    if (!isDraggingRef.current || !dragStartRef.current) {
+      isDraggingRef.current = false;
+      dragStartRef.current = null;
       setDragOffset(null);
       return;
     }
 
-    const start = touchStartRef.current;
-    const last = lastTouchRef.current || start;
-    const deltaY = last.y - start.y;
-    const deltaX = last.x - start.x;
+    const start = dragStartRef.current;
+    const deltaY = clientY - start.y;
+    const deltaX = clientX - start.x;
     const elapsed = Date.now() - start.time;
     const speedY = deltaY / Math.max(1, elapsed); // px/ms
 
-    touchStartRef.current = null;
-    lastTouchRef.current = null;
-    setDragOffset(null);
+    isDraggingRef.current = false;
+    dragStartRef.current = null;
 
     // Upward swipe / throw check:
-    // Dragged up > 30px or fast upward flick (> 15px up and speed < -0.2px/ms)
-    // with primary vertical movement (not a horizontal pan across hand)
-    const isVerticalMove = Math.abs(deltaY) >= Math.abs(deltaX) * 0.7;
-    const isUpwardThrow = isVerticalMove && (deltaY < -30 || (deltaY < -15 && speedY < -0.2));
+    // 1. Dragged up by 40px or more (deltaY <= -40)
+    // 2. OR fast flick upward (deltaY <= -18 and speedY < -0.25)
+    // with primarily vertical orientation
+    const isVerticalMove = Math.abs(deltaY) >= Math.abs(deltaX) * 0.6;
+    const isUpwardThrow = isVerticalMove && (deltaY <= -40 || (deltaY <= -18 && speedY < -0.25));
 
-    // Tap check: very small finger shift
-    const isTap = Math.abs(deltaY) < 14 && Math.abs(deltaX) < 14;
+    // Tap / Click check: very small finger/mouse movement
+    const isTapOrClick = !hasMovedRef.current || (Math.abs(deltaY) < 10 && Math.abs(deltaX) < 10);
 
     if (isUpwardThrow) {
       touchHandledRef.current = true;
-      if (e.cancelable) e.preventDefault();
+      if (e && e.cancelable) e.preventDefault();
+      // Capture current bounding rect right where released!
+      const rect = cardRef.current?.getBoundingClientRect();
+      setDragOffset(null);
       if (onSwipePlay) {
-        onSwipePlay();
+        onSwipePlay(rect);
       } else if (onClick) {
-        onClick();
+        onClick(undefined, rect);
       }
       setTimeout(() => {
         touchHandledRef.current = false;
-      }, 350);
-    } else if (isTap) {
+      }, 400);
+    } else if (isTapOrClick) {
       touchHandledRef.current = true;
-      if (e.cancelable) e.preventDefault();
+      if (e && e.cancelable) e.preventDefault();
+      const rect = cardRef.current?.getBoundingClientRect();
+      setDragOffset(null);
       if (onClick) {
-        onClick();
+        onClick(undefined, rect);
       }
       setTimeout(() => {
         touchHandledRef.current = false;
-      }, 350);
+      }, 400);
+    } else {
+      // User dragged back down towards the cards or panned horizontally:
+      // Cancel and smoothly snap back to hand!
+      setDragOffset(null);
     }
+  };
+
+  // Touch event handlers
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isPlayable || isDimmed) return;
+    const touch = e.touches[0];
+    handleDragStart(touch.clientX, touch.clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || !e.touches[0]) return;
+    const touch = e.touches[0];
+    handleDragMove(touch.clientX, touch.clientY);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    const touch = e.changedTouches[0] || (dragStartRef.current ? { clientX: dragStartRef.current.x, clientY: dragStartRef.current.y } : { clientX: 0, clientY: 0 });
+    handleDragEnd(touch.clientX, touch.clientY, e);
   };
 
   const handleTouchCancel = () => {
-    touchStartRef.current = null;
-    lastTouchRef.current = null;
+    isDraggingRef.current = false;
+    dragStartRef.current = null;
     setDragOffset(null);
   };
 
+  // Mouse drag on desktop
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPlayable || isDimmed || e.button !== 0) return;
+    if (touchHandledRef.current) return;
+    e.preventDefault();
+
+    handleDragStart(e.clientX, e.clientY);
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      handleDragMove(moveEvent.clientX, moveEvent.clientY);
+    };
+
+    const onMouseUp = (upEvent: MouseEvent) => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      handleDragEnd(upEvent.clientX, upEvent.clientY);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (touchHandledRef.current) {
-      // Already handled by touch tap or swipe throw, ignore synthetic click
-      return;
-    }
+    if (touchHandledRef.current) return;
     if (isPlayable && !isDimmed && onClick) {
-      onClick(e);
+      const rect = cardRef.current?.getBoundingClientRect();
+      onClick(e, rect);
     }
   };
 
@@ -244,7 +298,9 @@ export const CardView: React.FC<CardViewProps> = ({
 
   return (
     <div
+      ref={cardRef}
       onClick={isPlayable && !isDimmed ? handleClick : undefined}
+      onMouseDown={isPlayable && !isDimmed ? handleMouseDown : undefined}
       onTouchStart={isPlayable && !isDimmed ? handleTouchStart : undefined}
       onTouchMove={isPlayable && !isDimmed ? handleTouchMove : undefined}
       onTouchEnd={isPlayable && !isDimmed ? handleTouchEnd : undefined}
@@ -252,15 +308,15 @@ export const CardView: React.FC<CardViewProps> = ({
       style={{
         backgroundColor: '#ffffff',
         boxShadow: dragOffset && dragOffset.y < -20
-          ? '0 16px 32px -4px rgba(245, 158, 11, 0.7), 0 4px 14px -2px rgba(245, 158, 11, 0.5)'
+          ? '0 20px 40px -6px rgba(245, 158, 11, 0.7), 0 6px 18px -2px rgba(245, 158, 11, 0.5)'
           : isSelected
           ? '0 12px 28px -3px rgba(245, 158, 11, 0.65), 0 4px 10px -2px rgba(245, 158, 11, 0.5)'
           : '0 3px 10px rgba(0, 0, 0, 0.32)',
         transform: dragOffset
-          ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) scale(1.08) rotate(${Math.min(12, Math.max(-12, dragOffset.x * 0.2))}deg)`
+          ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) scale(1.08) rotate(${Math.min(16, Math.max(-16, dragOffset.x * 0.12))}deg)`
           : undefined,
-        zIndex: dragOffset ? 50 : undefined,
-        transition: dragOffset ? 'none' : 'transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms ease',
+        zIndex: dragOffset ? 60 : undefined,
+        transition: dragOffset ? 'none' : 'transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 220ms ease',
         touchAction: isPlayable && !isDimmed ? 'pan-x' : undefined,
       }}
       className={`
