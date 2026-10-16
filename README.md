@@ -108,6 +108,13 @@ Visit `http://localhost:3000` in your browser.
    * Base threshold is 6 tricks. A contract of level $L$ requires $6 + L$ tricks.
    * Target: **+10 points** to win the match.
    * Danger: **-10 points** eliminates a team.
+6. **Interactive Throwable Objects & Banter**:
+   * Players can throw interactive items across the table at any player or bot:
+     * 👞 **Used Shoe**: Tumbles $720^\circ$ end-over-end, triggering comic recoil and dust bursts.
+     * 🍾 **Open Beer Bottle**: Arcs with frothy liquid bubbles, producing a splashing spray burst on hit.
+     * 🥇 **Gold Medal**: Twinkles with ribbon trails and explodes with golden celebration confetti.
+   * **Multi-Device Dynamic Perspective**: Projectiles launch from the thrower's screen position and land on the target's avatar pod on every device, adapting in real time to each player's rotated seat view.
+   * **Web Audio Synthesis**: Procedural sound effects synthesize whoosh and impact sounds directly in the browser with no external assets.
 
 ---
 

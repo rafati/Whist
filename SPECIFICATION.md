@@ -266,3 +266,11 @@ Players at the table can express banter, celebration, or frustration by throwing
 * **Hit Reactions**: Both bot and human avatars perform a physical spring recoil shake (`.avatar-recoiling`) with unique comic speech bubbles.
 * **Audio Synthesis**: Native browser `AudioContext` synthesizer provides dynamic whoosh sounds and custom impact sound effects without external audio files.
 * **Rate-Limiting**: 1.5–2.5 second cooldown per seat enforced client-side and server-side.
+
+### 8.3 Multi-Device Dynamic Perspective Projection
+Because Royal Whist dynamically rotates the virtual table on each player's screen so their own seat is always oriented at the bottom (`bottomSeat`), the physical screen coordinates of any seat vary across connected devices:
+* **Local Player Origin**: When the local player throws an item, the projectile launches from the throw dock on the right of their bottom console (`[data-throw-dock]`).
+* **Remote Player Origin**: On other clients, the throw originates from that specific player's avatar pod as rendered in that client's view (`[data-throw-seat="${fromSeat}"]`).
+* **Target Receiver Destination**: On every client, the projectile travels towards and impacts the target's avatar pod (`[data-throw-seat="${toSeat}"]`), landing on the bottom player footer on the recipient's own screen and on their table pod on all other spectators' screens.
+* **Rotated Fallback Matrix**: If DOM elements have not yet mounted or are between phase transitions, screen geometry calculates positions using `getSeatVisualPos(seat, mySeat)` (`bottom`, `top`, `left`, `right`) based on each client's `mySeat` perspective.
+

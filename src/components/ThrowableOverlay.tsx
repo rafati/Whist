@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Seat, ThrowableObjectType, ThrownObjectEvent } from '../types.ts';
 import { ANIMATION_CONFIG } from '../logic/animationConfig.ts';
 import { playThrowSound, playHitSound } from '../lib/throwSounds.ts';
+import { getPartner, getNextSeat, getPrevSeat } from '../logic/gameLogic.ts';
 
 interface ActiveFlight {
   id: string;
@@ -26,11 +27,13 @@ interface ActiveImpact {
 }
 
 interface ThrowableOverlayProps {
+  mySeat: Seat | null;
   activeEvents: ThrownObjectEvent[];
   onTriggerRecoil?: (seat: Seat) => void;
 }
 
 export const ThrowableOverlay: React.FC<ThrowableOverlayProps> = ({
+  mySeat,
   activeEvents,
   onTriggerRecoil,
 }) => {
@@ -38,9 +41,12 @@ export const ThrowableOverlay: React.FC<ThrowableOverlayProps> = ({
   const [impacts, setImpacts] = useState<ActiveImpact[]>([]);
   const processedEventIdsRef = useRef<Set<string>>(new Set());
 
-  // Helper to get screen center of a seat
-  const getSeatCenter = (seat: Seat, isOrigin = false): { x: number; y: number } => {
-    if (isOrigin) {
+  // Calculates seat screen coordinates dynamically relative to THIS device's seat rotation (mySeat)
+  const getSeatCenter = (seat: Seat, isSource: boolean): { x: number; y: number } => {
+    const isLocalUserSeat = Boolean(mySeat && seat === mySeat);
+
+    // 1. If THIS local player is the one throwing, originate from the throw dock on the right of their console
+    if (isSource && isLocalUserSeat) {
       const dockEl = document.querySelector('[data-throw-dock]');
       if (dockEl) {
         const rect = dockEl.getBoundingClientRect();
@@ -53,6 +59,9 @@ export const ThrowableOverlay: React.FC<ThrowableOverlayProps> = ({
       }
     }
 
+    // 2. Query DOM for the actual visual seat element tagged on this screen
+    // Other players are in pods tagged with data-throw-seat="${seat}"
+    // and the local player is tagged in the footer with data-throw-seat="${mySeat}"
     const el = document.querySelector(`[data-throw-seat="${seat}"]`);
     if (el) {
       const rect = el.getBoundingClientRect();
@@ -64,15 +73,31 @@ export const ThrowableOverlay: React.FC<ThrowableOverlayProps> = ({
       }
     }
 
-    // Reliable cardinal geometry fallbacks (relative to viewport)
+    // 3. Fallback: Geometry dynamically rotated for this device's seat perspective
+    const bottomSeat: Seat = mySeat || 'South';
+    const topSeat: Seat = mySeat ? getPartner(mySeat) : 'North';
+    const leftSeat: Seat = mySeat ? getPrevSeat(mySeat) : 'West';
+    const rightSeat: Seat = mySeat ? getNextSeat(mySeat) : 'East';
+
+    let visualPos: 'bottom' | 'top' | 'left' | 'right' = 'bottom';
+    if (seat === bottomSeat) visualPos = 'bottom';
+    else if (seat === topSeat) visualPos = 'top';
+    else if (seat === leftSeat) visualPos = 'left';
+    else visualPos = 'right';
+
     const w = typeof window !== 'undefined' ? window.innerWidth : 1000;
     const h = typeof window !== 'undefined' ? window.innerHeight : 700;
-    if (seat === 'North') return { x: w * 0.5, y: h * 0.14 };
-    if (seat === 'South') return { x: w * 0.5, y: h * 0.86 };
-    if (seat === 'West') return { x: w * 0.14, y: h * 0.48 };
-    if (seat === 'East') return { x: w * 0.86, y: h * 0.48 };
 
-    return { x: w / 2, y: h / 2 };
+    switch (visualPos) {
+      case 'bottom':
+        return { x: w * 0.5, y: Math.min(h - 50, h * 0.88) };
+      case 'top':
+        return { x: w * 0.5, y: Math.max(50, h * 0.12) };
+      case 'left':
+        return { x: Math.max(50, w * 0.12), y: h * 0.48 };
+      case 'right':
+        return { x: Math.min(w - 50, w * 0.88), y: h * 0.48 };
+    }
   };
 
   // Process incoming thrown object events

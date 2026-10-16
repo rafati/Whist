@@ -470,7 +470,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     const tricksWon = gameState.tricksWonCount[seat] || 0;
 
     const isThisMySeat = mySeat === seat;
-    if (isThisMySeat) return null; // Player's profile is docked directly in bottom hand footer!
+    if (isThisMySeat && gameState.phase !== 'waiting') return null; // Player's profile is docked directly in bottom hand footer during gameplay!
 
     const visualPos = getSeatVisualPos(seat);
     const isTopSeat = visualPos === 'top';
@@ -944,7 +944,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             {renderSeat(
               bottomSeat,
               `bottom-1 sm:bottom-1.5 left-1/2 -translate-x-1/2 ${
-                mySeat ? 'landscape-hide-bottom-seat' : ''
+                mySeat && gameState.phase !== 'waiting' ? 'landscape-hide-bottom-seat' : ''
               } ${gameState.phase !== 'playing' ? 'landscape-console-bottom-seat' : ''}`
             )}
             {renderSeat(rightSeat, 'portrait-seat-right landscape-seat-right right-1 sm:right-2 top-1/2 -translate-y-1/2')}
@@ -1387,6 +1387,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
       {/* Global Interactive Projectile & Impact FX Layer */}
       <ThrowableOverlay
+        mySeat={mySeat}
         activeEvents={activeThrows}
         onTriggerRecoil={handleTriggerRecoil}
       />
