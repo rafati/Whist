@@ -62,12 +62,21 @@ export interface RoundScoreBreakdown {
   explanation: string[];
 }
 
-export type GamePhase = 'waiting' | 'bidding' | 'declaring' | 'playing' | 'round_over' | 'game_over';
+export interface MisdealInfo {
+  seat: Seat;
+  playerName: string;
+  hand: Card[];
+  message: string;
+  expiresAt: number;
+}
+
+export type GamePhase = 'waiting' | 'bidding' | 'declaring' | 'playing' | 'round_over' | 'game_over' | 'misdeal';
 
 export interface GameState {
   phase: GamePhase;
   roundNumber: number;
   dealer: Seat;
+  misdealInfo?: MisdealInfo | null;
   
   // Hands
   hands: Record<Seat, Card[]>;
@@ -98,7 +107,7 @@ export interface GameState {
 
   // Scores
   matchScores: {
-    TeamA: number; // starts at 0, win at +11, eliminate at -11
+    TeamA: number; // starts at 0, win at +10, eliminate at -10
     TeamB: number;
   };
   roundScores: RoundScoreBreakdown[];
@@ -129,6 +138,7 @@ export type ClientMessage =
   | { type: 'play_card'; roomId: string; seat: Seat; card: Card }
   | { type: 'next_round'; roomId: string }
   | { type: 'restart_match'; roomId: string }
+  | { type: 'skip_misdeal'; roomId: string }
   | { type: 'delete_room'; roomId: string }
   | { type: 'voice_join'; roomId: string; peerId: string; user: UserProfile; seat?: Seat | null }
   | { type: 'voice_leave'; roomId: string; peerId: string }

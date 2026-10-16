@@ -498,15 +498,64 @@ export function createInitialGameState(initialDealer: Seat = 'North'): GameState
   };
 }
 
+// Unwinnable Hand / Misdeal Validation
+// A hand is considered to have "winning cards" if it contains AT LEAST ONE of:
+// 1) Any Ace
+// 2) Any King with at least 1 other card of the same suit (suit length >= 2)
+// 3) Any Queen with at least 2 other cards of the same suit (suit length >= 3)
+// 4) Any Jack with at least 3 other cards of the same suit (suit length >= 4)
+// If a hand has NONE of the above, it has no winning cards ("Kosh" / unwinnable hand).
+export function hasWinningCards(hand: Card[]): boolean {
+  if (!hand || hand.length === 0) return true;
+
+  const suitCounts: Record<Suit, number> = { S: 0, H: 0, D: 0, C: 0 };
+  for (const card of hand) {
+    suitCounts[card.suit]++;
+  }
+
+  for (const card of hand) {
+    if (card.rank === 'A') {
+      return true;
+    }
+    if (card.rank === 'K' && suitCounts[card.suit] >= 2) {
+      return true;
+    }
+    if (card.rank === 'Q' && suitCounts[card.suit] >= 3) {
+      return true;
+    }
+    if (card.rank === 'J' && suitCounts[card.suit] >= 4) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Scans all 4 dealt hands to see if any player has no winning cards
+export function findSeatWithoutWinningCards(hands: Record<Seat, Card[]>): Seat | null {
+  for (const seat of SEATS) {
+    const hand = hands[seat];
+    if (hand && hand.length > 0 && !hasWinningCards(hand)) {
+      return seat;
+    }
+  }
+  return null;
+}
+
 // Start Deal Phase
-export function startDealRound(state: GameState, dealerSeat: Seat): GameState {
-  const hands = dealHands();
+export function startDealRound(
+  state: GameState,
+  dealerSeat: Seat,
+  preDealtHands?: Record<Seat, Card[]>
+): GameState {
+  const hands = preDealtHands || dealHands();
   const openingBidder = getNextSeat(dealerSeat); // Player to the right of the dealer
 
   return {
     ...state,
     phase: 'bidding',
     dealer: dealerSeat,
+    misdealInfo: null,
     hands,
     cardsCount: {
       North: 13,

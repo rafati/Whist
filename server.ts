@@ -7,6 +7,7 @@ import {
   Card,
   ClientMessage,
   GameState,
+  MisdealInfo,
   Room,
   Seat,
   ServerMessage,
@@ -22,6 +23,7 @@ import {
   createInitialGameState,
   dealHands,
   evaluateTrickWinner,
+  findSeatWithoutWinningCards,
   getDealerPrivileges,
   getNextSeat,
   getTeam,
@@ -55,6 +57,7 @@ app.use(express.json());
 const rooms = new Map<string, Room>();
 const clientSockets = new Map<WebSocket, { roomId?: string; user?: UserProfile }>();
 const botTimers = new Map<string, NodeJS.Timeout>();
+const misdealTimers = new Map<string, NodeJS.Timeout>();
 
 // Voice Chat Peer State
 interface ServerVoicePeer {
@@ -286,9 +289,7 @@ function processBid(room: Room, bid: Bid) {
   if (!state.highestBid || state.highestBid.type === 'pass') {
     // All 4 players passed! Re-deal with next dealer
     const nextDealer = getNextSeat(state.dealer);
-    room.gameState = startDealRound(state, nextDealer);
-    broadcastRoom(room.id);
-    scheduleBotActionIfNeeded(room.id);
+    executeDealRound(room, nextDealer);
     return;
   }
 
@@ -431,28 +432,87 @@ function resolveRoundEnd(room: Room) {
   broadcastRoom(room.id);
 }
 
+// Execute a deal round with unwinnable hand (misdeal) detection and auto re-deal
+function executeDealRound(room: Room, dealerSeat: Seat, roundNumber?: number) {
+  // Clear any existing misdeal timer or bot timer for this room
+  if (misdealTimers.has(room.id)) {
+    clearTimeout(misdealTimers.get(room.id)!);
+    misdealTimers.delete(room.id);
+  }
+  if (botTimers.has(room.id)) {
+    clearTimeout(botTimers.get(room.id)!);
+    botTimers.delete(room.id);
+  }
+
+  // Deal hands and check if any player has 0 winning cards
+  const hands = dealHands();
+  const unwinnableSeat = findSeatWithoutWinningCards(hands);
+
+  if (unwinnableSeat) {
+    const seatPlayer = room.seats[unwinnableSeat];
+    const playerName = seatPlayer?.name || unwinnableSeat;
+    const misdealInfo: MisdealInfo = {
+      seat: unwinnableSeat,
+      playerName,
+      hand: hands[unwinnableSeat],
+      message: `${playerName} has no winning cards — Re-dealing...`,
+      expiresAt: Date.now() + 10000,
+    };
+
+    room.gameState = {
+      ...room.gameState,
+      phase: 'misdeal',
+      dealer: dealerSeat,
+      hands,
+      misdealInfo,
+      currentBidder: null,
+      openingBidder: null,
+      currentTurn: null,
+      currentTrick: [],
+    };
+    if (typeof roundNumber === 'number') {
+      room.gameState.roundNumber = roundNumber;
+    }
+
+    broadcastRoom(room.id);
+    broadcastRoomList();
+
+    // Auto re-deal after 10s: pass deal to the next dealer counter-clockwise
+    const timer = setTimeout(() => {
+      misdealTimers.delete(room.id);
+      const nextDealer = getNextSeat(dealerSeat);
+      executeDealRound(room, nextDealer, roundNumber);
+    }, 10000);
+    misdealTimers.set(room.id, timer);
+    return;
+  }
+
+  // All 4 players have at least one winning card - proceed to bidding
+  room.gameState = startDealRound(room.gameState, dealerSeat, hands);
+  if (typeof roundNumber === 'number') {
+    room.gameState.roundNumber = roundNumber;
+  }
+
+  broadcastRoom(room.id);
+  broadcastRoomList();
+  scheduleBotActionIfNeeded(room.id);
+}
+
 // Start Next Round
 function advanceToNextRound(room: Room) {
   const state = room.gameState;
   const nextDealer = getNextSeat(state.dealer);
   const nextRoundNumber = state.roundNumber + 1;
 
-  const nextState = startDealRound(state, nextDealer);
-  nextState.roundNumber = nextRoundNumber;
-  room.gameState = nextState;
-
-  broadcastRoom(room.id);
-  scheduleBotActionIfNeeded(room.id);
+  executeDealRound(room, nextDealer, nextRoundNumber);
 }
 
 // Reset entire match
 function resetMatch(room: Room) {
   const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
   const freshState = createInitialGameState(randomDealer);
-  room.gameState = startDealRound(freshState, randomDealer);
-
-  broadcastRoom(room.id);
-  scheduleBotActionIfNeeded(room.id);
+  room.gameState = freshState;
+  executeDealRound(room, randomDealer, 1);
 }
 
 // WebSocket Connection Management
@@ -549,12 +609,11 @@ wss.on('connection', (ws) => {
           // Phase 1: The Deal
           // Dealer Selection: Randomized for the first round
           const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
-          room.gameState = startDealRound(room.gameState, randomDealer);
+          executeDealRound(room, randomDealer, 1);
+        } else {
+          broadcastRoom(room.id);
+          broadcastRoomList();
         }
-
-        broadcastRoom(room.id);
-        broadcastRoomList();
-        scheduleBotActionIfNeeded(room.id);
         return;
       }
 
@@ -619,12 +678,11 @@ wss.on('connection', (ws) => {
           const allOccupied = SEATS.every((s) => room.seats[s] !== null);
           if (allOccupied) {
             const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
-            room.gameState = startDealRound(room.gameState, randomDealer);
+            executeDealRound(room, randomDealer, 1);
+          } else {
+            broadcastRoom(room.id);
+            broadcastRoomList();
           }
-
-          broadcastRoom(room.id);
-          broadcastRoomList();
-          scheduleBotActionIfNeeded(room.id);
         }
         return;
       }
@@ -674,6 +732,20 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (msg.type === 'skip_misdeal') {
+        const room = rooms.get(msg.roomId);
+        if (!room) return;
+        if (room.gameState.phase === 'misdeal') {
+          if (misdealTimers.has(room.id)) {
+            clearTimeout(misdealTimers.get(room.id)!);
+            misdealTimers.delete(room.id);
+          }
+          const nextDealer = getNextSeat(room.gameState.dealer);
+          executeDealRound(room, nextDealer, room.gameState.roundNumber);
+        }
+        return;
+      }
+
       if (msg.type === 'delete_room') {
         const roomId = msg.roomId;
         if (rooms.has(roomId)) {
@@ -681,6 +753,11 @@ wss.on('connection', (ws) => {
           if (timer) {
             clearTimeout(timer);
             botTimers.delete(roomId);
+          }
+          const misdealTimer = misdealTimers.get(roomId);
+          if (misdealTimer) {
+            clearTimeout(misdealTimer);
+            misdealTimers.delete(roomId);
           }
           rooms.delete(roomId);
           roomVoicePeers.delete(roomId);
@@ -901,25 +978,21 @@ app.post('/api/rooms', (req, res) => {
       : null,
   };
 
-  let initialGameState = createInitialGameState(randomDealer);
-  if (autoFillBots && SEATS.every((s) => seats[s] !== null)) {
-    initialGameState = startDealRound(initialGameState, randomDealer);
-  }
-
   const newRoom: Room = {
     id: roomId,
     name: name || `Table #${roomId.slice(-4).toUpperCase()}`,
     createdAt: Date.now(),
     hostId: hostId || 'host',
     seats,
-    gameState: initialGameState,
+    gameState: createInitialGameState(randomDealer),
     botDifficulty: botDifficulty === 'casual' ? 'casual' : 'super',
   };
 
   rooms.set(roomId, newRoom);
-  broadcastRoomList();
-  if (autoFillBots) {
-    scheduleBotActionIfNeeded(roomId);
+  if (autoFillBots && SEATS.every((s) => seats[s] !== null)) {
+    executeDealRound(newRoom, randomDealer, 1);
+  } else {
+    broadcastRoomList();
   }
   res.json(newRoom);
 });
@@ -934,6 +1007,12 @@ app.delete('/api/rooms/:roomId', (req, res) => {
   if (timer) {
     clearTimeout(timer);
     botTimers.delete(roomId);
+  }
+
+  const misdealTimer = misdealTimers.get(roomId);
+  if (misdealTimer) {
+    clearTimeout(misdealTimer);
+    misdealTimers.delete(roomId);
   }
 
   rooms.delete(roomId);

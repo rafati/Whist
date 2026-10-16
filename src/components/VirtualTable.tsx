@@ -25,6 +25,7 @@ import { BiddingPanel } from './BiddingPanel.tsx';
 import { SuitDeclarationModal } from './SuitDeclarationModal.tsx';
 import { RoundSummaryModal } from './RoundSummaryModal.tsx';
 import { GameOverModal } from './GameOverModal.tsx';
+import { MisdealModal } from './MisdealModal.tsx';
 import { ScoreBoard } from './ScoreBoard.tsx';
 import { SimulationModal } from './SimulationModal.tsx';
 import { VoiceChatBar } from './VoiceChatBar.tsx';
@@ -193,6 +194,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     playCard,
     nextRound,
     restartMatch,
+    skipMisdeal,
     deleteRoom,
   } = useSocket();
 
@@ -979,6 +981,17 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                       </button>
                     </>
                   )}
+                </div>
+              )}
+
+              {/* Misdeal Phase: Revealed 13-Card Hand and Countdown */}
+              {gameState.phase === 'misdeal' && gameState.misdealInfo && (
+                <div className="landscape-compact-console z-30 w-full max-w-lg">
+                  <MisdealModal
+                    misdealInfo={gameState.misdealInfo}
+                    onSkip={() => skipMisdeal(room.id)}
+                    isHost={user?.id === room.hostId}
+                  />
                 </div>
               )}
 

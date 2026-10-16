@@ -16,6 +16,7 @@ interface SocketContextType {
   playCard: (roomId: string, seat: any, card: any) => void;
   nextRound: (roomId: string) => void;
   restartMatch: (roomId: string) => void;
+  skipMisdeal: (roomId: string) => void;
   deleteRoom: (roomId: string) => void;
   refreshRoomList: () => void;
   errorMessage: string | null;
@@ -195,7 +196,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       activeRoomIdRef.current = null;
       setCurrentRoom(null);
     }
-  }, [send, refreshRoomList, currentRoom]);
+  }, [refreshRoomList, currentRoom?.id, send]);
+
+  const skipMisdeal = useCallback((roomId: string) => {
+    send({ type: 'skip_misdeal', roomId });
+  }, [send]);
 
   const clearError = () => setErrorMessage(null);
 
@@ -216,6 +221,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         playCard,
         nextRound,
         restartMatch,
+        skipMisdeal,
         deleteRoom,
         refreshRoomList,
         errorMessage,
