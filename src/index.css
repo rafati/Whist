@@ -80,47 +80,72 @@
   }
 }
 
-/* Compact vertical scaling for mobile landscape viewports (height <= 460px) */
-@media (max-height: 460px) and (orientation: landscape) {
+/* Compact vertical scaling and widescreen oval table for mobile landscape viewports (height <= 480px) */
+@media (max-height: 480px) and (orientation: landscape) {
   .landscape-compact-header {
-    height: 2rem !important;
+    height: 1.875rem !important; /* 30px */
     padding-top: 0.1rem !important;
     padding-bottom: 0.1rem !important;
   }
   .landscape-compact-table-wrap {
-    max-height: calc(100dvh - 118px) !important;
-    max-width: min(96dvw, calc((100dvh - 118px) * 2.15)) !important;
+    aspect-ratio: auto !important;
+    width: 98% !important;
+    max-width: 960px !important;
+    height: 100% !important;
+    max-height: calc(100dvh - 96px) !important;
     padding: 0.25rem !important;
-    border-radius: 22px !important;
+    border-radius: 24px !important;
+  }
+  .landscape-compact-felt {
+    border-radius: 20px !important;
   }
   .landscape-compact-center-stage {
-    width: 10rem !important;
-    height: 10rem !important;
+    width: 14rem !important;
+    height: 8.5rem !important;
+    border-radius: 9999px !important;
+  }
+  .landscape-compact-trick-card {
+    width: 2.5rem !important;
+    height: 3.5rem !important;
+  }
+  .landscape-hide-bottom-seat {
+    display: none !important;
+  }
+  .landscape-seat-top {
+    top: 0.25rem !important;
+  }
+  .landscape-seat-left {
+    left: 0.5rem !important;
+  }
+  .landscape-seat-right {
+    right: 0.5rem !important;
   }
   .landscape-compact-console {
-    width: 330px !important;
+    width: 320px !important;
     max-width: 80dvw !important;
-    transform: scale(0.84);
+    transform: scale(0.82);
     transform-origin: center center;
   }
   .landscape-compact-hand-footer {
     padding-bottom: 0.1rem !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
   }
   .landscape-compact-hand-box {
-    padding: 0.15rem 0.45rem !important;
+    padding: 0.15rem 0.5rem !important;
     border-radius: 0.75rem !important;
   }
   .landscape-compact-hand-row {
-    min-height: 64px !important;
-    padding-top: 0.2rem !important;
+    min-height: 56px !important;
+    padding-top: 0.15rem !important;
     padding-bottom: 0.05rem !important;
   }
   .landscape-compact-card {
-    width: 3.25rem !important;
-    height: 4.3rem !important;
+    width: 3.1rem !important;
+    height: 4.1rem !important;
   }
   .landscape-compact-card-slot:not(:first-child) {
-    margin-left: -0.95rem !important;
+    margin-left: -1rem !important;
   }
   .landscape-compact-modal {
     padding: 0.65rem 0.9rem !important;
@@ -128,23 +153,30 @@
   }
 }
 
-/* Extra-short mobile landscape viewports (340px - 370px height) */
-@media (max-height: 370px) and (orientation: landscape) {
+/* Extra-short mobile landscape viewports (320px - 380px height, e.g. Safari with toolbars) */
+@media (max-height: 380px) and (orientation: landscape) {
   .landscape-compact-table-wrap {
-    max-height: calc(100dvh - 108px) !important;
-    max-width: min(96dvw, calc((100dvh - 108px) * 2.25)) !important;
+    max-height: calc(100dvh - 86px) !important;
+  }
+  .landscape-compact-center-stage {
+    width: 12.5rem !important;
+    height: 7.25rem !important;
+  }
+  .landscape-compact-trick-card {
+    width: 2.25rem !important;
+    height: 3.15rem !important;
   }
   .landscape-compact-console {
-    transform: scale(0.75);
+    transform: scale(0.72);
   }
   .landscape-compact-hand-row {
-    min-height: 58px !important;
+    min-height: 48px !important;
   }
   .landscape-compact-card {
-    width: 3rem !important;
-    height: 3.95rem !important;
+    width: 2.85rem !important;
+    height: 3.75rem !important;
   }
   .landscape-compact-card-slot:not(:first-child) {
-    margin-left: -0.9rem !important;
+    margin-left: -0.95rem !important;
   }
 }

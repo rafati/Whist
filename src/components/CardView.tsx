@@ -25,7 +25,7 @@ export const CardView: React.FC<CardViewProps> = ({
   // Proportional, high-legibility card dimensions across mobile landscape & desktop
   const sizeClasses = {
     xs: 'w-7 h-10 sm:w-8 sm:h-11 rounded-sm sm:rounded-md',
-    sm: 'w-12 h-17 sm:w-14 sm:h-20 md:w-16 md:h-24 rounded-lg sm:rounded-xl',
+    sm: 'landscape-compact-trick-card w-12 h-17 sm:w-14 sm:h-20 md:w-16 md:h-24 rounded-lg sm:rounded-xl',
     hand: 'landscape-compact-card w-13 h-19 sm:w-16 sm:h-23 md:w-20 md:h-28 lg:w-23 lg:h-33 rounded-lg sm:rounded-xl',
     md: 'w-16 h-24 sm:w-20 sm:h-29 rounded-xl',
     lg: 'w-20 h-29 sm:w-28 sm:h-40 rounded-2xl',

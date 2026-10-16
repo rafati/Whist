@@ -139,10 +139,10 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
   }
 
   const posClass = {
-    top: 'top-0.5 sm:top-1 left-1/2 -translate-x-1/2',
-    bottom: 'bottom-0.5 sm:bottom-1 left-1/2 -translate-x-1/2',
-    left: 'left-0.5 sm:left-1 top-1/2 -translate-y-1/2',
-    right: 'right-0.5 sm:right-1 top-1/2 -translate-y-1/2',
+    top: 'top-1 sm:top-1.5 left-1/2 -translate-x-1/2',
+    bottom: 'bottom-1 sm:bottom-1.5 left-1/2 -translate-x-1/2',
+    left: 'left-1 sm:left-2 top-1/2 -translate-y-1/2',
+    right: 'right-1 sm:right-2 top-1/2 -translate-y-1/2',
   }[visualPos];
 
   const team = getTeam(played.seat);
@@ -658,7 +658,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
           {/* Phase-Specific Live Contract / Auction Progress Pill */}
           {gameState.phase === 'playing' && contractTeam && (
-            <div className="flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/40 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg shadow-xs text-[10px] sm:text-[11px] shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-950/90 border border-amber-500/40 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-lg shadow-xs text-[10px] sm:text-[11px] shrink-0">
               {renderTrumpBadge()}
               <span className="text-slate-600">•</span>
               <span className="font-mono font-bold text-amber-300" title="Declaring team tricks won vs. contract target">
@@ -669,6 +669,28 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               <span className="font-mono text-slate-300" title="Defending team tricks won vs. tricks needed to set contract">
                 Def: {defenseTricksWon}/{defenseSetGoalTricks}
               </span>
+              <span className="text-slate-600">|</span>
+              <span className="font-mono text-emerald-400 font-bold" title="Current trick">
+                Tk {gameState.tricksHistory.length + 1}/13
+              </span>
+              {currentLedSuit && (
+                <>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-300 text-[10px]" title="Led suit">
+                    Led:{' '}
+                    <strong
+                      style={{
+                        color:
+                          currentLedSuit === 'H' || currentLedSuit === 'D'
+                            ? '#ef4444'
+                            : '#ffffff',
+                      }}
+                    >
+                      {SUIT_SYMBOLS[currentLedSuit]}
+                    </strong>
+                  </span>
+                </>
+              )}
             </div>
           )}
 
@@ -824,24 +846,24 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
         className="flex-1 min-h-0 relative flex items-center justify-center p-1 sm:p-1.5 overflow-clip"
       >
         {/* Table Stage: Rich Hardwood Rail Borders with Casino Green Felt */}
-        <div className="landscape-compact-table-wrap relative w-full max-w-[min(960px,calc((100dvh-175px)*1.75))] h-full max-h-[calc(100dvh-175px)] aspect-[16/10] rounded-[28px] sm:rounded-[40px] md:rounded-[52px] table-wood-rail table-brass-bevel p-1.5 sm:p-2.5 md:p-3.5 shadow-2xl overflow-visible flex items-center justify-center">
+        <div className="landscape-compact-table-wrap relative w-full max-w-5xl h-full md:aspect-[16/10] rounded-[24px] sm:rounded-[36px] md:rounded-[52px] table-wood-rail table-brass-bevel p-1 sm:p-2.5 md:p-3.5 shadow-2xl overflow-visible flex items-center justify-center">
           {/* Inner Casino Green Felt Surface */}
-          <div className="w-full h-full rounded-[22px] sm:rounded-[32px] md:rounded-[44px] table-felt-radial table-felt-rim table-felt-stitch relative flex items-center justify-center p-1 sm:p-2 overflow-visible">
+          <div className="landscape-compact-felt w-full h-full rounded-[20px] sm:rounded-[30px] md:rounded-[44px] table-felt-radial table-felt-rim table-felt-stitch relative flex items-center justify-center p-1 sm:p-2 overflow-visible">
             {/* Cardinal Seats (Dynamically oriented with active player at the bottom) */}
             {renderSeat(
               topSeat,
-              `top-1 sm:top-1.5 left-1/2 -translate-x-1/2 ${
+              `landscape-seat-top top-1 sm:top-1.5 left-1/2 -translate-x-1/2 ${
                 gameState.phase !== 'playing' ? 'landscape-console-top-seat' : ''
               }`
             )}
-            {renderSeat(leftSeat, 'left-1 sm:left-2 top-1/2 -translate-y-1/2')}
+            {renderSeat(leftSeat, 'landscape-seat-left left-1 sm:left-2 top-1/2 -translate-y-1/2')}
             {renderSeat(
               bottomSeat,
               `bottom-1 sm:bottom-1.5 left-1/2 -translate-x-1/2 ${
-                gameState.phase !== 'playing' ? 'landscape-console-bottom-seat' : ''
-              }`
+                mySeat ? 'landscape-hide-bottom-seat' : ''
+              } ${gameState.phase !== 'playing' ? 'landscape-console-bottom-seat' : ''}`
             )}
-            {renderSeat(rightSeat, 'right-1 sm:right-2 top-1/2 -translate-y-1/2')}
+            {renderSeat(rightSeat, 'landscape-seat-right right-1 sm:right-2 top-1/2 -translate-y-1/2')}
 
             {/* Center Table Stage */}
             <div className="landscape-compact-center-stage relative w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 lg:w-80 lg:h-80 rounded-full border border-emerald-600/20 bg-black/25 flex items-center justify-center p-1 overflow-visible">
@@ -983,31 +1005,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               {/* Playing Phase: Current Trick Center Arena */}
               {gameState.phase === 'playing' && (
                 <div className="relative w-full h-full flex items-center justify-center">
-                  {/* Subtle Center Trick Counter & Led Suit Pill */}
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-slate-950/90 border border-emerald-600/50 px-2.5 py-0.5 rounded-full shadow pointer-events-none whitespace-nowrap text-[9px] sm:text-[10px]">
-                    <span className="font-mono text-emerald-400 font-bold">
-                      Trick {gameState.tricksHistory.length + 1}/13
-                    </span>
-                    {currentLedSuit && (
-                      <>
-                        <span className="text-slate-600">•</span>
-                        <span className="text-slate-300">
-                          Led:{' '}
-                          <strong
-                            style={{
-                              color:
-                                currentLedSuit === 'H' || currentLedSuit === 'D'
-                                  ? '#ef4444'
-                                  : '#ffffff',
-                            }}
-                          >
-                            {SUIT_SYMBOLS[currentLedSuit]}
-                          </strong>
-                        </span>
-                      </>
-                    )}
-                  </div>
-
                   {/* 4 Cards Placement in Trick with Smooth Play & Collect Animations */}
                   {displayTrick.map((played, idx) => {
                     const isWinningCard = Boolean(
@@ -1078,20 +1075,53 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             <div className="landscape-compact-hand-box bg-slate-950/92 backdrop-blur-md border border-emerald-800/40 rounded-xl sm:rounded-2xl px-2 py-1 sm:p-2 shadow-2xl">
               {/* Compact Hand Status Header Row */}
               <div className="flex items-center justify-between text-xs px-1 mb-0.5">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <span
-                    className={`text-[9px] sm:text-[10px] font-bold px-2 py-[1px] rounded-full border ${
-                      getTeam(mySeat) === 'TeamA'
-                        ? 'text-emerald-300 bg-emerald-950/80 border-emerald-700/50'
-                        : 'text-blue-300 bg-blue-950/80 border-blue-700/50'
-                    }`}
-                  >
-                    {getTeam(mySeat) === 'TeamA' ? 'Team 1' : 'Team 2'} • {myHand.length}{' '}
-                    {myHand.length === 1 ? 'card' : 'cards'}
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                  {/* Player Profile & Identity Pill */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="relative shrink-0">
+                      <img
+                        src={user?.avatar || seats[mySeat]?.avatar || 'https://api.dicebear.com/7.x/initials/svg?seed=You'}
+                        alt="You"
+                        referrerPolicy="no-referrer"
+                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border object-cover shadow bg-slate-800 ${
+                          getTeam(mySeat) === 'TeamA' ? 'border-emerald-400' : 'border-blue-400'
+                        }`}
+                      />
+                      {gameState.dealer === mySeat && (
+                        <div
+                          className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-amber-500 text-slate-950 font-black text-[7px] flex items-center justify-center border border-white shadow font-mono"
+                          title="Dealer"
+                        >
+                          D
+                        </div>
+                      )}
+                    </div>
+                    <span
+                      className={`text-[9px] sm:text-[10px] font-bold px-2 py-[1px] rounded-full border flex items-center gap-1 ${
+                        getTeam(mySeat) === 'TeamA'
+                          ? 'text-emerald-300 bg-emerald-950/80 border-emerald-700/50'
+                          : 'text-blue-300 bg-blue-950/80 border-blue-700/50'
+                      }`}
+                    >
+                      <span>{getTeam(mySeat) === 'TeamA' ? 'Team 1' : 'Team 2'}</span>
+                      {gameState.phase === 'playing' && (
+                        <>
+                          <span className="text-slate-500">•</span>
+                          <span className="text-amber-300 font-mono font-bold" title="Tricks won by you this round">
+                            {gameState.playerTricksWon[mySeat] || 0}T
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+
+                  <span className="text-slate-500 text-[10px] hidden sm:inline">•</span>
+                  <span className="text-slate-400 text-[10px] hidden sm:inline">
+                    {myHand.length} {myHand.length === 1 ? 'card' : 'cards'}
                   </span>
 
                   {/* Suit distribution pills */}
-                  <div className="hidden sm:flex items-center gap-1 text-[10px] font-mono font-semibold">
+                  <div className="hidden md:flex items-center gap-1 text-[10px] font-mono font-semibold">
                     <span className="bg-slate-900 border border-slate-800 px-1.5 py-[1px] rounded text-slate-200">
                       ♠ {myHand.filter((c) => c.suit === 'S').length}
                     </span>
