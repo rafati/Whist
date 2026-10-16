@@ -201,7 +201,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const [showSimModal, setShowSimModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showTableMenu, setShowTableMenu] = useState(false);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
   // Developer-only flag to access AI Simulation Lab (?dev=true)
   const isDevMode =
@@ -219,9 +218,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const gameState = room.gameState;
   const seats = room.seats;
 
-  // Clear selected card and any lingering celebration badges whenever phase or round changes
+  // Clear any lingering celebration badges whenever phase or round changes
   useEffect(() => {
-    setSelectedCardId(null);
     setCelebratedSeat(null);
     setWinnerInfo(null);
     setIsGathering(false);
@@ -327,7 +325,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const executePlayCard = (card: Card) => {
     if (!mySeat || !isMyTurnToPlay) return;
     if (!isCardLegal(card, myHand, currentLedSuit)) return;
-    setSelectedCardId(null);
     setJustPlayedHandCardId(card.id);
     playCard(room.id, mySeat, card);
     setTimeout(() => {
@@ -338,23 +335,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const handleCardInteraction = (card: Card) => {
     if (!mySeat || !isMyTurnToPlay) return;
     if (!isCardLegal(card, myHand, currentLedSuit)) return;
-
-    // Use 2-tap confirmation on touch devices (coarse pointer) to prevent mis-taps,
-    // and instant 1-click play on desktop pointers.
-    const isTouchDevice =
-      typeof window !== 'undefined' &&
-      window.matchMedia &&
-      window.matchMedia('(pointer: coarse)').matches;
-
-    if (isTouchDevice) {
-      if (selectedCardId === card.id) {
-        executePlayCard(card);
-      } else {
-        setSelectedCardId(card.id);
-      }
-    } else {
-      executePlayCard(card);
-    }
+    executePlayCard(card);
   };
 
   const handleSeatClick = (seat: Seat) => {
@@ -871,12 +852,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
       </header>
 
       {/* Main Table Arena */}
-      <main
-        onClick={() => {
-          if (selectedCardId) setSelectedCardId(null);
-        }}
-        className="portrait-table-container flex-1 min-h-0 relative flex items-center justify-center p-1 sm:p-1.5 overflow-clip"
-      >
+      <main className="portrait-table-container flex-1 min-h-0 relative flex items-center justify-center p-1 sm:p-1.5 overflow-clip">
         {/* Table Stage: Rich Hardwood Rail Borders with Casino Green Felt */}
         <div className="portrait-table-wrap landscape-compact-table-wrap relative w-full max-w-5xl h-full md:aspect-[16/10] rounded-[24px] sm:rounded-[36px] md:rounded-[52px] table-wood-rail table-brass-bevel p-1 sm:p-2.5 md:p-3.5 shadow-2xl overflow-visible flex items-center justify-center">
           {/* Inner Casino Green Felt Surface */}
@@ -1219,11 +1195,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     isMyTurnToPlay ? (
                       <span className="text-slate-950 font-extrabold text-[9px] sm:text-[10px] flex items-center gap-1 bg-amber-400 px-2 py-0.5 rounded-full shadow animate-pulse">
                         <span>
-                          {selectedCardId
-                            ? 'TAP SELECTED CARD AGAIN TO PLAY'
-                            : currentLedSuit
+                          {currentLedSuit
                             ? `YOUR TURN • FOLLOW ${SUIT_NAMES[currentLedSuit].toUpperCase()}`
-                            : 'YOUR TURN • PLAY A CARD'}
+                            : 'YOUR TURN • TAP OR SWIPE CARD TO PLAY'}
                         </span>
                       </span>
                     ) : (
@@ -1271,7 +1245,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     const isDimmed =
                       gameState.phase === 'playing' && isMyTurnToPlay && !isLegal;
                     const isJustPlayed = justPlayedHandCardId === card.id;
-                    const isSelected = selectedCardId === card.id;
 
                     return (
                       <div
@@ -1281,9 +1254,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                           ${idx !== 0 ? '-ml-5 sm:-ml-6 md:-ml-8 lg:-ml-9' : ''}
                           ${
                             isJustPlayed
-                              ? '-translate-y-6 scale-105 opacity-50 ring-2 ring-amber-400 z-30 duration-150'
-                              : isSelected
-                              ? 'z-40 duration-150'
+                              ? '-translate-y-10 sm:-translate-y-12 scale-95 opacity-30 ring-2 ring-amber-400 z-40 duration-200 pointer-events-none'
                               : canPlay
                               ? '-translate-y-2 sm:-translate-y-2.5 hover:-translate-y-4 hover:z-30 hover:scale-105 duration-150'
                               : ''
@@ -1294,10 +1265,13 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                           card={card}
                           size="hand"
                           isPlayable={Boolean(canPlay && !isJustPlayed)}
-                          isSelected={isSelected}
                           isDimmed={isDimmed}
-                          onClick={(e) => {
-                            e.stopPropagation();
+                          onClick={() => {
+                            if (gameState.phase === 'playing') {
+                              handleCardInteraction(card);
+                            }
+                          }}
+                          onSwipePlay={() => {
                             if (gameState.phase === 'playing') {
                               handleCardInteraction(card);
                             }

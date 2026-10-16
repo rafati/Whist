@@ -1,15 +1,16 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { Card, Rank, Suit } from '../types.ts';
 import { SUIT_SYMBOLS } from '../logic/gameLogic.ts';
 import { RoyalCourtArt } from './RoyalCourtArt.tsx';
 
-interface CardViewProps {
+export interface CardViewProps {
   card?: Card;
   faceDown?: boolean;
   isPlayable?: boolean;
   isSelected?: boolean;
   isDimmed?: boolean;
-  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onClick?: (e?: React.MouseEvent<HTMLDivElement>) => void;
+  onSwipePlay?: () => void;
   size?: 'xs' | 'sm' | 'hand' | 'md' | 'lg' | 'xl';
   className?: string;
 }
@@ -86,9 +87,110 @@ export const CardView: React.FC<CardViewProps> = ({
   isSelected = false,
   isDimmed = false,
   onClick,
+  onSwipePlay,
   size = 'hand',
   className = '',
 }) => {
+  const [dragOffset, setDragOffset] = useState<{ y: number; x: number } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
+  const touchHandledRef = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isPlayable || isDimmed) return;
+    const touch = e.touches[0];
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now(),
+    };
+    lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!touchStartRef.current || !isPlayable || isDimmed) return;
+    const touch = e.touches[0];
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+
+    // Follow upward swipe toward the table felt
+    if (deltaY < 0) {
+      const clampedY = Math.max(-95, deltaY);
+      setDragOffset({ y: clampedY, x: deltaX * 0.25 });
+    } else {
+      // Small resistance when dragged downward
+      setDragOffset({ y: Math.min(15, deltaY * 0.15), x: 0 });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!touchStartRef.current || !isPlayable || isDimmed) {
+      touchStartRef.current = null;
+      lastTouchRef.current = null;
+      setDragOffset(null);
+      return;
+    }
+
+    const start = touchStartRef.current;
+    const last = lastTouchRef.current || start;
+    const deltaY = last.y - start.y;
+    const deltaX = last.x - start.x;
+    const elapsed = Date.now() - start.time;
+    const speedY = deltaY / Math.max(1, elapsed); // px/ms
+
+    touchStartRef.current = null;
+    lastTouchRef.current = null;
+    setDragOffset(null);
+
+    // Upward swipe / throw check:
+    // Dragged up > 30px or fast upward flick (> 15px up and speed < -0.2px/ms)
+    // with primary vertical movement (not a horizontal pan across hand)
+    const isVerticalMove = Math.abs(deltaY) >= Math.abs(deltaX) * 0.7;
+    const isUpwardThrow = isVerticalMove && (deltaY < -30 || (deltaY < -15 && speedY < -0.2));
+
+    // Tap check: very small finger shift
+    const isTap = Math.abs(deltaY) < 14 && Math.abs(deltaX) < 14;
+
+    if (isUpwardThrow) {
+      touchHandledRef.current = true;
+      if (e.cancelable) e.preventDefault();
+      if (onSwipePlay) {
+        onSwipePlay();
+      } else if (onClick) {
+        onClick();
+      }
+      setTimeout(() => {
+        touchHandledRef.current = false;
+      }, 350);
+    } else if (isTap) {
+      touchHandledRef.current = true;
+      if (e.cancelable) e.preventDefault();
+      if (onClick) {
+        onClick();
+      }
+      setTimeout(() => {
+        touchHandledRef.current = false;
+      }, 350);
+    }
+  };
+
+  const handleTouchCancel = () => {
+    touchStartRef.current = null;
+    lastTouchRef.current = null;
+    setDragOffset(null);
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (touchHandledRef.current) {
+      // Already handled by touch tap or swipe throw, ignore synthetic click
+      return;
+    }
+    if (isPlayable && !isDimmed && onClick) {
+      onClick(e);
+    }
+  };
+
   // Proportional standard card dimensions (classic 1 : 1.4 ratio)
   const sizeClasses = {
     xs: 'w-7 h-10 sm:w-8 sm:h-11 rounded-sm sm:rounded-md',
@@ -142,12 +244,24 @@ export const CardView: React.FC<CardViewProps> = ({
 
   return (
     <div
-      onClick={isPlayable && !isDimmed ? onClick : undefined}
+      onClick={isPlayable && !isDimmed ? handleClick : undefined}
+      onTouchStart={isPlayable && !isDimmed ? handleTouchStart : undefined}
+      onTouchMove={isPlayable && !isDimmed ? handleTouchMove : undefined}
+      onTouchEnd={isPlayable && !isDimmed ? handleTouchEnd : undefined}
+      onTouchCancel={isPlayable && !isDimmed ? handleTouchCancel : undefined}
       style={{
         backgroundColor: '#ffffff',
-        boxShadow: isSelected
+        boxShadow: dragOffset && dragOffset.y < -20
+          ? '0 16px 32px -4px rgba(245, 158, 11, 0.7), 0 4px 14px -2px rgba(245, 158, 11, 0.5)'
+          : isSelected
           ? '0 12px 28px -3px rgba(245, 158, 11, 0.65), 0 4px 10px -2px rgba(245, 158, 11, 0.5)'
           : '0 3px 10px rgba(0, 0, 0, 0.32)',
+        transform: dragOffset
+          ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) scale(1.08) rotate(${Math.min(12, Math.max(-12, dragOffset.x * 0.2))}deg)`
+          : undefined,
+        zIndex: dragOffset ? 50 : undefined,
+        transition: dragOffset ? 'none' : 'transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms ease',
+        touchAction: isPlayable && !isDimmed ? 'pan-x' : undefined,
       }}
       className={`
         ${sizeClasses}
@@ -156,17 +270,17 @@ export const CardView: React.FC<CardViewProps> = ({
         relative
         select-none
         overflow-hidden
-        transition-all duration-150
         ${isDimmed ? 'opacity-40 grayscale-[35%] pointer-events-none scale-[0.96]' : ''}
         ${isPlayable && !isDimmed ? 'cursor-pointer hover:-translate-y-2.5 hover:shadow-2xl hover:ring-2 hover:ring-amber-400 active:scale-95 z-20' : ''}
         ${isSelected ? 'ring-2 sm:ring-3 ring-amber-400 -translate-y-2.5 sm:-translate-y-3 scale-105 z-40' : ''}
         ${className}
       `}
     >
-      {/* 2-Tap Confirmation Badge when Selected on mobile touch */}
-      {isSelected && (
-        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-50 bg-amber-400 text-slate-950 font-black text-[7px] sm:text-[8px] uppercase tracking-wider px-1.5 py-[1px] rounded-full shadow-md border border-white whitespace-nowrap pointer-events-none">
-          Tap to Play
+      {/* Throw Badge when dragging up on touch */}
+      {dragOffset && dragOffset.y < -24 && (
+        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-50 bg-amber-400 text-slate-950 font-black text-[7px] sm:text-[8px] uppercase tracking-wider px-1.5 py-[1px] rounded-full shadow-md border border-white whitespace-nowrap pointer-events-none flex items-center gap-0.5 animate-pulse">
+          <span>Throw</span>
+          <span className="text-[9px] font-bold leading-none">↑</span>
         </div>
       )}
 
