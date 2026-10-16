@@ -20,7 +20,6 @@ import {
 } from '../logic/gameLogic.ts';
 import { ANIMATION_CONFIG } from '../logic/animationConfig.ts';
 import { CardView } from './CardView.tsx';
-import { OpponentHandSpread } from './OpponentHandSpread.tsx';
 import { BiddingPanel } from './BiddingPanel.tsx';
 import { SuitDeclarationModal } from './SuitDeclarationModal.tsx';
 import { RoundSummaryModal } from './RoundSummaryModal.tsx';
@@ -460,33 +459,79 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 </div>
               )}
 
-              {/* Bid Speech Bubble During & After Bidding */}
-              {gameState.phase === 'bidding' ? (
-                <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none`}>
-                  {isCurrentBidder ? (
-                    <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow animate-pulse">
-                      Bidding...
-                    </span>
-                  ) : seatBid ? (
-                    seatBid.type === 'pass' ? (
-                      <span className="bg-slate-800 border border-slate-700 text-slate-300 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
-                        Passed
-                      </span>
-                    ) : (
-                      <span className="bg-emerald-950 border border-emerald-500 text-emerald-300 font-bold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
-                        Bid {seatBid.level} {seatBid.contractType}
-                      </span>
-                    )
-                  ) : null}
-                </div>
-              ) : (gameState.phase === 'playing' || gameState.phase === 'declaring') && isDeclarer && seatBid ? (
-                <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none`}>
-                  <span className="bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow flex items-center gap-0.5">
-                    <Crown className="w-2.5 h-2.5 text-slate-950" />
-                    <span>Declarer ({seatBid.level}{seatBid.contractType === 'NT' ? 'NT' : 'S'})</span>
-                  </span>
-                </div>
-              ) : null}
+              {/* Bid Speech Bubble During Bidding & Persistent Bid / Winning Contract Post-Auction */}
+              {(() => {
+                // Phase 1: During Active Bidding
+                if (gameState.phase === 'bidding') {
+                  return (
+                    <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none`}>
+                      {isCurrentBidder ? (
+                        <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow animate-pulse">
+                          Bidding...
+                        </span>
+                      ) : seatBid ? (
+                        seatBid.type === 'pass' ? (
+                          <span className="bg-slate-800 border border-slate-700 text-slate-300 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
+                            Passed
+                          </span>
+                        ) : (
+                          <span className="bg-emerald-950 border border-emerald-500 text-emerald-300 font-bold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
+                            Bid {seatBid.level} {seatBid.contractType}
+                          </span>
+                        )
+                      ) : null}
+                    </div>
+                  );
+                }
+
+                // Phase 2: Post-Auction (Declaring, Playing, Round Over)
+                if (gameState.phase === 'playing' || gameState.phase === 'declaring' || gameState.phase === 'round_over') {
+                  // Winning Bidder: Prominent Glowing Gold Contract Badge
+                  if (isDeclarer) {
+                    let contractText = '';
+                    if (gameState.trumpSuit === 'NT') {
+                      contractText = `${gameState.winningBid?.level || 1} NT (No Trump)`;
+                    } else if (gameState.trumpSuit) {
+                      const sym = SUIT_SYMBOLS[gameState.trumpSuit];
+                      const sName = SUIT_NAMES[gameState.trumpSuit];
+                      contractText = `${gameState.winningBid?.level || 1}${sym} ${sName}`;
+                    } else {
+                      contractText = `${gameState.winningBid?.level || 1} Suit`;
+                    }
+
+                    return (
+                      <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-5 sm:-top-6'} left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-150`}>
+                        <span className="bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.7)] border border-white flex items-center gap-1">
+                          <Crown className="w-2.5 h-2.5 fill-current text-slate-950 shrink-0" />
+                          <span>{contractText}</span>
+                          <span className="text-[7px] bg-slate-950 text-amber-300 px-1 py-0.2 rounded-full font-bold uppercase tracking-wider">
+                            Winning Bid
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  // Non-Declarer Players: Persistent clear bid or pass pill
+                  if (seatBid) {
+                    return (
+                      <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-20 whitespace-nowrap pointer-events-none`}>
+                        {seatBid.type === 'pass' ? (
+                          <span className="bg-slate-900/90 border border-slate-700/80 text-slate-400 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow-xs">
+                            Passed
+                          </span>
+                        ) : (
+                          <span className="bg-slate-900/90 border border-slate-600 text-slate-300 font-bold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow-xs">
+                            Bid {seatBid.level} {seatBid.contractType}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
+                }
+
+                return null;
+              })()}
 
             {/* Avatar & Status Badges */}
             <div className="relative shrink-0">
@@ -569,17 +614,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               </div>
             </div>
           </div>
-
-          {/* Opponent Stacked Card Deck (Tactile deck visual as in MobilityWare) */}
-          {(gameState.phase === 'playing' || gameState.phase === 'bidding' || gameState.phase === 'declaring') && (
-            <div className={`${isTopSeat ? 'shrink-0' : 'mt-0.5'} flex justify-center`}>
-              <OpponentHandSpread
-                count={gameState.cardsCount[seat] || 0}
-                orientation={visualPos === 'top' ? 'top' : visualPos === 'left' ? 'left' : 'right'}
-                isCurrentTurn={isCurrentPlayer}
-              />
-            </div>
-          )}
         </div>
       ) : (
           /* Empty Seat Claim Button */
@@ -1132,10 +1166,35 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     </span>
                   </div>
 
-                  <span className="text-slate-500 text-[10px] hidden sm:inline">•</span>
-                  <span className="text-slate-400 text-[10px] hidden sm:inline">
-                    {myHand.length} {myHand.length === 1 ? 'card' : 'cards'}
-                  </span>
+                  {/* Your Bid or Winning Contract in Bottom Dock */}
+                  {(() => {
+                    const isMyDeclarer = gameState.declarer === mySeat;
+                    const myBid = gameState.bids.find((b) => b.seat === mySeat);
+                    if ((gameState.phase === 'playing' || gameState.phase === 'declaring') && isMyDeclarer) {
+                      let myContractDisplay = '';
+                      if (gameState.trumpSuit === 'NT') {
+                        myContractDisplay = `${gameState.winningBid?.level || 1} NT (No Trump)`;
+                      } else if (gameState.trumpSuit) {
+                        myContractDisplay = `${gameState.winningBid?.level || 1}${SUIT_SYMBOLS[gameState.trumpSuit]} ${SUIT_NAMES[gameState.trumpSuit]}`;
+                      } else {
+                        myContractDisplay = `${gameState.winningBid?.level || 1} Suit`;
+                      }
+                      return (
+                        <span className="bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-black text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow border border-white flex items-center gap-1 shrink-0">
+                          <Crown className="w-2.5 h-2.5 fill-current shrink-0" />
+                          <span>Winning Bid: {myContractDisplay}</span>
+                        </span>
+                      );
+                    }
+                    if (myBid && (gameState.phase === 'playing' || gameState.phase === 'bidding' || gameState.phase === 'declaring')) {
+                      return (
+                        <span className="bg-slate-900 border border-slate-700 text-slate-300 font-bold text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-xs shrink-0">
+                          {myBid.type === 'pass' ? 'Passed' : `Bid ${myBid.level} ${myBid.contractType}`}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   {/* Suit distribution pills */}
                   <div className="hidden md:flex items-center gap-1 text-[10px] font-mono font-semibold">
