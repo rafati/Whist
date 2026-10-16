@@ -67,9 +67,10 @@ Represents the complete authoritative state of play within a room ([src/types.ts
 
 | Property | Type | Description |
 |---|---|---|
-| `phase` | `GamePhase` | `'waiting' \| 'bidding' \| 'declaring' \| 'playing' \| 'round_over' \| 'game_over'` |
+| `phase` | `GamePhase` | `'waiting' \| 'bidding' \| 'declaring' \| 'playing' \| 'round_over' \| 'game_over' \| 'misdeal'` |
 | `roundNumber` | `number` | Current round counter (starts at 1) |
 | `dealer` | `Seat` | Active dealer seat (`'North' \| 'West' \| 'South' \| 'East'`) |
+| `misdealInfo` | `MisdealInfo \| null` | Unwinnable hand payload (revealed 13 cards, player name, countdown expiry) |
 | `hands` | `Record<Seat, Card[]>` | Active cards held by each seated player |
 | `cardsCount` | `Record<Seat, number>` | Remaining card count per player (publicly visible) |
 | `auctionTurnsCount`| `number` | Number of bids placed in current auction (0 to 4) |
@@ -86,7 +87,7 @@ Represents the complete authoritative state of play within a room ([src/types.ts
 | `tricksHistory` | `TrickResult[]` | Record of all completed tricks in the current round |
 | `tricksWonCount` | `Record<Seat, number>` | Individual trick count per seat |
 | `teamTricksWon` | `{ TeamA: number; TeamB: number }` | Cumulative tricks won per team this round |
-| `matchScores` | `{ TeamA: number; TeamB: number }` | Overall match scores (starts at 0; win +11, eliminate -11) |
+| `matchScores` | `{ TeamA: number; TeamB: number }` | Overall match scores (starts at 0; win +10, eliminate -10) |
 | `roundScores` | `RoundScoreBreakdown[]` | Historical scoring breakdowns for each round |
 | `winnerTeam` | `Team \| null` | Winning team if match concluded |
 | `winnerReason` | `string \| null` | Explanation of match victory or elimination |

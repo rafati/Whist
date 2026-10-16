@@ -34,6 +34,15 @@ Enables human players and AI bots to assemble at virtual tables in 2-versus-2 pa
    * Round 1: Randomized dealer selected from `['North', 'West', 'South', 'East']`.
    * Subsequent Rounds: Dealer rotates counter-clockwise: `North` $\rightarrow$ `West` $\rightarrow$ `South` $\rightarrow$ `East` $\rightarrow$ `North`.
 5. The auction opening bidder is assigned to the player to the immediate right of the dealer (`getNextSeat(dealer)`).
+6. **Unwinnable Hand / Misdeal ("Kosh") Rule**:
+   * Hands are verified for winning card criteria:
+     * Any **Ace (`A`)**
+     * Any **King (`K`)** with at least 1 other card of the same suit (suit length $\ge 2$)
+     * Any **Queen (`Q`)** with at least 2 other cards of the same suit (suit length $\ge 3$)
+     * Any **Jack (`J`)** with at least 3 other cards of the same suit (suit length $\ge 4$)
+   * If any hand contains none of the above, state transitions to `'misdeal'`.
+   * The 13-card hand is revealed face-up for 10 seconds via [MisdealModal.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/MisdealModal.tsx) with a countdown progress bar and "Deal Now" skip button.
+   * On timeout or skip, cards are re-dealt with the dealer rotating counter-clockwise (`getNextSeat(dealer)`).
 
 ---
 
@@ -57,11 +66,15 @@ $$\text{Rank} = \text{Level} \times 2 + (\text{ContractType} == \text{'NT'} ? 1 
 Hierarchy: `1 Suit < 1 NT < 2 Suit < 2 NT < 3 Suit < 3 NT < ... < 7 Suit < 7 NT`
 
 ### 3.4 Dealer Strategic Privileges (Turn 4)
-The dealer on turn 4 has special strategic options ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L196-L225)):
+The dealer on turn 4 has special strategic options ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L206-L298)):
 1. **Pass**: Accepts the leading bid from turns 1–3.
-2. **Match Suit**: Matches the highest numeric level to claim a Suit contract without increasing the level (e.g., if highest bid is `2 NT`, dealer can declare `2 Suit` with `isDealerPrivilegeMatch: true`).
-3. **Match NT**: Matches the highest numeric level to claim No Trump.
-4. **Exceed**: Submits a strictly higher bid.
+2. **When Highest Bid reached Dealer as Suit (e.g. `2 Suit`)**:
+   * Dealer can **Match Suit** at the same level (`Match 2 Suit`, 8 tricks) with `isDealerPrivilegeMatch: true`.
+   * Dealer can submit a higher bid (`2 NT`, `3 Suit`, `3 NT`, etc.).
+3. **When Highest Bid reached Dealer as No Trump (e.g. `2 NT`)**:
+   * Dealer can take No Trump with the **same number or higher** (`Match 2 No Trump`, `Bid 3 No Trump`, etc.).
+   * If the dealer wants to take it **Suit**, it must be **one or more higher** (e.g. `3 Suit` or above). Matching `2 Suit` against `2 NT` is strictly disallowed.
+4. **Exceed**: Submits any strictly higher legal bid.
 
 ### 3.5 Auction Conclusion
 * **All 4 Players Pass**: The cards are reshuffled and re-dealt with the dealer rotating counter-clockwise ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L272-L278)).
@@ -135,7 +148,7 @@ Let $L = \text{Bid Level}$, Required Tricks $= 6 + L$:
 ## 7. Feature: Victory and Elimination Conditions
 
 Evaluated via `checkMatchEnd()` ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L400-L449)):
-* **Victory Condition**: Reaching $\ge +11$ match points.
-* **Elimination Condition**: Dropping to $\le -11$ match points.
-* **Priority Rule**: If both teams trigger conditions simultaneously, $+11$ Victory takes precedence over $-11$ Elimination. If both teams exceed $+11$, the team with the higher score wins; if exactly tied, Team 1 holds victory precedence.
+* **Victory Condition**: Reaching $\ge +10$ match points.
+* **Elimination Condition**: Dropping to $\le -10$ match points.
+* **Priority Rule**: If both teams trigger conditions simultaneously, $+10$ Victory takes precedence over $-10$ Elimination. If both teams exceed $+10$, the team with the higher score wins; if exactly tied, Team 1 holds victory precedence.
 * **Game Over Modal**: Displays confetti, final scores, and offers "Start New Match" ([GameOverModal.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/GameOverModal.tsx)).

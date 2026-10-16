@@ -36,6 +36,17 @@ Play proceeds strictly in a **Counter-Clockwise** direction across all phases:
 2. 13 cards are dealt to each of the 4 players.
 3. Hand cards are automatically sorted by suit (`Spades` > `Hearts` > `Clubs` > `Diamonds`, with trump placed first if active) and rank descending.
 4. For round 1, dealer selection is randomized among the 4 seats. In subsequent rounds, the dealer button rotates counter-clockwise (`getNextSeat(dealer)`).
+5. **Unwinnable Hand / Misdeal ("Kosh") Rule**:
+   * Each dealt 13-card hand is validated to ensure it contains at least one **winning card** ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L508-L532)):
+     * Any **Ace (`A`)**
+     * Any **King (`K`)** with at least 1 other card of the same suit (suit length $\ge 2$)
+     * Any **Queen (`Q`)** with at least 2 other cards of the same suit (suit length $\ge 3$)
+     * Any **Jack (`J`)** with at least 3 other cards of the same suit (suit length $\ge 4$)
+   * If any player's hand contains none of the above (has 0 winning cards):
+     * The game immediately enters the `'misdeal'` phase.
+     * The unwinnable player's 13-card hand is revealed face-up in the center arena for 10 seconds via [MisdealModal.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/MisdealModal.tsx).
+     * An animated countdown bar indicates automatic re-dealing. The host or players can click **"Deal Now"** (`skip_misdeal`) to bypass the countdown.
+     * When re-dealt, the deal advances **counter-clockwise** to the next dealer (`getNextSeat(dealer)`).
 
 ### 2.2 Phase 2: The Auction (Bidding)
 1. **Turn Sequence**: Exactly 4 turns in counter-clockwise order, beginning with the player to the **immediate right of the dealer** (`getNextSeat(dealer)`). The dealer always bids 4th (last).
@@ -46,10 +57,14 @@ Play proceeds strictly in a **Counter-Clockwise** direction across all phases:
    Rank formula: $\text{Rank} = \text{Level} \times 2 + (\text{ContractType} == \text{'NT'} ? 1 : 0)$  
    `1 Suit < 1 NT < 2 Suit < 2 NT < 3 Suit < 3 NT < ... < 7 Suit < 7 NT`
 4. **Dealer Privileges (4th Turn)**:
-   The dealer possesses strategic privileges on their turn ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L196-L225)):
+   The dealer possesses strategic privileges on their turn ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L206-L298)):
    * **Pass**: Accepts the highest bid from turns 1–3.
-   * **Match Suit**: Matches the highest numeric level to declare a Suit contract without needing to increase the level (e.g., if high bid is 2 Suit or 2 NT, dealer can claim 2 Suit).
-   * **Match NT / Exceed**: Matches or exceeds the current high bid level.
+   * **When Highest Bid reached Dealer as Suit (e.g. `2 Suit`)**:
+     * Dealer can **Match Suit** at the same level (`Match 2 Suit`, 8 tricks) with `isDealerPrivilegeMatch: true`.
+     * Dealer can bid higher (`2 NT`, `3 Suit`, `3 NT`, etc.).
+   * **When Highest Bid reached Dealer as No Trump (e.g. `2 NT`)**:
+     * Dealer can take No Trump with the **same number or higher** (`Match 2 No Trump`, `Bid 3 No Trump`, etc.).
+     * If the dealer wants to take it **Suit**, it must be **one or more higher** (e.g., `3 Suit` or above). Matching `2 Suit` against `2 NT` is strictly disallowed.
 5. **Contract Determination**: The highest bidder becomes the **Declarer**. If all 4 players pass, the cards are reshuffled and re-dealt with the dealer rotating counter-clockwise.
 
 ### 2.3 Phase 3: Trump Declaration
@@ -90,9 +105,9 @@ Scoring is calculated per round based on tricks won above the base threshold of 
 
 ### 2.6 Victory and Elimination Conditions
 Evaluated by `checkMatchEnd()` ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L400-L449)):
-* **Victory Condition**: First team to achieve **+11 Match Points**.
-* **Elimination Condition**: Any team falling to **-11 Match Points** is eliminated.
-* **Priority Rule**: If both conditions are triggered in the same round, reaching $+11$ (Victory) takes precedence over dropping to $-11$ (Elimination). If both teams reach $+11$, higher score wins.
+* **Victory Condition**: First team to achieve **+10 Match Points**.
+* **Elimination Condition**: Any team falling to **-10 Match Points** is eliminated.
+* **Priority Rule**: If both conditions are triggered in the same round, reaching $+10$ (Victory) takes precedence over dropping to $-10$ (Elimination). If both teams reach $+10$, higher score wins.
 
 ---
 
@@ -202,6 +217,7 @@ A full-mesh peer-to-peer voice chat system integrated into the table interface (
 | `play_card` | `roomId: string, seat: Seat, card: Card` | Plays a card to the active trick |
 | `next_round` | `roomId: string` | Starts next round from round summary |
 | `restart_match` | `roomId: string` | Resets match scores to 0-0 |
+| `skip_misdeal` | `roomId: string` | Bypasses 10s countdown to immediately re-deal on misdeal |
 | `delete_room` | `roomId: string` | Closes and deletes the table |
 | `voice_join` | `roomId: string, peerId: string, user: UserProfile, seat?: Seat \| null` | Joins table WebRTC voice room |
 | `voice_leave` | `roomId: string, peerId: string` | Disconnects from voice room |

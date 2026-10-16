@@ -287,6 +287,15 @@ Resets cumulative match scores to 0-0 and starts Round 1.
 }
 ```
 
+#### `skip_misdeal`
+Bypasses the 10-second misdeal reveal timer to immediately re-deal cards.
+```json
+{
+  "type": "skip_misdeal",
+  "roomId": "room_123"
+}
+```
+
 #### `delete_room`
 Deletes the room table.
 ```json

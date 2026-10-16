@@ -76,11 +76,16 @@ Visit `http://localhost:3000` in your browser.
 
 ## How to Play
 
-1. **The Deal**: 13 cards are dealt to each player in counter-clockwise order.
+1. **The Deal & Unwinnable Hand Rule ("Kosh")**:
+   * 13 cards are dealt to each player in counter-clockwise order.
+   * **Winning Cards Check**: Every hand must have at least one winning card: **Ace**, **King+1** (suit length $\ge 2$), **Queen+2** (suit length $\ge 3$), or **Jack+3** (suit length $\ge 4$).
+   * If any player lacks winning cards, a 10-second face-up misdeal reveal is displayed, and cards are automatically re-dealt with the deal passing counter-clockwise to the next dealer.
 2. **The Auction**:
    * Exactly 4 turns in counter-clockwise order starting to the immediate right of the dealer.
    * Bid level (1–7) and contract type (`Suit` or `NT`).
-   * The dealer has special privileges on turn 4 (Pass, Match Suit, or Match NT).
+   * **Dealer Strategic Privileges (Turn 4)**:
+     * When bid reaches dealer as **Suit** (e.g. `2 Suit`): Dealer can match the suit bid at the same level (`Match 2 Suit`), bid higher, or pass.
+     * When bid reaches dealer as **No Trump** (e.g. `2 NT`): Dealer can take No Trump with the **same number or higher** (`Match 2 No Trump`, `Bid 3 No Trump`, etc.). If dealer wants to take it **Suit**, it must be **one or more higher** (e.g. `3 Suit` or above). Matching `2 Suit` against `2 NT` is disallowed.
 3. **Trump Declaration**: If a Suit contract won, the Declarer declares the trump suit (♠, ♥, ♦, ♣). For NT contracts, trump declaration is skipped.
 4. **Trick Play**:
    * 13 tricks played in counter-clockwise order.
@@ -88,8 +93,8 @@ Visit `http://localhost:3000` in your browser.
    * Players must follow the led suit if possible; otherwise, they may trump or discard.
 5. **Scoring**:
    * Base threshold is 6 tricks. A contract of level $L$ requires $6 + L$ tricks.
-   * Target: **+11 points** to win the match.
-   * Danger: **-11 points** eliminates a team.
+   * Target: **+10 points** to win the match.
+   * Danger: **-10 points** eliminates a team.
 
 ---
 
