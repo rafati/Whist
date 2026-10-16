@@ -113,19 +113,27 @@ Evaluated by `checkMatchEnd()` ([gameLogic.ts](file:///Users/rafatishaq/antigrav
 
 ## 3. Visual Layout, Table Style & Card Engine Specifications
 
-### 3.1 Casino Table Architecture
+### 3.1 Casino Table Architecture & UI Layout
 * **Mahogany Wood Rail**: Styled via `.table-wood-rail` CSS class with golden brass bevel trim (`.table-brass-bevel`) and depth lighting.
 * **Casino Emerald Felt Surface**: Radial gradient felt texture (`.table-felt-radial`) with subtle dashed inner perimeter stitch line (`.table-felt-stitch`).
-* **Zero-Scroll Viewport**: The table layout fits within `100dvh` (`max-h-[100dvh] overflow-hidden`) with proportional card scaling and responsive containers.
+* **Clean Uncluttered Arena**: Redundant card stacks and counters for opponents have been completely removed from the felt to preserve focus on active card play.
+* **Player Seat Indicators**:
+  * **Auction Bids**: During bidding, every seat displays their active bid or a `Passed` badge directly above/below their avatar.
+  * **Winning Contract Badge**: The Declarer is clearly marked with a golden crown badge (`👑 Winning Bid: <level><suit>`) throughout the playing phase.
+* **Zero-Scroll Viewport**: The table layout fits within `100dvh` (`max-h-[100dvh] overflow-hidden`) with proportional card scaling and responsive containers for both mobile portrait and widescreen landscape modes.
 
-### 3.2 High-Legibility Card Engine
+### 3.2 Card Engine & Touch Interaction Specifications
 * **Classic 2-Color Deck**:
-  * Hearts (♥) & Diamonds (♦): Vibrant Red (`#dc2626`).
+  * Hearts (♥) & Diamonds (♦): Vibrant Red (`#c02626`).
   * Spades (♠) & Clubs (♣): Deep Black/Charcoal (`#0f172a`).
-* **Single Giant Center Pip for Numbers**: Number cards (2 through 10, and Ace) render a single bold center suit pip for instant legibility across devices ([CardView.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/CardView.tsx#L156-L163)). Ace of Spades includes an ornate vector centerpiece.
-* **Royal Court Art for Court Cards (J, Q, K)**: Custom SVG illustrations with crowns, sceptres, armor, and heraldic patterns ([RoyalCourtArt.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/RoyalCourtArt.tsx)).
-* **Corner Indices**: Bold rank typography stacked directly above the suit symbol in the top-left corner and bottom-right corner (inverted).
-* **Opponent Face-Down Card Spreads**: Visual fans showing remaining card count for partner and opponents with diamond lattice card backs ([OpponentHandSpread.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/OpponentHandSpread.tsx)).
+* **Geometric Pip Layouts**: Number cards (2 through 10) use authentic multi-pip vector SVG coordinates matching standard casino playing cards ([CardView.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/CardView.tsx)). Ace of Spades includes an ornate vector filigree centerpiece.
+* **Royal Court Art for Court Cards (J, Q, K)**: Custom double-headed SVG illustrations with crowns, sceptres, armor, and heraldic patterns ([RoyalCourtArt.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/RoyalCourtArt.tsx)).
+* **Corner Indices**: Bold serif typography stacked directly above the suit symbol in the top-left corner and bottom-right corner (inverted).
+* **Single-Tap / 1-Click Card Play**: Zero double-tap confirmation required on touch devices. Tapping or clicking any legal playable card plays it immediately.
+* **Swipe-Up "Throw" Gesture**: On touchscreens, players can flick or swipe cards upward to throw them onto the felt:
+  * Upward movement tracks touch displacement dynamically (`translate3d`) with subtle tilt and elevated drop shadow.
+  * Passing the throw threshold (drag $> 30\text{px}$ up, or flick with velocity $< -0.2\text{px/ms}$) displays an animated `Throw ↑` badge and plays the card upon release.
+  * Horizontal scrolling/panning gestures across the hand are isolated and protected (`touch-action: pan-x`).
 
 ### 3.3 Configurable Animation Timing
 Located in [src/logic/animationConfig.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/animationConfig.ts):

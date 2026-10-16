@@ -71,6 +71,8 @@ Visit `http://localhost:3000` in your browser.
 | `npm run lint` | Runs TypeScript type checking (`tsc --noEmit`) |
 | `npm run train` | Runs headless self-play bot training and updates `src/data/learnedPolicy.json` |
 | `npm run ai-optimize` | Runs 2,500 simulation matches and optimizes bot policy using Gemini API |
+| `npx tsx scripts/test_touch_gestures.ts` | Tests touch emulation, single-tap play, and swipe-up throw gestures via Headless Chrome CDP |
+| `npx tsx scripts/test_ui_portrait.ts` | Tests end-to-end UI layout, auction, and trick taking on iPhone portrait viewport |
 
 ---
 
@@ -80,17 +82,23 @@ Visit `http://localhost:3000` in your browser.
    * 13 cards are dealt to each player in counter-clockwise order.
    * **Winning Cards Check**: Every hand must have at least one winning card: **Ace**, **King+1** (suit length $\ge 2$), **Queen+2** (suit length $\ge 3$), or **Jack+3** (suit length $\ge 4$).
    * If any player lacks winning cards, a 10-second face-up misdeal reveal is displayed, and cards are automatically re-dealt with the deal passing counter-clockwise to the next dealer.
-2. **The Auction**:
+2. **The Auction & Live Bid Indicators**:
    * Exactly 4 turns in counter-clockwise order starting to the immediate right of the dealer.
    * Bid level (1–7) and contract type (`Suit` or `NT`).
+   * **Live Seat Bids**: Each player's seat clearly marks their current bid or `Passed` badge throughout the auction.
    * **Dealer Strategic Privileges (Turn 4)**:
      * When bid reaches dealer as **Suit** (e.g. `2 Suit`): Dealer can match the suit bid at the same level (`Match 2 Suit`), bid higher, or pass.
      * When bid reaches dealer as **No Trump** (e.g. `2 NT`): Dealer can take No Trump with the **same number or higher** (`Match 2 No Trump`, `Bid 3 No Trump`, etc.). If dealer wants to take it **Suit**, it must be **one or more higher** (e.g. `3 Suit` or above). Matching `2 Suit` against `2 NT` is disallowed.
-3. **Trump Declaration**: If a Suit contract won, the Declarer declares the trump suit (♠, ♥, ♦, ♣). For NT contracts, trump declaration is skipped.
-4. **Trick Play**:
+3. **Trump Declaration & Winning Bidder**:
+   * The winning bidder is highlighted with a prominent golden **Winning Bid** badge (e.g., `👑 Winning Bid: 2♠ Spades`) displayed directly above their avatar.
+   * If a Suit contract won, the Declarer declares the trump suit (♠, ♥, ♦, ♣). For NT contracts, trump declaration is skipped.
+4. **Trick Play & Ergonomic Touch Controls**:
    * 13 tricks played in counter-clockwise order.
    * **Opening lead**: In NT games, the Declarer leads first; in Suit games, the player to the right of the Declarer leads first.
    * Players must follow the led suit if possible; otherwise, they may trump or discard.
+   * **Single-Tap / 1-Click Play**: Double-tap requirement has been removed on mobile touch devices. A single tap or desktop click on any eligible playable card immediately plays it.
+   * **Swipe-Up "Throw" Gesture**: On touchscreens, players can flick or swipe an eligible card upwards towards the center felt. The card follows finger displacement with a dynamic tilt and elevation, showing an animated `Throw ↑` badge before launching smoothly onto the table.
+   * **Clean Center Felt**: Redundant opponent card stacks and counters have been removed so the felt remains clean and focused on gameplay.
 5. **Scoring**:
    * Base threshold is 6 tricks. A contract of level $L$ requires $6 + L$ tricks.
    * Target: **+10 points** to win the match.

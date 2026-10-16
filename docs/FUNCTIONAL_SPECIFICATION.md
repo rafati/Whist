@@ -76,9 +76,10 @@ The dealer on turn 4 has special strategic options ([gameLogic.ts](file:///Users
    * If the dealer wants to take it **Suit**, it must be **one or more higher** (e.g. `3 Suit` or above). Matching `2 Suit` against `2 NT` is strictly disallowed.
 4. **Exceed**: Submits any strictly higher legal bid.
 
-### 3.5 Auction Conclusion
+### 3.5 Auction Conclusion & Contract Visibility
 * **All 4 Players Pass**: The cards are reshuffled and re-dealt with the dealer rotating counter-clockwise ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L272-L278)).
-* **Winning Bid**: The highest bidder becomes the **Declarer**.
+* **Live Seat Bids**: All players display their submitted bid or a `Passed` badge directly above/below their avatar throughout the auction.
+* **Winning Bid & Declarer Badge**: The highest bidder becomes the **Declarer**. A prominent golden badge (`👑 Winning Bid: <level><suit>`) is attached to the Declarer's avatar for the duration of the round.
   * If winning bid is `Suit`: Game transitions to `declaring` (Phase 3).
   * If winning bid is `NT`: Game sets `trumpSuit = 'NT'` and transitions directly to `playing` (Phase 4). The Declarer leads the first trick.
 
@@ -104,6 +105,10 @@ The dealer on turn 4 has special strategic options ([gameLogic.ts](file:///Users
 * **Mandatory Follow Rule** ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L228-L233)):
   * If the player holds at least one card in the suit led by the trick leader, they **must** play a card of that suit.
   * If void in the led suit, the player may play any card (trump or discard).
+* **Card Interaction Mechanics**:
+  * **Single-Tap / 1-Click Play**: On both desktop and mobile touch devices, tapping or clicking a legal playable card plays it immediately. The 2-tap confirmation has been removed.
+  * **Swipe-Up "Throw" Gesture**: On touch devices, swiping or flicking an eligible card upwards towards the table felt throws the card into the trick. Visual drag tracking follows the user's finger with dynamic elevation, tilt, and an animated `Throw ↑` badge when the release threshold is reached.
+  * **Clean Felt Design**: Opponent card stacks/counts have been removed from player cards to keep the felt spacious and uncluttered.
 
 ### 5.2 Trick Evaluation & Timing
 When the 4th card lands in the trick ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L347-L380)):

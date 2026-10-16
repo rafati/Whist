@@ -25,6 +25,21 @@ While formal assertion-based unit tests are not present, the codebase features a
   * Suit and NT score delta calculations.
   * Victory and elimination termination conditions.
 
+### 1.3 Automated Headless Chrome CDP Verification Scripts
+The test suite includes dedicated browser automation runners that leverage the Chrome DevTools Protocol (CDP) for mobile viewport and gesture verification:
+
+* **Touch Gestures & Single-Tap Play Runner**: [scripts/test_touch_gestures.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/scripts/test_touch_gestures.ts)
+  * `npx tsx scripts/test_touch_gestures.ts`
+  * Emulates touch screens (`Emulation.setTouchEmulationEnabled`) with coarse pointer events.
+  * Dispatches `Input.dispatchTouchEvent` sequences (`touchStart`, `touchMove`, `touchEnd`) verifying upward swipe throw mechanics and single-tap card plays.
+* **Mobile Portrait Viewport Runner**: [scripts/test_ui_portrait.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/scripts/test_ui_portrait.ts)
+  * `npx tsx scripts/test_ui_portrait.ts`
+  * Tests the complete player journey on iPhone portrait viewports (390x844): Auth, Lobby, Quick Play table entry, auction bidding, trump declaration, single-tap card play, and trick evaluation.
+  * Captures timestamped visual screenshots across each game phase.
+* **WebSocket Flow Smoke Test**: [scripts/verify_game_flow.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/scripts/verify_game_flow.ts)
+  * `npx tsx scripts/verify_game_flow.ts`
+  * Validates room creation REST API and WebSocket state synchronization without requiring a browser UI.
+
 ---
 
 ## 2. Testing Limitations & Uncovered Critical Areas
