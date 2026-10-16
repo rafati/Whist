@@ -204,7 +204,7 @@ export interface DealerPrivileges {
 }
 
 export function getDealerPrivileges(highestBid: Bid | null): DealerPrivileges {
-  if (!highestBid || highestBid.type === 'pass' || !highestBid.level) {
+  if (!highestBid || highestBid.type === 'pass' || !highestBid.level || !highestBid.contractType) {
     return {
       canPass: true,
       canMatchSuit: false,
@@ -214,14 +214,89 @@ export function getDealerPrivileges(highestBid: Bid | null): DealerPrivileges {
   }
 
   const highestLevel = highestBid.level;
-  return {
-    canPass: true,
-    canMatchSuit: true,
-    matchedSuitLevel: highestLevel,
-    canMatchNT: true,
-    matchedNTLevel: highestLevel,
-    canExceedNT: highestLevel < 7,
-  };
+  if (highestBid.contractType === 'Suit') {
+    return {
+      canPass: true,
+      canMatchSuit: true,
+      matchedSuitLevel: highestLevel,
+      canMatchNT: false,
+      canExceedNT: highestLevel < 7,
+    };
+  } else {
+    // If highest bid reached dealer as NT (e.g. 2 NT):
+    // Dealer can take NT with the same number or higher.
+    // If dealer wants to take it Suit, it must be one or more higher (e.g. 3 Suit or above).
+    return {
+      canPass: true,
+      canMatchSuit: false, // Cannot take Suit at same level when highest is NT!
+      canMatchNT: true,
+      matchedNTLevel: highestLevel,
+      canExceedNT: highestLevel < 7,
+    };
+  }
+}
+
+// Validates whether candidate bid is legal for a player.
+// If isDealerFinalTurn is true, dealer privileges apply:
+// - If highest bid is Suit: dealer can match the suit bid at the same level (or bid higher).
+// - If highest bid is NT: dealer can take NT with the same level or higher, or take Suit at level + 1 or higher.
+export function isLegalBid(
+  level: number,
+  contractType: ContractType,
+  highestBid: Bid | null,
+  isDealerFinalTurn: boolean = false
+): boolean {
+  if (level < 1 || level > 7) return false;
+
+  if (!highestBid || highestBid.type === 'pass' || !highestBid.level || !highestBid.contractType) {
+    return true;
+  }
+
+  // Check standard higher bid
+  if (isBidHigher(level, contractType, highestBid)) {
+    return true;
+  }
+
+  // Dealer privilege on final turn (turn 4):
+  if (isDealerFinalTurn) {
+    if (highestBid.contractType === 'Suit') {
+      // Can match suit bid at same level
+      if (contractType === 'Suit' && level === highestBid.level) {
+        return true;
+      }
+    } else if (highestBid.contractType === 'NT') {
+      // Can take NT with the same number or higher
+      if (contractType === 'NT' && level === highestBid.level) {
+        return true;
+      }
+      // Note: If taking Suit, level must be >= highestBid.level + 1,
+      // which is already covered above by isBidHigher!
+    }
+  }
+
+  return false;
+}
+
+// Checks if a bid is specifically utilizing the dealer's special match privilege
+export function isDealerPrivilegeMatch(
+  level: number,
+  contractType: ContractType,
+  highestBid: Bid | null,
+  isDealerFinalTurn: boolean
+): boolean {
+  if (!isDealerFinalTurn || !highestBid || highestBid.type !== 'bid' || !highestBid.level || !highestBid.contractType) {
+    return false;
+  }
+
+  if (highestBid.contractType === 'Suit') {
+    return contractType === 'Suit' && level === highestBid.level;
+  }
+
+  if (highestBid.contractType === 'NT') {
+    return contractType === 'NT' && level === highestBid.level;
+  }
+
+  return false;
 }
 
 // Card play legal check (Mandatory Follow)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bid, Card, ContractType, GameState, Seat } from '../types.ts';
-import { isBidHigher, getTeam } from '../logic/gameLogic.ts';
+import { isLegalBid, isDealerPrivilegeMatch, getTeam } from '../logic/gameLogic.ts';
 import { Sparkles, Check, X } from 'lucide-react';
 
 interface BiddingPanelProps {
@@ -21,13 +21,20 @@ export const BiddingPanel: React.FC<BiddingPanelProps> = ({
   const isMyTurn = Boolean(mySeat && gameState.currentBidder === mySeat);
   const isDealer = Boolean(mySeat && gameState.dealer === mySeat);
   const isFinalTurn = gameState.auctionTurnsCount === 3; // 4th turn
+  const isDealerFinalTurn = isDealer && isFinalTurn;
 
   const highest = gameState.highestBid;
 
-  const canDealerMatchSuitAtLevel = (lvl: number) => {
+  const isLevelLegal = (lvl: number) => {
+    return (
+      isLegalBid(lvl, 'Suit', highest, isDealerFinalTurn) ||
+      isLegalBid(lvl, 'NT', highest, isDealerFinalTurn)
+    );
+  };
+
+  const isMatchingLevel = (lvl: number) => {
     return Boolean(
-      isDealer &&
-      isFinalTurn &&
+      isDealerFinalTurn &&
       highest &&
       highest.type === 'bid' &&
       highest.level &&
@@ -35,30 +42,46 @@ export const BiddingPanel: React.FC<BiddingPanelProps> = ({
     );
   };
 
-  const isDealerMatchSuit = Boolean(
-    isDealer &&
-    isFinalTurn &&
-    highest &&
-    highest.type === 'bid' &&
-    highest.level &&
-    selectedLevel === highest.level &&
-    selectedType === 'Suit'
+  const isDealerMatch = isDealerPrivilegeMatch(
+    selectedLevel,
+    selectedType,
+    highest,
+    isDealerFinalTurn
   );
 
-  // Automatically default selector: for dealer on final turn, default to matching the suit bid;
-  // otherwise default to the lowest legal higher bid.
+  const isValidBid = isLegalBid(
+    selectedLevel,
+    selectedType,
+    highest,
+    isDealerFinalTurn
+  );
+
+  // Automatically default selector:
+  // For dealer on final turn:
+  // - If highest bid reached dealer as NT (e.g. 2 NT): default to matching NT at same level (2 NT)
+  // - If highest bid reached dealer as Suit (e.g. 2 Suit): default to matching Suit at same level (2 Suit)
+  // Otherwise default to the lowest legal higher bid.
   useEffect(() => {
-    if (!highest || highest.type !== 'bid' || !highest.level) {
+    if (!highest || highest.type !== 'bid' || !highest.level || !highest.contractType) {
       setSelectedLevel(1);
       setSelectedType('Suit');
       return;
     }
-    if (isDealer && isFinalTurn) {
-      setSelectedLevel(highest.level);
-      setSelectedType('Suit');
-      return;
+    if (isDealerFinalTurn) {
+      if (highest.contractType === 'NT') {
+        setSelectedLevel(highest.level);
+        setSelectedType('NT');
+        return;
+      } else {
+        setSelectedLevel(highest.level);
+        setSelectedType('Suit');
+        return;
+      }
     }
     if (highest.contractType === 'Suit') {
+      setSelectedLevel(highest.level);
+      setSelectedType('NT');
+    } else {
       if (highest.level < 7) {
         setSelectedLevel(highest.level + 1);
         setSelectedType('Suit');
@@ -66,16 +89,8 @@ export const BiddingPanel: React.FC<BiddingPanelProps> = ({
         setSelectedLevel(7);
         setSelectedType('NT');
       }
-    } else {
-      if (highest.level < 7) {
-        setSelectedLevel(highest.level + 1);
-        setSelectedType('Suit');
-      }
     }
-  }, [highest?.level, highest?.contractType, highest?.type, isDealer, isFinalTurn]);
-
-  const isValidHigherBid = isBidHigher(selectedLevel, selectedType, highest);
-  const isValidBid = isValidHigherBid || isDealerMatchSuit;
+  }, [highest?.level, highest?.contractType, highest?.type, isDealerFinalTurn]);
 
   const handleStandardBid = () => {
     if (!mySeat || !isValidBid) return;
@@ -84,7 +99,7 @@ export const BiddingPanel: React.FC<BiddingPanelProps> = ({
       type: 'bid',
       level: selectedLevel,
       contractType: selectedType,
-      isDealerPrivilegeMatch: isDealerMatchSuit,
+      isDealerPrivilegeMatch: isDealerMatch,
     });
   };
 
@@ -198,22 +213,19 @@ export const BiddingPanel: React.FC<BiddingPanelProps> = ({
             </div>
             <div className="grid grid-cols-7 gap-1">
               {[1, 2, 3, 4, 5, 6, 7].map((lvl) => {
-                const canBidAtLevel =
-                  isBidHigher(lvl, 'Suit', highest) ||
-                  isBidHigher(lvl, 'NT', highest) ||
-                  canDealerMatchSuitAtLevel(lvl);
-                const isMatchingLvl = canDealerMatchSuitAtLevel(lvl);
+                const canBidAtLevel = isLevelLegal(lvl);
+                const isMatchingLvl = isMatchingLevel(lvl);
                 return (
                   <button
                     key={lvl}
                     onClick={() => {
                       setSelectedLevel(lvl);
-                      if (
-                        !isBidHigher(lvl, selectedType, highest) &&
-                        !canDealerMatchSuitAtLevel(lvl) &&
-                        isBidHigher(lvl, 'NT', highest)
-                      ) {
+                      const suitLegal = isLegalBid(lvl, 'Suit', highest, isDealerFinalTurn);
+                      const ntLegal = isLegalBid(lvl, 'NT', highest, isDealerFinalTurn);
+                      if (selectedType === 'Suit' && !suitLegal && ntLegal) {
                         setSelectedType('NT');
+                      } else if (selectedType === 'NT' && !ntLegal && suitLegal) {
+                        setSelectedType('Suit');
                       }
                     }}
                     disabled={!canBidAtLevel}
@@ -239,16 +251,16 @@ export const BiddingPanel: React.FC<BiddingPanelProps> = ({
             <button
               onClick={() => {
                 setSelectedType('Suit');
-                if (
-                  !isBidHigher(selectedLevel, 'Suit', highest) &&
-                  !canDealerMatchSuitAtLevel(selectedLevel) &&
-                  selectedLevel < 7 &&
-                  isBidHigher(selectedLevel + 1, 'Suit', highest)
-                ) {
-                  setSelectedLevel(selectedLevel + 1);
+                if (!isLegalBid(selectedLevel, 'Suit', highest, isDealerFinalTurn)) {
+                  for (let lvl = 1; lvl <= 7; lvl++) {
+                    if (isLegalBid(lvl, 'Suit', highest, isDealerFinalTurn)) {
+                      setSelectedLevel(lvl);
+                      break;
+                    }
+                  }
                 }
               }}
-              disabled={!isBidHigher(7, 'Suit', highest) && !canDealerMatchSuitAtLevel(selectedLevel)}
+              disabled={![1, 2, 3, 4, 5, 6, 7].some((lvl) => isLegalBid(lvl, 'Suit', highest, isDealerFinalTurn))}
               className={`py-1 px-1.5 rounded-lg font-bold text-[11px] sm:text-xs transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
                 selectedType === 'Suit'
                   ? 'bg-emerald-600 text-white shadow ring-2 ring-emerald-400'
@@ -258,8 +270,19 @@ export const BiddingPanel: React.FC<BiddingPanelProps> = ({
               <span>♠ ♥ ♦ ♣ Suit</span>
             </button>
             <button
-              onClick={() => setSelectedType('NT')}
-              className={`py-1 px-1.5 rounded-lg font-bold text-[11px] sm:text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
+              onClick={() => {
+                setSelectedType('NT');
+                if (!isLegalBid(selectedLevel, 'NT', highest, isDealerFinalTurn)) {
+                  for (let lvl = 1; lvl <= 7; lvl++) {
+                    if (isLegalBid(lvl, 'NT', highest, isDealerFinalTurn)) {
+                      setSelectedLevel(lvl);
+                      break;
+                    }
+                  }
+                }
+              }}
+              disabled={![1, 2, 3, 4, 5, 6, 7].some((lvl) => isLegalBid(lvl, 'NT', highest, isDealerFinalTurn))}
+              className={`py-1 px-1.5 rounded-lg font-bold text-[11px] sm:text-xs transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
                 selectedType === 'NT'
                   ? 'bg-indigo-600 text-white shadow ring-2 ring-indigo-400'
                   : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
@@ -290,9 +313,9 @@ export const BiddingPanel: React.FC<BiddingPanelProps> = ({
             >
               <Check className="w-3.5 h-3.5" />
               <span>
-                {isDealerMatchSuit
-                  ? `Match ${selectedLevel} Suit (${6 + selectedLevel} Tricks)`
-                  : `Bid ${selectedLevel} ${selectedType} (${6 + selectedLevel} Tricks)`}
+                {isDealerMatch
+                  ? `Match ${selectedLevel} ${selectedType === 'NT' ? 'No Trump' : 'Suit'} (${6 + selectedLevel} Tricks)`
+                  : `Bid ${selectedLevel} ${selectedType === 'NT' ? 'No Trump' : 'Suit'} (${6 + selectedLevel} Tricks)`}
               </span>
             </button>
           </div>

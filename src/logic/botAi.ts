@@ -69,10 +69,16 @@ export function getBotBid(gameState: GameState, seat: Seat): Bid {
 
   // Final Turn: Dealer Privileges
   if (isDealer && isFinalTurn && highest && highest.type === 'bid' && highest.level) {
+    // If partner is currently winning the bid, dealer passes to let partner win!
+    const partner = getPartner(seat);
+    if (gameState.highestBidder === partner) {
+      return { seat, type: 'pass' };
+    }
+
     const privileges = getDealerPrivileges(highest);
 
-    // If dealer has very strong hand (HCP >= 14 and balanced), use Match/Exceed NT
-    if (privileges.canMatchNT && hcp >= 14) {
+    // If dealer has very strong hand (HCP >= 14 and balanced), use Match NT if allowed
+    if (privileges.canMatchNT && privileges.matchedNTLevel && hcp >= 14) {
       return {
         seat,
         type: 'bid',
@@ -82,8 +88,8 @@ export function getBotBid(gameState: GameState, seat: Seat): Bid {
       };
     }
 
-    // If dealer has 5+ cards in a suit and HCP >= 11, use Match Suit
-    if (privileges.canMatchSuit && strongest.count >= 5 && hcp >= 10) {
+    // If dealer has 5+ cards in a suit and HCP >= 10, use Match Suit if allowed
+    if (privileges.canMatchSuit && privileges.matchedSuitLevel && strongest.count >= 5 && hcp >= 10) {
       return {
         seat,
         type: 'bid',
@@ -93,13 +99,7 @@ export function getBotBid(gameState: GameState, seat: Seat): Bid {
       };
     }
 
-    // If partner is currently winning the bid, dealer passes to let partner win!
-    const partner = getPartner(seat);
-    if (gameState.highestBidder === partner) {
-      return { seat, type: 'pass' };
-    }
-
-    // If partner is not winning and dealer can't match, pass or make standard bid
+    // If dealer cannot match or hand not strong enough, pass
     return { seat, type: 'pass' };
   }
 

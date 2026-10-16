@@ -29,6 +29,8 @@ import {
   getTeam,
   isBidHigher,
   isCardLegal,
+  isDealerPrivilegeMatch,
+  isLegalBid,
   SEATS,
   startDealRound,
 } from './src/logic/gameLogic.ts';
@@ -241,36 +243,30 @@ function processBid(room: Room, bid: Bid) {
   if (bid.type === 'pass') {
     state.bids.push({ seat: currentSeat, type: 'pass' });
   } else {
-    const isDealerSuitMatch = Boolean(
-      isDealer &&
-      isFinalTurn &&
-      state.highestBid &&
-      state.highestBid.type === 'bid' &&
-      state.highestBid.level &&
-      bid.contractType === 'Suit' &&
-      bid.level === state.highestBid.level
+    if (!bid.level || !bid.contractType) return;
+
+    const isLegal = isLegalBid(bid.level, bid.contractType, state.highestBid, isDealer && isFinalTurn);
+    if (!isLegal) {
+      console.warn(
+        `[Bidding] Disallowed bid rejected: seat=${currentSeat}, bid=${bid.level}${bid.contractType}, high=${state.highestBid?.level}${state.highestBid?.contractType}`
+      );
+      return;
+    }
+
+    const isMatch = isDealerPrivilegeMatch(
+      bid.level,
+      bid.contractType,
+      state.highestBid,
+      isDealer && isFinalTurn
     );
 
-    // Validate bid
-    if (isDealer && isFinalTurn && (bid.isDealerPrivilegeMatch || isDealerSuitMatch)) {
-      // Dealer privilege match: matches highest suit bid
-      const matchBid: Bid = {
-        ...bid,
-        isDealerPrivilegeMatch: true,
-      };
-      state.bids.push(matchBid);
-      state.highestBid = matchBid;
-      state.highestBidder = currentSeat;
-    } else {
-      // Check higher
-      if (!bid.level || !bid.contractType) return;
-      if (!isBidHigher(bid.level, bid.contractType, state.highestBid)) {
-        return;
-      }
-      state.bids.push(bid);
-      state.highestBid = bid;
-      state.highestBidder = currentSeat;
-    }
+    const recordedBid: Bid = {
+      ...bid,
+      isDealerPrivilegeMatch: isMatch,
+    };
+    state.bids.push(recordedBid);
+    state.highestBid = recordedBid;
+    state.highestBidder = currentSeat;
   }
 
   state.auctionTurnsCount++;
