@@ -20,6 +20,7 @@ import {
 } from '../logic/gameLogic.ts';
 import { ANIMATION_CONFIG } from '../logic/animationConfig.ts';
 import { CardView } from './CardView.tsx';
+import { OpponentHandSpread } from './OpponentHandSpread.tsx';
 import { BiddingPanel } from './BiddingPanel.tsx';
 import { SuitDeclarationModal } from './SuitDeclarationModal.tsx';
 import { RoundSummaryModal } from './RoundSummaryModal.tsx';
@@ -139,10 +140,10 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
   }
 
   const posClass = {
-    top: 'top-1 sm:top-1.5 left-1/2 -translate-x-1/2',
-    bottom: 'bottom-1 sm:bottom-1.5 left-1/2 -translate-x-1/2',
-    left: 'left-1 sm:left-2 top-1/2 -translate-y-1/2',
-    right: 'right-1 sm:right-2 top-1/2 -translate-y-1/2',
+    top: 'top-3.5 sm:top-4 left-1/2 -translate-x-1/2',
+    bottom: 'bottom-3.5 sm:bottom-4 left-1/2 -translate-x-1/2',
+    left: 'left-3.5 sm:left-4 top-1/2 -translate-y-1/2',
+    right: 'right-3.5 sm:right-4 top-1/2 -translate-y-1/2',
   }[visualPos];
 
   const team = getTeam(played.seat);
@@ -160,31 +161,18 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
       <div
         className={`relative transition-all duration-200 ${
           isWinningCard
-            ? 'ring-2 sm:ring-3 ring-amber-400 rounded-lg sm:rounded-xl shadow-[0_0_22px_rgba(251,191,36,0.9)] scale-105 z-20'
+            ? 'ring-2 sm:ring-3 ring-amber-400 rounded-lg sm:rounded-xl shadow-[0_0_24px_rgba(251,191,36,0.95)] scale-105 z-20'
             : 'shadow-md'
         }`}
       >
         <CardView card={played.card} size="sm" />
-        {isWinningCard ? (
-          <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow-md flex items-center gap-0.5 whitespace-nowrap animate-pulse">
+        {isWinningCard && (
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-2 py-[1px] rounded-full shadow-lg flex items-center gap-0.5 whitespace-nowrap animate-pulse border border-white">
             <Crown className="w-2.5 h-2.5 text-slate-950 fill-current" />
             <span>Winner</span>
           </div>
-        ) : isLeadCard ? (
-          <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-slate-600 text-slate-200 font-bold text-[7px] sm:text-[8px] px-1.5 py-[1px] rounded-full shadow whitespace-nowrap">
-            Led
-          </div>
-        ) : null}
+        )}
       </div>
-      <span
-        className={`text-[7px] sm:text-[8px] px-1.5 py-[1px] rounded font-bold mt-0.5 shadow-xs border leading-tight ${
-          team === 'TeamA'
-            ? 'bg-emerald-950/90 text-emerald-300 border-emerald-600/40'
-            : 'bg-blue-950/90 text-blue-300 border-blue-600/40'
-        }`}
-      >
-        {team === 'TeamA' ? 'Team 1' : 'Team 2'}
-      </span>
     </div>
   );
 };
@@ -230,10 +218,16 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const gameState = room.gameState;
   const seats = room.seats;
 
-  // Clear selected card when turn or phase changes
+  // Clear selected card and any lingering celebration badges whenever phase or round changes
   useEffect(() => {
     setSelectedCardId(null);
-  }, [gameState.currentTurn, gameState.phase, gameState.roundNumber]);
+    setCelebratedSeat(null);
+    setWinnerInfo(null);
+    setIsGathering(false);
+    if (gameState.phase !== 'playing') {
+      setDisplayTrick([]);
+    }
+  }, [gameState.phase, gameState.roundNumber, room.id]);
 
   // Synchronize trick state with gameState.currentTrick and run card/trick animations
   useEffect(() => {
@@ -429,60 +423,68 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     const tricksWon = gameState.tricksWonCount[seat] || 0;
 
     const isThisMySeat = mySeat === seat;
+    if (isThisMySeat) return null; // Player's profile is docked directly in bottom hand footer!
+
+    const visualPos = getSeatVisualPos(seat);
+    const isTopSeat = visualPos === 'top';
     const isPartner = Boolean(mySeat && getPartner(mySeat) === seat);
-    const isCelebrated = celebratedSeat === seat;
+    const isCelebrated = gameState.phase === 'playing' && celebratedSeat === seat;
     const seatBid = gameState.bids.find((b) => b.seat === seat);
     const seatVoice = getSeatVoiceState(seat);
 
     return (
       <div className={`absolute ${positionClasses} flex flex-col items-center z-20`}>
         {player ? (
-          <div
-            className={`
-              flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-2xl transition-all duration-200 relative
-              ${isCelebrated ? 'ring-3 ring-amber-400 bg-amber-950/90 shadow-[0_0_22px_rgba(251,191,36,0.9)] scale-110 z-30' : ''}
-              ${!isCelebrated && (isCurrentBidder || isCurrentPlayer) ? 'ring-2 ring-amber-400 bg-amber-950/85 shadow-lg scale-105' : ''}
-              ${!isCelebrated && !(isCurrentBidder || isCurrentPlayer) ? 'bg-slate-950/90 border border-emerald-800/50 shadow-md' : ''}
-              ${isThisMySeat && !isCelebrated ? 'border-emerald-400/80' : ''}
-            `}
-          >
-            {/* Trick Winner Celebration Badge */}
-            {isCelebrated && (
-              <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-40 whitespace-nowrap animate-bounce pointer-events-none">
-                <span className="bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-black text-[9px] px-2 py-[1px] rounded-full shadow-lg border border-white flex items-center gap-0.5">
-                  <Crown className="w-2.5 h-2.5 fill-current" />
-                  <span>+1 Trick!</span>
-                </span>
-              </div>
-            )}
-
-            {/* Bid Speech Bubble During & After Bidding */}
-            {gameState.phase === 'bidding' ? (
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none">
-                {isCurrentBidder ? (
-                  <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow animate-pulse">
-                    Bidding...
+          <div className={`flex ${isTopSeat ? 'flex-row items-center gap-2' : 'flex-col items-center gap-1'}`}>
+            <div
+              className={`
+                flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-2xl transition-all duration-200 relative
+                ${isCelebrated ? 'ring-3 ring-amber-400 bg-amber-950/90 shadow-[0_0_22px_rgba(251,191,36,0.9)] scale-110 z-30' : ''}
+                ${!isCelebrated && (isCurrentBidder || isCurrentPlayer) ? 'ring-2 ring-amber-400 bg-amber-950/85 shadow-lg scale-105' : ''}
+                ${!isCelebrated && !(isCurrentBidder || isCurrentPlayer) ? 'bg-slate-950/90 border border-emerald-800/50 shadow-md' : ''}
+              `}
+            >
+              {/* Trick Winner Celebration Toast */}
+              {isCelebrated && (
+                <div
+                  className={`absolute left-1/2 -translate-x-1/2 z-40 whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-150 ${
+                    isDeclarer ? '-top-9' : '-top-5'
+                  }`}
+                >
+                  <span className="bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-black text-[9px] px-2 py-0.5 rounded-full shadow-lg border border-white flex items-center gap-1 animate-pulse">
+                    <Crown className="w-2.5 h-2.5 fill-current" />
+                    <span>+1 Trick!</span>
                   </span>
-                ) : seatBid ? (
-                  seatBid.type === 'pass' ? (
-                    <span className="bg-slate-800 border border-slate-700 text-slate-300 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
-                      Passed
+                </div>
+              )}
+
+              {/* Bid Speech Bubble During & After Bidding */}
+              {gameState.phase === 'bidding' ? (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none">
+                  {isCurrentBidder ? (
+                    <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow animate-pulse">
+                      Bidding...
                     </span>
-                  ) : (
-                    <span className="bg-emerald-950 border border-emerald-500 text-emerald-300 font-bold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
-                      Bid {seatBid.level} {seatBid.contractType}
-                    </span>
-                  )
-                ) : null}
-              </div>
-            ) : (gameState.phase === 'playing' || gameState.phase === 'declaring') && isDeclarer && seatBid ? (
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none">
-                <span className="bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow flex items-center gap-0.5">
-                  <Crown className="w-2.5 h-2.5 text-slate-950" />
-                  <span>Declarer ({seatBid.level}{seatBid.contractType === 'NT' ? 'NT' : 'S'})</span>
-                </span>
-              </div>
-            ) : null}
+                  ) : seatBid ? (
+                    seatBid.type === 'pass' ? (
+                      <span className="bg-slate-800 border border-slate-700 text-slate-300 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
+                        Passed
+                      </span>
+                    ) : (
+                      <span className="bg-emerald-950 border border-emerald-500 text-emerald-300 font-bold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
+                        Bid {seatBid.level} {seatBid.contractType}
+                      </span>
+                    )
+                  ) : null}
+                </div>
+              ) : (gameState.phase === 'playing' || gameState.phase === 'declaring') && isDeclarer && seatBid ? (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none">
+                  <span className="bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow flex items-center gap-0.5">
+                    <Crown className="w-2.5 h-2.5 text-slate-950" />
+                    <span>Declarer ({seatBid.level}{seatBid.contractType === 'NT' ? 'NT' : 'S'})</span>
+                  </span>
+                </div>
+              ) : null}
 
             {/* Avatar & Status Badges */}
             <div className="relative shrink-0">
@@ -565,7 +567,19 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               </div>
             </div>
           </div>
-        ) : (
+
+          {/* Opponent Stacked Card Deck (Tactile deck visual as in MobilityWare) */}
+          {(gameState.phase === 'playing' || gameState.phase === 'bidding' || gameState.phase === 'declaring') && (
+            <div className={`${isTopSeat ? 'shrink-0' : 'mt-0.5'} flex justify-center`}>
+              <OpponentHandSpread
+                count={gameState.cardsCount[seat] || 0}
+                orientation={visualPos === 'top' ? 'top' : visualPos === 'left' ? 'left' : 'right'}
+                isCurrentTurn={isCurrentPlayer}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
           /* Empty Seat Claim Button */
           <button
             onClick={() => handleSeatClick(seat)}
@@ -869,6 +883,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             <div className="landscape-compact-center-stage relative w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 lg:w-80 lg:h-80 rounded-full border border-emerald-600/20 bg-black/25 flex items-center justify-center p-1 overflow-visible">
               <div className="absolute inset-0 pointer-events-none opacity-20 flex items-center justify-center">
                 <div className="w-full h-full rounded-full border border-dashed border-emerald-400 animate-spin [animation-duration:60s]" />
+              </div>
+
+              {/* Subtle Embossed Felt Watermark (MobilityWare Style) */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none opacity-[0.06]">
+                <div className="flex flex-col items-center">
+                  <span className="text-6xl sm:text-7xl font-serif-display font-black text-emerald-200">♠</span>
+                  <span className="text-[9px] sm:text-[11px] font-serif-display font-bold tracking-[0.25em] uppercase text-emerald-100 mt-0.5">ROYAL WHIST</span>
+                </div>
               </div>
 
               {/* Waiting Phase: Pre-Game Seating & Bot Setup Card */}
@@ -1187,10 +1209,13 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 ) : (
                   sortedMyHand.map((card, idx) => {
                     const isLegal =
-                      gameState.phase === 'playing' &&
-                      isCardLegal(card, myHand, currentLedSuit);
+                      gameState.phase === 'playing'
+                        ? isCardLegal(card, myHand, currentLedSuit)
+                        : true;
                     const canPlay =
                       gameState.phase === 'playing' && isMyTurnToPlay && isLegal;
+                    const isDimmed =
+                      gameState.phase === 'playing' && isMyTurnToPlay && !isLegal;
                     const isJustPlayed = justPlayedHandCardId === card.id;
                     const isSelected = selectedCardId === card.id;
 
@@ -1206,7 +1231,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                               : isSelected
                               ? 'z-40 duration-150'
                               : canPlay
-                              ? 'hover:-translate-y-3 hover:z-30 hover:scale-105 duration-150'
+                              ? '-translate-y-2 sm:-translate-y-2.5 hover:-translate-y-4 hover:z-30 hover:scale-105 duration-150'
                               : ''
                           }
                         `}
@@ -1216,17 +1241,13 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                           size="hand"
                           isPlayable={Boolean(canPlay && !isJustPlayed)}
                           isSelected={isSelected}
+                          isDimmed={isDimmed}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (gameState.phase === 'playing') {
                               handleCardInteraction(card);
                             }
                           }}
-                          className={
-                            gameState.phase === 'playing' && !isLegal && isMyTurnToPlay
-                              ? 'opacity-40 brightness-75 cursor-not-allowed'
-                              : ''
-                          }
                         />
                       </div>
                     );

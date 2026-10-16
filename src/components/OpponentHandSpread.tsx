@@ -14,75 +14,35 @@ export const OpponentHandSpread: React.FC<OpponentHandSpreadProps> = ({
 }) => {
   if (count <= 0) return null;
 
-  // Maximum visual cards to display to avoid UI clutter while maintaining fan effect
-  const displayCount = Math.min(count, 13);
-  const cardIndices = Array.from({ length: displayCount }, (_, i) => i);
-
-  if (orientation === 'top') {
-    // Top Seat (Partner) - Horizontal fanned spread
-    const middleIndex = (displayCount - 1) / 2;
-    return (
-      <div className="flex flex-col items-center mt-1 select-none pointer-events-none">
-        <div className="flex items-center justify-center overflow-visible">
-          {cardIndices.map((i) => {
-            const offset = i - middleIndex;
-            const rotation = offset * 2.2; // slight fan angle
-            const translateY = Math.abs(offset) * 0.8;
-
-            return (
-              <div
-                key={i}
-                style={{
-                  transform: `rotate(${rotation}deg) translateY(${translateY}px)`,
-                  zIndex: i + 1,
-                }}
-                className={`transition-transform duration-200 ${
-                  i !== 0 ? '-ml-4 sm:-ml-5 md:-ml-5.5' : ''
-                } ${isCurrentTurn ? 'ring-1 ring-amber-400 rounded-sm' : ''}`}
-              >
-                <CardView faceDown size="xs" />
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-0.5 bg-slate-950/80 border border-slate-700/60 px-1.5 py-[1px] rounded-full text-[8px] font-mono text-slate-300 font-bold shadow-xs">
-          {count} {count === 1 ? 'card' : 'cards'}
-        </div>
-      </div>
-    );
-  }
-
-  // Left or Right Seat (Opponents) - Vertical angled cascade
-  const isLeft = orientation === 'left';
+  // Realistic stacked deck layers (1 to 4 depth layers)
+  const stackLayers = Math.min(Math.max(count, 1), 4);
 
   return (
     <div
-      className={`flex items-center gap-1 select-none pointer-events-none ${
-        isLeft ? 'flex-row' : 'flex-row-reverse'
+      className={`relative flex items-center justify-center select-none pointer-events-none transition-all duration-200 ${
+        isCurrentTurn ? 'scale-105' : ''
       }`}
     >
-      <div className="flex flex-col items-center justify-center overflow-visible">
-        {cardIndices.map((i) => {
-          const rotation = isLeft ? -15 + i * 2.5 : 15 - i * 2.5;
-          const translateX = isLeft ? i * 0.8 : -i * 0.8;
-
-          return (
-            <div
-              key={i}
-              style={{
-                transform: `rotate(${rotation}deg) translateX(${translateX}px)`,
-                zIndex: i + 1,
-              }}
-              className={`transition-transform duration-200 ${
-                i !== 0 ? '-mt-6 sm:-mt-7 md:-mt-8' : ''
-              } ${isCurrentTurn ? 'ring-1 ring-amber-400 rounded-sm' : ''}`}
-            >
-              <CardView faceDown size="xs" />
-            </div>
-          );
-        })}
+      {/* Realistic Stacked Deck of Card Backs */}
+      <div className="relative">
+        {Array.from({ length: stackLayers }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              position: i === 0 ? 'relative' : 'absolute',
+              top: i * -1.5,
+              left: orientation === 'left' ? i * 1.5 : orientation === 'right' ? i * -1.5 : 0,
+              zIndex: i,
+            }}
+            className={i > 0 ? 'opacity-90 pointer-events-none' : ''}
+          >
+            <CardView faceDown size="xs" />
+          </div>
+        ))}
       </div>
-      <div className="bg-slate-950/80 border border-slate-700/60 px-1 py-0.5 rounded-md text-[8px] font-mono text-slate-300 font-bold shadow-xs">
+
+      {/* Card Count Badge */}
+      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 z-20 bg-slate-950/95 border border-slate-700/90 px-1.5 py-[0.5px] rounded-full text-[8px] font-mono text-amber-300 font-bold shadow-sm whitespace-nowrap leading-tight">
         {count}
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card } from '../types.ts';
+import { Card, Rank, Suit } from '../types.ts';
 import { SUIT_SYMBOLS } from '../logic/gameLogic.ts';
 import { RoyalCourtArt } from './RoyalCourtArt.tsx';
 
@@ -8,44 +8,111 @@ interface CardViewProps {
   faceDown?: boolean;
   isPlayable?: boolean;
   isSelected?: boolean;
+  isDimmed?: boolean;
   onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
   size?: 'xs' | 'sm' | 'hand' | 'md' | 'lg' | 'xl';
   className?: string;
 }
+
+// Vector Suit Pip SVG Path definitions
+const SUIT_PATHS: Record<Suit, string> = {
+  S: 'M14 2 C11.5 7.5 6 13 6 17 C6 20 8.5 22.5 11.5 22.5 C13.5 22.5 15.5 21.2 16.5 19.5 C16 21.5 15 24 13 25.5 L19 25.5 C17 24 16 21.5 15.5 19.5 C16.5 21.2 18.5 22.5 20.5 22.5 C23.5 22.5 26 20 26 17 C26 13 20.5 7.5 18 2 C17 0.5 15 0.5 14 2 Z',
+  H: 'M16 25 C16 25 5 16.5 5 9.5 C5 5.5 8 2.5 12 2.5 C14.5 2.5 16 4 16 5 C16 4 17.5 2.5 20 2.5 C24 2.5 27 5.5 27 9.5 C27 16.5 16 25 16 25 Z',
+  D: 'M16 2.5 L26.5 14 L16 25.5 L5.5 14 Z',
+  C: 'M16 2.5 C13.5 2.5 11.5 4.5 11.5 7 C11.5 8.2 12 9.2 12.8 10 C11.2 9.2 8.5 9.5 7.5 12 C6.2 14.8 8.2 18 11.5 18 C12.8 18 14 17.2 14.8 16.2 C14.2 18.2 13 22 10 25.5 L22 25.5 C19 22 17.8 18.2 17.2 16.2 C18 17.2 19.2 18 20.5 18 C23.8 18 25.8 14.8 24.5 12 C23.5 9.5 20.8 9.2 19.2 10 C20 9.2 20.5 8.2 20.5 7 C20.5 4.5 18.5 2.5 16 2.5 Z',
+};
+
+interface PipPos {
+  x: number;
+  y: number;
+  flip?: boolean;
+}
+
+const PIP_LAYOUTS: Record<Rank, PipPos[]> = {
+  A: [{ x: 50, y: 70 }],
+  '2': [{ x: 50, y: 35 }, { x: 50, y: 105, flip: true }],
+  '3': [{ x: 50, y: 35 }, { x: 50, y: 70 }, { x: 50, y: 105, flip: true }],
+  '4': [
+    { x: 30, y: 35 }, { x: 70, y: 35 },
+    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
+  ],
+  '5': [
+    { x: 30, y: 35 }, { x: 70, y: 35 },
+    { x: 50, y: 70 },
+    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
+  ],
+  '6': [
+    { x: 30, y: 35 }, { x: 70, y: 35 },
+    { x: 30, y: 70 }, { x: 70, y: 70 },
+    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
+  ],
+  '7': [
+    { x: 30, y: 35 }, { x: 70, y: 35 },
+    { x: 50, y: 52 },
+    { x: 30, y: 70 }, { x: 70, y: 70 },
+    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
+  ],
+  '8': [
+    { x: 30, y: 35 }, { x: 70, y: 35 },
+    { x: 50, y: 52 },
+    { x: 30, y: 70 }, { x: 70, y: 70 },
+    { x: 50, y: 88, flip: true },
+    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
+  ],
+  '9': [
+    { x: 30, y: 30 }, { x: 70, y: 30 },
+    { x: 30, y: 56 }, { x: 70, y: 56 },
+    { x: 50, y: 70 },
+    { x: 30, y: 84, flip: true }, { x: 70, y: 84, flip: true },
+    { x: 30, y: 110, flip: true }, { x: 70, y: 110, flip: true }
+  ],
+  '10': [
+    { x: 30, y: 28 }, { x: 70, y: 28 },
+    { x: 50, y: 44 },
+    { x: 30, y: 58 }, { x: 70, y: 58 },
+    { x: 30, y: 82, flip: true }, { x: 70, y: 82, flip: true },
+    { x: 50, y: 96, flip: true },
+    { x: 30, y: 112, flip: true }, { x: 70, y: 112, flip: true }
+  ],
+  J: [],
+  Q: [],
+  K: [],
+};
 
 export const CardView: React.FC<CardViewProps> = ({
   card,
   faceDown = false,
   isPlayable = false,
   isSelected = false,
+  isDimmed = false,
   onClick,
   size = 'hand',
   className = '',
 }) => {
-  // Proportional, high-legibility card dimensions across mobile landscape & desktop
+  // Proportional standard card dimensions (classic 1 : 1.4 ratio)
   const sizeClasses = {
     xs: 'w-7 h-10 sm:w-8 sm:h-11 rounded-sm sm:rounded-md',
-    sm: 'landscape-compact-trick-card w-12 h-17 sm:w-14 sm:h-20 md:w-16 md:h-24 rounded-lg sm:rounded-xl',
+    sm: 'landscape-compact-trick-card w-12 h-17 sm:w-14 sm:h-20 md:w-16 md:h-23 rounded-lg sm:rounded-xl',
     hand: 'landscape-compact-card w-13 h-19 sm:w-16 sm:h-23 md:w-20 md:h-28 lg:w-23 lg:h-33 rounded-lg sm:rounded-xl',
-    md: 'w-16 h-24 sm:w-20 sm:h-29 rounded-xl',
-    lg: 'w-20 h-29 sm:w-28 sm:h-40 rounded-2xl',
-    xl: 'w-28 h-40 sm:w-36 sm:h-52 rounded-2xl',
+    md: 'w-16 h-23 sm:w-20 sm:h-28 rounded-xl',
+    lg: 'w-20 h-28 sm:w-28 sm:h-39 rounded-2xl',
+    xl: 'w-28 h-39 sm:w-36 sm:h-50 rounded-2xl',
   }[size];
 
   // Face-down card back with classic casino diamond lattice & gold emblem
   if (faceDown || !card) {
     return (
       <div
-        className={`${sizeClasses} shrink-0 bg-[#0f1d3a] border-[1.5px] sm:border-2 border-white shadow-md relative overflow-hidden flex items-center justify-center select-none ${className}`}
+        className={`${sizeClasses} shrink-0 bg-[#0c1936] border-[1.5px] border-white shadow-md relative overflow-hidden flex items-center justify-center select-none ${className}`}
         style={{
-          boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.45)',
         }}
       >
-        <div className="absolute inset-0.5 sm:inset-1 border border-blue-400/50 rounded-[4px] sm:rounded-md flex items-center justify-center overflow-hidden bg-[#122449]">
+        <div className="absolute inset-0.5 sm:inset-1 border border-blue-400/40 rounded-[3px] sm:rounded-md flex items-center justify-center overflow-hidden bg-[#10234a]">
           <div
             className="absolute inset-0 opacity-40 pointer-events-none"
             style={{
-              backgroundImage: `radial-gradient(#60a5fa 1px, transparent 1px), radial-gradient(#93c5fd 1px, #122449 1px)`,
+              backgroundImage: `radial-gradient(#60a5fa 1px, transparent 1px), radial-gradient(#93c5fd 1px, #10234a 1px)`,
               backgroundSize: '8px 8px',
               backgroundPosition: '0 0, 4px 4px',
             }}
@@ -64,112 +131,116 @@ export const CardView: React.FC<CardViewProps> = ({
     );
   }
 
-  // Classic 2-color deck: Hearts & Diamonds (#dc2626), Spades & Clubs (#0f172a)
+  // Classic 2-color tournament deck: Hearts & Diamonds rich crimson (#c02626), Spades & Clubs deep midnight black (#0f172a)
   const isRed = card.suit === 'H' || card.suit === 'D';
-  const suitColorHex = isRed ? '#dc2626' : '#0f172a';
+  const suitColorHex = isRed ? '#c02626' : '#0f172a';
   const symbol = SUIT_SYMBOLS[card.suit];
 
   const isCourtCard = card.rank === 'J' || card.rank === 'Q' || card.rank === 'K';
   const isAce = card.rank === 'A';
+  const isAceOfSpades = isAce && card.suit === 'S';
 
   return (
     <div
-      onClick={isPlayable ? onClick : undefined}
+      onClick={isPlayable && !isDimmed ? onClick : undefined}
       style={{
         backgroundColor: '#ffffff',
         boxShadow: isSelected
-          ? '0 12px 28px -3px rgba(245, 158, 11, 0.65), 0 4px 8px -2px rgba(245, 158, 11, 0.5)'
-          : '0 2px 8px rgba(0, 0, 0, 0.28)',
+          ? '0 12px 28px -3px rgba(245, 158, 11, 0.65), 0 4px 10px -2px rgba(245, 158, 11, 0.5)'
+          : '0 3px 10px rgba(0, 0, 0, 0.32)',
       }}
       className={`
         ${sizeClasses}
         shrink-0
         border border-slate-300 sm:border-slate-400
         relative
-        flex flex-col justify-between
-        p-1 sm:p-1.5
         select-none
-        overflow-visible
+        overflow-hidden
         transition-all duration-150
-        ${isPlayable ? 'cursor-pointer hover:-translate-y-2.5 hover:shadow-2xl hover:ring-2 hover:ring-amber-400 active:scale-95 z-20' : ''}
+        ${isDimmed ? 'opacity-40 grayscale-[35%] pointer-events-none scale-[0.96]' : ''}
+        ${isPlayable && !isDimmed ? 'cursor-pointer hover:-translate-y-2.5 hover:shadow-2xl hover:ring-2 hover:ring-amber-400 active:scale-95 z-20' : ''}
         ${isSelected ? 'ring-2 sm:ring-3 ring-amber-400 -translate-y-2.5 sm:-translate-y-3 scale-105 z-40' : ''}
         ${className}
       `}
     >
-      {/* 2-Tap Confirmation Badge when Selected */}
+      {/* 2-Tap Confirmation Badge when Selected on mobile touch */}
       {isSelected && (
         <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-50 bg-amber-400 text-slate-950 font-black text-[7px] sm:text-[8px] uppercase tracking-wider px-1.5 py-[1px] rounded-full shadow-md border border-white whitespace-nowrap pointer-events-none">
           Tap to Play
         </div>
       )}
 
+      {/* Subtle Inner Card Border Frame (Bicycle standard hairline frame) */}
+      <div className="absolute inset-0.5 sm:inset-1 border border-slate-200/90 rounded-[4px] sm:rounded-md pointer-events-none select-none z-10" />
+
       {/* Top-Left Rank & Suit Index */}
       <div
-        className="flex flex-col items-start leading-none select-none z-10 pt-0.5 pl-0.5"
+        className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 flex flex-col items-center leading-none select-none z-20"
         style={{ color: suitColorHex }}
       >
-        <span className="font-black font-sans text-xs sm:text-sm md:text-base lg:text-lg leading-none tracking-tight">
+        <span className="font-serif font-black text-[11px] sm:text-xs md:text-sm lg:text-base leading-none tracking-tight">
           {card.rank}
         </span>
-        <span className="text-[11px] sm:text-xs md:text-sm lg:text-base leading-none mt-0.5 font-bold">
+        <span className="text-[10px] sm:text-[11px] md:text-xs lg:text-sm leading-none mt-0.5 font-bold">
           {symbol}
         </span>
       </div>
 
-      {/* Center Artwork Area */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none px-2 sm:px-2.5 py-3 sm:py-3.5 overflow-hidden rounded-lg sm:rounded-xl">
-        {isCourtCard ? (
-          <div className="w-[72%] h-[72%] flex items-center justify-center">
-            <RoyalCourtArt rank={card.rank} suit={card.suit} />
-          </div>
-        ) : isAce ? (
-          card.suit === 'S' ? (
-            <div className="flex flex-col items-center justify-center">
-              <svg
-                viewBox="0 0 60 70"
-                className="w-7 h-9 sm:w-10 sm:h-12 md:w-13 md:h-15 lg:w-15 lg:h-18 select-none"
+      {/* Bottom-Right Mirrored Rank & Suit Index (Reversible Card Standard) */}
+      <div
+        className="absolute bottom-1 right-1 sm:bottom-1.5 sm:right-1.5 flex flex-col items-center leading-none select-none z-20 rotate-180"
+        style={{ color: suitColorHex }}
+      >
+        <span className="font-serif font-black text-[11px] sm:text-xs md:text-sm lg:text-base leading-none tracking-tight">
+          {card.rank}
+        </span>
+        <span className="text-[10px] sm:text-[11px] md:text-xs lg:text-sm leading-none mt-0.5 font-bold">
+          {symbol}
+        </span>
+      </div>
+
+      {/* Center Artwork & Pip Area */}
+      {isCourtCard ? (
+        /* Traditional Double-Headed Court Card Frame */
+        <div className="absolute inset-2 sm:inset-2.5 md:inset-3 flex items-center justify-center overflow-hidden rounded-[2px]">
+          <RoyalCourtArt rank={card.rank} suit={card.suit} />
+        </div>
+      ) : isAceOfSpades ? (
+        /* Legendary Bicycle Ornate Ace of Spades */
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none p-3">
+          <svg viewBox="0 0 100 130" className="w-[68%] h-[68%] drop-shadow-sm select-none">
+            <path
+              d="M50 14 C40 32, 16 58, 16 78 C16 94, 30 102, 42 92 C38 100, 32 108, 28 112 L72 112 C68 108, 62 100, 58 92 C70 102, 84 94, 84 78 C84 58, 60 32, 50 14 Z"
+              fill="#0f172a"
+            />
+            {/* Center Ornate Gold Filigree Inlay */}
+            <circle cx="50" cy="68" r="8" fill="#eab308" stroke="#ca8a04" strokeWidth="1" />
+            <path
+              d="M50 63 L52 67 L57 67 L53 70 L55 75 L50 72 L45 75 L47 70 L43 67 L48 67 Z"
+              fill="#ffffff"
+            />
+            <circle cx="50" cy="68" r="2" fill="#b45309" />
+          </svg>
+        </div>
+      ) : (
+        /* Traditional Standard Geometric Pip Layout for Number Cards (2 to 10) & Aces */
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none p-1 sm:p-1.5">
+          <svg viewBox="0 0 100 140" className="w-full h-full select-none">
+            {PIP_LAYOUTS[card.rank]?.map((pip, idx) => (
+              <g
+                key={idx}
+                transform={`translate(${pip.x - 7}, ${pip.y - 7}) ${pip.flip ? 'rotate(180 7 7)' : ''}`}
               >
                 <path
-                  d="M30 4 C24 16, 6 36, 6 48 C6 58, 16 63, 24 57 C22 62, 19 66, 17 68 L43 68 C41 66, 38 62, 36 57 C44 63, 54 58, 54 48 C54 36, 36 16, 30 4 Z"
-                  fill="#0f172a"
+                  d={SUIT_PATHS[card.suit]}
+                  fill={suitColorHex}
+                  transform="scale(0.48)"
                 />
-                <circle cx="30" cy="40" r="4.5" fill="#f59e0b" />
-                <path
-                  d="M30 33 L32 38 L37 38 L33 41 L35 46 L30 43 L25 46 L27 41 L23 38 L28 38 Z"
-                  fill="#ffffff"
-                />
-              </svg>
-            </div>
-          ) : (
-            <span
-              style={{ color: suitColorHex }}
-              className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black select-none leading-none drop-shadow-xs"
-            >
-              {symbol}
-            </span>
-          )
-        ) : (
-          <span
-            style={{ color: suitColorHex }}
-            className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black select-none leading-none drop-shadow-xs"
-          >
-            {symbol}
-          </span>
-        )}
-      </div>
-
-      {/* Bottom-Right Inverted Rank & Suit Index */}
-      <div
-        className="flex flex-col items-start rotate-180 self-end leading-none select-none z-10 pt-0.5 pl-0.5"
-        style={{ color: suitColorHex }}
-      >
-        <span className="font-black font-sans text-xs sm:text-sm md:text-base lg:text-lg leading-none tracking-tight">
-          {card.rank}
-        </span>
-        <span className="text-[11px] sm:text-xs md:text-sm lg:text-base leading-none mt-0.5 font-bold">
-          {symbol}
-        </span>
-      </div>
+              </g>
+            ))}
+          </svg>
+        </div>
+      )}
     </div>
   );
 };
