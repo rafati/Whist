@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { ClientMessage, Room, ServerMessage, UserProfile } from '../types.ts';
+import { ClientMessage, Room, ServerMessage, UserProfile, Seat, ThrowableObjectType } from '../types.ts';
 
 interface SocketContextType {
   isConnected: boolean;
@@ -18,6 +18,7 @@ interface SocketContextType {
   restartMatch: (roomId: string) => void;
   skipMisdeal: (roomId: string) => void;
   deleteRoom: (roomId: string) => void;
+  throwObject: (roomId: string, fromSeat: Seat, toSeat: Seat, objectType: ThrowableObjectType) => void;
   refreshRoomList: () => void;
   errorMessage: string | null;
   clearError: () => void;
@@ -202,6 +203,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     send({ type: 'skip_misdeal', roomId });
   }, [send]);
 
+  const throwObject = useCallback((roomId: string, fromSeat: Seat, toSeat: Seat, objectType: ThrowableObjectType) => {
+    send({ type: 'throw_object', roomId, fromSeat, toSeat, objectType });
+  }, [send]);
+
   const clearError = () => setErrorMessage(null);
 
   return (
@@ -223,6 +228,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         restartMatch,
         skipMisdeal,
         deleteRoom,
+        throwObject,
         refreshRoomList,
         errorMessage,
         clearError,

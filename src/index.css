@@ -255,3 +255,17 @@
     margin-left: -0.95rem !important;
   }
 }
+
+/* Avatar Recoil Animation when hit by thrown object */
+@keyframes avatar-recoil {
+  0% { transform: scale(1) rotate(0deg); }
+  20% { transform: scale(0.82) rotate(-14deg); }
+  45% { transform: scale(1.15) rotate(12deg); }
+  70% { transform: scale(0.92) rotate(-6deg); }
+  85% { transform: scale(1.05) rotate(3deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.avatar-recoiling {
+  animation: avatar-recoil 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}

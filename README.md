@@ -33,6 +33,11 @@ A real-time, 4-player trick-taking partnership card game built with React 19, Vi
 * **AI & Simulation Lab**:
   * **Monte Carlo Simulation Runner**: Headless statistical engine capable of simulating thousands of matches to benchmark strategy.
   * **AI Strategy Optimizer (Google Gemini API)**: Analyzes match telemetry and synthesizes optimized strategic parameters for the bot engine.
+* **Interactive Throwable Objects**:
+  * Real-time table banter: seated players can throw a **Used Shoe** (👞), **Open Beer Bottle** (🍾), or **Gold Medal** (🥇) across the table at any player or bot.
+  * 3D parabolic Bezier flight trajectories with rotational tumbling, particle trails, and cartoon impact explosions (dust & stars, foam splash, golden sparkles).
+  * Recoil animations and reaction bubbles for both human and AI bot avatars.
+  * Synthesized procedural sound effects via native Web Audio API.
 * **Multiplayer & Bot Play**:
   * Real-time WebSocket room matchmaking and table synchronization.
   * "Sit & Fill Bots" button allows immediate play with AI bots across Casual and Super Bot difficulties.

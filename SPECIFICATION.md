@@ -227,6 +227,7 @@ A full-mesh peer-to-peer voice chat system integrated into the table interface (
 | `restart_match` | `roomId: string` | Resets match scores to 0-0 |
 | `skip_misdeal` | `roomId: string` | Bypasses 10s countdown to immediately re-deal on misdeal |
 | `delete_room` | `roomId: string` | Closes and deletes the table |
+| `throw_object` | `roomId: string, fromSeat: Seat, toSeat: Seat, objectType: ThrowableObjectType` | Throws an interactive item at another seated player or bot |
 | `voice_join` | `roomId: string, peerId: string, user: UserProfile, seat?: Seat \| null` | Joins table WebRTC voice room |
 | `voice_leave` | `roomId: string, peerId: string` | Disconnects from voice room |
 | `voice_signal` | `roomId: string, toPeerId: string, fromPeerId: string, signal: any` | Relays WebRTC SDP offer/answer/ICE |
@@ -239,6 +240,7 @@ A full-mesh peer-to-peer voice chat system integrated into the table interface (
 | `room_list` | `rooms: Array<{ id, name, playersCount, status }>` | Broadcasts active tables to lobby |
 | `room_state` | `room: Room` | Full synchronized room and game state |
 | `room_deleted` | `roomId: string` | Notifies clients that the table was deleted |
+| `object_thrown` | `throwEvent: ThrownObjectEvent` | Broadcasts an animated projectile flight between table seats |
 | `voice_peers_list`| `roomId: string, peers: VoicePeer[]` | Initial peer list sent to joining voice client |
 | `voice_peer_joined`| `roomId: string, peer: VoicePeer` | Announces a new peer joining voice |
 | `voice_peer_left` | `roomId: string, peerId: string` | Announces a peer disconnecting from voice |
@@ -246,3 +248,21 @@ A full-mesh peer-to-peer voice chat system integrated into the table interface (
 | `voice_peer_status`| `roomId: string, peerId: string, isMuted: boolean, isDeafened: boolean` | Peer mute/deafen state change |
 | `voice_peer_speaking`| `roomId: string, peerId: string, isSpeaking: boolean` | Peer voice activity state change |
 | `error` | `message: string` | Validation or action error notice |
+
+---
+
+## 8. Interactive Throwable Objects System
+
+Players at the table can express banter, celebration, or frustration by throwing interactive animated objects at other players (humans or bots) in real-time.
+
+### 8.1 The Three Items
+1. 👞 **Used Shoe**: A dusty, battered boot that tumbles $720^\circ$ end-over-end across the table, impacting with a cartoon dust ring and dizzy spinning stars (`"Thump!"`).
+2. 🍾 **Open Beer Bottle**: A green glass bottle spinning in an arc with bubbling liquid trails, producing a frothy splash burst and spray droplets on impact (`"Cheers!"`).
+3. 🥇 **Gold Medal**: A gleaming gold medal with twinkling ribbon trails, generating a golden victory halo and confetti burst on impact (`"Champion!"`).
+
+### 8.2 UI & Targeting
+* **Dock Placement**: Docked on the **right side of the player console** (in the compact header row of the bottom hand footer). Also available in the bottom-right corner when seated in the waiting lobby.
+* **Direct Targeting Flow**: Tapping an item enters **Targeting Mode**, causing all eligible target player avatar pods to pulse with glowing crosshairs. Clicking any player's pod dispatches the throw.
+* **Hit Reactions**: Both bot and human avatars perform a physical spring recoil shake (`.avatar-recoiling`) with unique comic speech bubbles.
+* **Audio Synthesis**: Native browser `AudioContext` synthesizer provides dynamic whoosh sounds and custom impact sound effects without external audio files.
+* **Rate-Limiting**: 1.5–2.5 second cooldown per seat enforced client-side and server-side.

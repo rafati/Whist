@@ -16,6 +16,7 @@ import {
   Bid,
   TrumpSuit,
   VoicePeer,
+  ThrownObjectEvent,
 } from './src/types.ts';
 import {
   calculateRoundScores,
@@ -60,6 +61,7 @@ const rooms = new Map<string, Room>();
 const clientSockets = new Map<WebSocket, { roomId?: string; user?: UserProfile }>();
 const botTimers = new Map<string, NodeJS.Timeout>();
 const misdealTimers = new Map<string, NodeJS.Timeout>();
+const throwCooldowns = new Map<string, number>();
 
 // Voice Chat Peer State
 interface ServerVoicePeer {
@@ -598,6 +600,7 @@ wss.on('connection', (ws) => {
           email: msg.user.email,
           avatar: msg.user.avatar,
         };
+        clientSockets.set(ws, { roomId: msg.roomId, user: msg.user });
 
         // 1.2 Start Trigger: Transitions from "Waiting" to "Active" automatically only when all 4 seats are occupied
         const allOccupied = SEATS.every((s) => room.seats[s] !== null);
@@ -764,6 +767,45 @@ wss.on('connection', (ws) => {
             }
           }
           broadcastRoomList();
+        }
+        return;
+      }
+
+      if (msg.type === 'throw_object') {
+        const room = rooms.get(msg.roomId);
+        if (!room) return;
+
+        // Ensure fromSeat and toSeat are occupied seats in this room
+        if (!room.seats[msg.fromSeat] || !room.seats[msg.toSeat]) return;
+
+        // Rate limiting cooldown (1.5 seconds per seat)
+        const cooldownKey = `${msg.roomId}:${msg.fromSeat}`;
+        const now = Date.now();
+        const lastThrow = throwCooldowns.get(cooldownKey) || 0;
+        if (now - lastThrow < 1500) {
+          return;
+        }
+        throwCooldowns.set(cooldownKey, now);
+
+        const throwEvent: ThrownObjectEvent = {
+          id: `throw_${now}_${Math.random().toString(36).substring(2, 7)}`,
+          roomId: msg.roomId,
+          fromSeat: msg.fromSeat,
+          toSeat: msg.toSeat,
+          objectType: msg.objectType,
+          timestamp: now,
+        };
+
+        const payload: ServerMessage = {
+          type: 'object_thrown',
+          throwEvent,
+        };
+        const json = JSON.stringify(payload);
+
+        for (const [clientWs, info] of clientSockets.entries()) {
+          if (info.roomId === msg.roomId && clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(json);
+          }
         }
         return;
       }

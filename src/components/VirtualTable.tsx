@@ -6,6 +6,8 @@ import {
   PlayedCard,
   Room,
   Seat,
+  ThrowableObjectType,
+  ThrownObjectEvent,
 } from '../types.ts';
 import {
   getTeam,
@@ -28,6 +30,8 @@ import { MisdealModal } from './MisdealModal.tsx';
 import { ScoreBoard } from './ScoreBoard.tsx';
 import { SimulationModal } from './SimulationModal.tsx';
 import { VoiceChatBar } from './VoiceChatBar.tsx';
+import { ThrowableDock } from './ThrowableDock.tsx';
+import { ThrowableOverlay } from './ThrowableOverlay.tsx';
 import { useVoiceChat } from '../lib/useVoiceChat.ts';
 import {
   ArrowLeft,
@@ -195,6 +199,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     restartMatch,
     skipMisdeal,
     deleteRoom,
+    throwObject,
+    addSocketListener,
   } = useSocket();
 
   const [showScoreModal, setShowScoreModal] = useState(false);
@@ -207,6 +213,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('dev') === 'true';
 
+  const isProBot = room.botDifficulty !== 'casual';
+  const gameState = room.gameState;
+  const seats = room.seats;
+
+  // Determine current user's seat
+  const mySeat: Seat | null =
+    (Object.keys(seats) as Seat[]).find((s) => seats[s]?.id === user?.id) || null;
+
   // Animation state for played tricks and card flight
   const [displayTrick, setDisplayTrick] = useState<PlayedCard[]>(room.gameState.currentTrick);
   const [isGathering, setIsGathering] = useState(false);
@@ -214,9 +228,37 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const [celebratedSeat, setCelebratedSeat] = useState<Seat | null>(null);
   const [justPlayedHandCardId, setJustPlayedHandCardId] = useState<string | null>(null);
 
-  const isProBot = room.botDifficulty !== 'casual';
-  const gameState = room.gameState;
-  const seats = room.seats;
+  // Interactive throwable objects state
+  const [selectedThrowable, setSelectedThrowable] = useState<ThrowableObjectType | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState<number>(0);
+  const [activeThrows, setActiveThrows] = useState<ThrownObjectEvent[]>([]);
+  const [recoiledSeats, setRecoiledSeats] = useState<Set<Seat>>(new Set());
+
+  // Listen for multiplayer thrown objects from other players
+  useEffect(() => {
+    const unsubscribe = addSocketListener((msg) => {
+      if (msg.type === 'object_thrown') {
+        // Skip echo if thrown by local player to avoid duplicate animation
+        if (mySeat && msg.throwEvent.fromSeat === mySeat) return;
+        setActiveThrows((prev) => [...prev, msg.throwEvent]);
+        setTimeout(() => {
+          setActiveThrows((prev) => prev.filter((ev) => ev.id !== msg.throwEvent.id));
+        }, 3500);
+      }
+    });
+    return unsubscribe;
+  }, [addSocketListener, mySeat]);
+
+  const handleTriggerRecoil = (seat: Seat) => {
+    setRecoiledSeats((prev) => new Set(prev).add(seat));
+    setTimeout(() => {
+      setRecoiledSeats((prev) => {
+        const next = new Set(prev);
+        next.delete(seat);
+        return next;
+      });
+    }, 600);
+  };
 
   // Clear any lingering celebration badges whenever phase or round changes
   useEffect(() => {
@@ -271,10 +313,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
       }
     }
   }, [gameState.currentTrick, gameState.trumpSuit]);
-
-  // Determine current user's seat
-  const mySeat: Seat | null =
-    (Object.keys(seats) as Seat[]).find((s) => seats[s]?.id === user?.id) || null;
 
   // Table Voice Chat (Mesh WebRTC)
   const voice = useVoiceChat({
@@ -345,6 +383,33 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     claimSeat(room.id, seat, user);
   };
 
+  const handleThrowAtSeat = (targetSeat: Seat) => {
+    if (!mySeat || !selectedThrowable || !room) return;
+    if (targetSeat === mySeat) return;
+    if (!seats[targetSeat]) return;
+    if (Date.now() < cooldownUntil) return;
+
+    // 1. Fire optimistic local animation immediately for instant responsive UX
+    const localEventId = `throw_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const localThrowEvent: ThrownObjectEvent = {
+      id: localEventId,
+      roomId: room.id,
+      fromSeat: mySeat,
+      toSeat: targetSeat,
+      objectType: selectedThrowable,
+      timestamp: Date.now(),
+    };
+    setActiveThrows((prev) => [...prev, localThrowEvent]);
+    setTimeout(() => {
+      setActiveThrows((prev) => prev.filter((ev) => ev.id !== localEventId));
+    }, 3500);
+
+    // 2. Dispatch to server for room broadcast
+    throwObject(room.id, mySeat, targetSeat, selectedThrowable);
+    setCooldownUntil(Date.now() + ANIMATION_CONFIG.THROW_COOLDOWN_MS);
+    setSelectedThrowable(null);
+  };
+
   // Dynamic table seat mapping: active human player is ALWAYS oriented at the bottom location
   const bottomSeat: Seat = mySeat || 'South';
   const topSeat: Seat = mySeat ? getPartner(mySeat) : 'North';
@@ -411,21 +476,46 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     const isTopSeat = visualPos === 'top';
     const isPartner = Boolean(mySeat && getPartner(mySeat) === seat);
     const isCelebrated = gameState.phase === 'playing' && celebratedSeat === seat;
+    const isRecoiling = recoiledSeats.has(seat);
+    const isTargetable = Boolean(selectedThrowable && mySeat && mySeat !== seat && player);
     const seatBid = gameState.bids.find((b) => b.seat === seat);
     const seatVoice = getSeatVoiceState(seat);
 
     return (
-      <div className={`absolute ${positionClasses} flex flex-col items-center z-20`}>
+      <div
+        data-throw-seat={seat}
+        onClick={(e) => {
+          if (isTargetable) {
+            e.stopPropagation();
+            handleThrowAtSeat(seat);
+          }
+        }}
+        className={`absolute ${positionClasses} flex flex-col items-center z-20 ${isTargetable ? 'cursor-crosshair' : ''}`}
+      >
         {player ? (
           <div className={`flex ${isTopSeat ? 'flex-row items-center gap-2' : 'flex-col items-center gap-1'}`}>
             <div
+              onClick={(e) => {
+                if (isTargetable) {
+                  e.stopPropagation();
+                  handleThrowAtSeat(seat);
+                }
+              }}
               className={`
                 flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-2xl transition-all duration-200 relative
+                ${isTargetable ? 'cursor-crosshair ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900 animate-pulse scale-105 hover:scale-115 shadow-[0_0_18px_rgba(251,191,36,0.9)] z-40' : ''}
+                ${isRecoiling ? 'avatar-recoiling' : ''}
                 ${isCelebrated ? 'ring-3 ring-amber-400 bg-amber-950/90 shadow-[0_0_22px_rgba(251,191,36,0.9)] scale-110 z-30' : ''}
-                ${!isCelebrated && (isCurrentBidder || isCurrentPlayer) ? 'ring-2 ring-amber-400 bg-amber-950/85 shadow-lg scale-105' : ''}
-                ${!isCelebrated && !(isCurrentBidder || isCurrentPlayer) ? 'bg-slate-950/90 border border-emerald-800/50 shadow-md' : ''}
+                ${!isCelebrated && !isTargetable && (isCurrentBidder || isCurrentPlayer) ? 'ring-2 ring-amber-400 bg-amber-950/85 shadow-lg scale-105' : ''}
+                ${!isCelebrated && !isTargetable && !(isCurrentBidder || isCurrentPlayer) ? 'bg-slate-950/90 border border-emerald-800/50 shadow-md' : ''}
               `}
             >
+              {/* Active Targeting Reticle Tag */}
+              {isTargetable && (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-2 py-0.2 rounded-full shadow-lg animate-bounce z-50 whitespace-nowrap">
+                  TARGET 🎯
+                </div>
+              )}
               {/* Bid Speech Bubble During Bidding & Persistent Bid / Winning Contract Post-Auction */}
               {(() => {
                 // Phase 1: During Active Bidding
@@ -1090,13 +1180,15 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               <div className="flex items-center justify-between text-xs px-1 mb-0.5">
                 <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   {/* Player Profile & Identity Pill */}
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div data-throw-seat={mySeat} className="flex items-center gap-1.5 shrink-0">
                     <div className="relative shrink-0">
                       <img
                         src={user?.avatar || seats[mySeat]?.avatar || 'https://api.dicebear.com/7.x/initials/svg?seed=You'}
                         alt="You"
                         referrerPolicy="no-referrer"
                         className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border object-cover shadow bg-slate-800 ${
+                          recoiledSeats.has(mySeat) ? 'avatar-recoiling' : ''
+                        } ${
                           getTeam(mySeat) === 'TeamA' ? 'border-emerald-400' : 'border-blue-400'
                         }`}
                       />
@@ -1175,44 +1267,54 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   </div>
                 </div>
 
-                {/* Live Turn Prompt */}
-                <div>
-                  {gameState.phase === 'playing' ? (
-                    isMyTurnToPlay ? (
-                      <span className="text-slate-950 font-extrabold text-[9px] sm:text-[10px] flex items-center gap-1 bg-amber-400 px-2 py-0.5 rounded-full shadow animate-pulse">
+                {/* Right Header Section: Live Turn Prompt & Throwable Items Dock */}
+                <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                  {/* Live Turn Prompt */}
+                  <div>
+                    {gameState.phase === 'playing' ? (
+                      isMyTurnToPlay ? (
+                        <span className="text-slate-950 font-extrabold text-[9px] sm:text-[10px] flex items-center gap-1 bg-amber-400 px-2 py-0.5 rounded-full shadow animate-pulse">
+                          <span>
+                            {currentLedSuit
+                              ? `YOUR TURN • FOLLOW ${SUIT_NAMES[currentLedSuit].toUpperCase()}`
+                              : 'YOUR TURN • TAP OR SWIPE CARD TO PLAY'}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[9px] sm:text-[11px]">
+                          Waiting for{' '}
+                          <strong className="text-slate-200">
+                            {(gameState.currentTurn &&
+                              seats[gameState.currentTurn]?.name.replace(/^Bot\s+/i, '')) ||
+                              'Player'}
+                          </strong>
+                          ...
+                        </span>
+                      )
+                    ) : gameState.phase === 'bidding' ? (
+                      <span className="text-amber-300 font-semibold text-[9px] sm:text-[10px] flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5 text-amber-400" />
                         <span>
-                          {currentLedSuit
-                            ? `YOUR TURN • FOLLOW ${SUIT_NAMES[currentLedSuit].toUpperCase()}`
-                            : 'YOUR TURN • TAP OR SWIPE CARD TO PLAY'}
+                          {gameState.currentBidder === mySeat
+                            ? 'Your turn to bid above!'
+                            : 'Inspect your hand during the auction'}
                         </span>
                       </span>
                     ) : (
-                      <span className="text-slate-400 text-[9px] sm:text-[11px]">
-                        Waiting for{' '}
-                        <strong className="text-slate-200">
-                          {(gameState.currentTurn &&
-                            seats[gameState.currentTurn]?.name.replace(/^Bot\s+/i, '')) ||
-                            'Player'}
-                        </strong>
-                        ...
+                      <span className="text-amber-300 font-semibold text-[9px] sm:text-[10px]">
+                        {gameState.declarer === mySeat
+                          ? 'Select Trump Suit in the center console'
+                          : 'Waiting for Declarer to name Trump'}
                       </span>
-                    )
-                  ) : gameState.phase === 'bidding' ? (
-                    <span className="text-amber-300 font-semibold text-[9px] sm:text-[10px] flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                      <span>
-                        {gameState.currentBidder === mySeat
-                          ? 'Your turn to bid above!'
-                          : 'Inspect your hand during the auction'}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="text-amber-300 font-semibold text-[9px] sm:text-[10px]">
-                      {gameState.declarer === mySeat
-                        ? 'Select Trump Suit in the center console'
-                        : 'Waiting for Declarer to name Trump'}
-                    </span>
-                  )}
+                    )}
+                  </div>
+
+                  {/* Throwable Objects Dock on the right side of the player area */}
+                  <ThrowableDock
+                    selectedItem={selectedThrowable}
+                    onSelectItem={setSelectedThrowable}
+                    cooldownUntil={cooldownUntil}
+                  />
                 </div>
               </div>
 
@@ -1271,6 +1373,23 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             </div>
           </footer>
         )}
+
+      {/* Floating Throwable Tray if seated in waiting room */}
+      {gameState.phase === 'waiting' && mySeat && (
+        <div className="absolute bottom-3 right-3 z-30 flex items-center gap-2">
+          <ThrowableDock
+            selectedItem={selectedThrowable}
+            onSelectItem={setSelectedThrowable}
+            cooldownUntil={cooldownUntil}
+          />
+        </div>
+      )}
+
+      {/* Global Interactive Projectile & Impact FX Layer */}
+      <ThrowableOverlay
+        activeEvents={activeThrows}
+        onTriggerRecoil={handleTriggerRecoil}
+      />
 
       {/* End-of-Round & End-of-Match Modals */}
       <RoundSummaryModal

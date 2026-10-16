@@ -42,6 +42,21 @@ export const ANIMATION_CONFIG = {
    * Physics cubic-bezier easing curve when trick is swept to the winner.
    */
   TRICK_SWEEP_EASING: 'cubic-bezier(0.4, 0, 0.2, 1)',
+
+  /**
+   * Flight duration (in ms) for an interactive thrown object (shoe, beer, medal).
+   */
+  THROW_FLIGHT_DURATION_MS: 650,
+
+  /**
+   * Duration (in ms) of the hit reaction effect (shake, splash, particles).
+   */
+  THROW_HIT_DURATION_MS: 1200,
+
+  /**
+   * Cooldown period (in ms) between consecutive throws.
+   */
+  THROW_COOLDOWN_MS: 2500,
 } as const;
 
 /**

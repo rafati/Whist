@@ -125,6 +125,17 @@ export interface Room {
   botDifficulty?: 'casual' | 'super';
 }
 
+export type ThrowableObjectType = 'shoe' | 'beer' | 'medal';
+
+export interface ThrownObjectEvent {
+  id: string;
+  roomId: string;
+  fromSeat: Seat;
+  toSeat: Seat;
+  objectType: ThrowableObjectType;
+  timestamp: number;
+}
+
 // Client to Server Messages
 export type ClientMessage =
   | { type: 'join_room'; roomId: string; user: UserProfile }
@@ -140,6 +151,7 @@ export type ClientMessage =
   | { type: 'restart_match'; roomId: string }
   | { type: 'skip_misdeal'; roomId: string }
   | { type: 'delete_room'; roomId: string }
+  | { type: 'throw_object'; roomId: string; fromSeat: Seat; toSeat: Seat; objectType: ThrowableObjectType }
   | { type: 'voice_join'; roomId: string; peerId: string; user: UserProfile; seat?: Seat | null }
   | { type: 'voice_leave'; roomId: string; peerId: string }
   | { type: 'voice_signal'; roomId: string; toPeerId: string; fromPeerId: string; signal: any }
@@ -162,6 +174,7 @@ export type ServerMessage =
   | { type: 'room_list'; rooms: Array<{ id: string; name: string; playersCount: number; status: GamePhase }> }
   | { type: 'room_state'; room: Room }
   | { type: 'room_deleted'; roomId: string }
+  | { type: 'object_thrown'; throwEvent: ThrownObjectEvent }
   | { type: 'voice_peers_list'; roomId: string; peers: VoicePeer[] }
   | { type: 'voice_peer_joined'; roomId: string; peer: VoicePeer }
   | { type: 'voice_peer_left'; roomId: string; peerId: string }
