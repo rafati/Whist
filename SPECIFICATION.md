@@ -143,7 +143,7 @@ export const ANIMATION_CONFIG = {
   CARD_PLAY_DURATION_MS: 400,          // Flight transition duration when card is played
   TRICK_REVIEW_DELAY_MS: 750,          // Pause duration after 4th card lands for review
   TRICK_COLLECT_DURATION_MS: 550,      // Sweep duration when trick cards fly to winner
-  WINNER_CELEBRATION_DURATION_MS: 1000,// Celebration highlight duration (+1 Trick badge)
+  WINNER_CELEBRATION_DURATION_MS: 1000,// Winner seat highlight duration
   CARD_FLIGHT_EASING: 'cubic-bezier(0.22, 1, 0.36, 1)',
   TRICK_SWEEP_EASING: 'cubic-bezier(0.4, 0, 0.2, 1)',
 } as const;

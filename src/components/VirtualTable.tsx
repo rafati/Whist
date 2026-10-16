@@ -426,20 +426,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 ${!isCelebrated && !(isCurrentBidder || isCurrentPlayer) ? 'bg-slate-950/90 border border-emerald-800/50 shadow-md' : ''}
               `}
             >
-              {/* Trick Winner Celebration Toast */}
-              {isCelebrated && (
-                <div
-                  className={`absolute left-1/2 -translate-x-1/2 z-40 whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-150 ${
-                    isTopSeat ? 'top-full mt-1.5' : isDeclarer ? '-top-9' : '-top-5'
-                  }`}
-                >
-                  <span className="bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-black text-[9px] px-2 py-0.5 rounded-full shadow-lg border border-white flex items-center gap-1 animate-pulse">
-                    <Crown className="w-2.5 h-2.5 fill-current" />
-                    <span>+1 Trick!</span>
-                  </span>
-                </div>
-              )}
-
               {/* Bid Speech Bubble During Bidding & Persistent Bid / Winning Contract Post-Auction */}
               {(() => {
                 // Phase 1: During Active Bidding
