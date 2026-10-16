@@ -1108,7 +1108,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         <>
                           <span className="text-slate-500">•</span>
                           <span className="text-amber-300 font-mono font-bold" title="Tricks won by you this round">
-                            {gameState.playerTricksWon[mySeat] || 0}T
+                            {gameState.tricksWonCount?.[mySeat] || 0}T
                           </span>
                         </>
                       )}
