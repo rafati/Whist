@@ -350,8 +350,34 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     }, 600);
   };
 
+  const gatherTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTrickAnimationTimers = () => {
+    if (gatherTimerRef.current) {
+      clearTimeout(gatherTimerRef.current);
+      gatherTimerRef.current = null;
+    }
+    if (finishTimerRef.current) {
+      clearTimeout(finishTimerRef.current);
+      finishTimerRef.current = null;
+    }
+    if (celebrateTimerRef.current) {
+      clearTimeout(celebrateTimerRef.current);
+      celebrateTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearTrickAnimationTimers();
+    };
+  }, []);
+
   // Clear any lingering celebration badges whenever phase or round changes
   useEffect(() => {
+    clearTrickAnimationTimers();
     setCelebratedSeat(null);
     setWinnerInfo(null);
     setIsGathering(false);
@@ -365,6 +391,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     const trick = gameState.currentTrick;
 
     if (trick.length === 4) {
+      clearTrickAnimationTimers();
       setDisplayTrick(trick);
       setIsGathering(false);
 
@@ -372,35 +399,49 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
         const result = evaluateTrickWinner(trick, gameState.trumpSuit);
         setWinnerInfo(result);
 
-        const gatherTimer = setTimeout(() => {
+        gatherTimerRef.current = setTimeout(() => {
+          gatherTimerRef.current = null;
           setIsGathering(true);
         }, ANIMATION_CONFIG.CARD_PLAY_DURATION_MS + ANIMATION_CONFIG.TRICK_REVIEW_DELAY_MS);
 
-        const finishTimer = setTimeout(() => {
+        finishTimerRef.current = setTimeout(() => {
+          finishTimerRef.current = null;
           setIsGathering(false);
           setDisplayTrick([]);
           setWinnerInfo(null);
           setCelebratedSeat(result.winner);
         }, ANIMATION_CONFIG.CARD_PLAY_DURATION_MS + ANIMATION_CONFIG.TRICK_REVIEW_DELAY_MS + ANIMATION_CONFIG.TRICK_COLLECT_DURATION_MS);
 
-        const clearCelebrateTimer = setTimeout(() => {
+        celebrateTimerRef.current = setTimeout(() => {
+          celebrateTimerRef.current = null;
           setCelebratedSeat(null);
         }, ANIMATION_CONFIG.CARD_PLAY_DURATION_MS + ANIMATION_CONFIG.TRICK_REVIEW_DELAY_MS + ANIMATION_CONFIG.TRICK_COLLECT_DURATION_MS + ANIMATION_CONFIG.WINNER_CELEBRATION_DURATION_MS);
-
-        return () => {
-          clearTimeout(gatherTimer);
-          clearTimeout(finishTimer);
-          clearTimeout(clearCelebrateTimer);
-        };
       }
     } else if (trick.length > 0) {
+      if (gatherTimerRef.current) {
+        clearTimeout(gatherTimerRef.current);
+        gatherTimerRef.current = null;
+      }
+      if (finishTimerRef.current) {
+        clearTimeout(finishTimerRef.current);
+        finishTimerRef.current = null;
+      }
       setDisplayTrick(trick);
       setIsGathering(false);
       setWinnerInfo(null);
     } else {
-      if (!isGathering && !winnerInfo) {
-        setDisplayTrick([]);
+      // Server resolved the trick (after SERVER_TRICK_RESOLVE_DELAY_MS) and reset gameState.currentTrick to []
+      if (gatherTimerRef.current) {
+        clearTimeout(gatherTimerRef.current);
+        gatherTimerRef.current = null;
       }
+      if (finishTimerRef.current) {
+        clearTimeout(finishTimerRef.current);
+        finishTimerRef.current = null;
+      }
+      setIsGathering(false);
+      setDisplayTrick([]);
+      setWinnerInfo(null);
     }
   }, [gameState.currentTrick, gameState.trumpSuit]);
 
@@ -448,7 +489,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const myHand = mySeat ? gameState.hands[mySeat] || [] : [];
   const sortedMyHand = sortHand(myHand, gameState.trumpSuit);
 
-  const currentLedSuit = displayTrick.length > 0 ? displayTrick[0].card.suit : null;
+  // Authoritative led suit must always come from gameState.currentTrick so opening leads never inherit a stale suit from displayTrick
+  const currentLedSuit =
+    gameState.currentTrick.length > 0 ? gameState.currentTrick[0].card.suit : null;
 
   const getTrickTargetRect = (visualPos: 'bottom' | 'top' | 'left' | 'right') => {
     // 1. Try finding slot element directly in the DOM
