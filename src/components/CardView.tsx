@@ -272,7 +272,7 @@ export const CardView: React.FC<CardViewProps> = ({
         relative
         select-none
         overflow-hidden
-        ${isDimmed ? 'opacity-40 grayscale-[35%] pointer-events-none scale-[0.96]' : ''}
+        ${isDimmed ? 'opacity-80 pointer-events-none' : ''}
         ${isPlayable && !isDimmed ? 'cursor-pointer hover:-translate-y-2.5 hover:shadow-2xl hover:ring-2 hover:ring-amber-400 active:scale-95 z-20' : ''}
         ${isSelected ? 'ring-2 sm:ring-3 ring-amber-400 -translate-y-2.5 sm:-translate-y-3 scale-105 z-40' : ''}
         ${className}

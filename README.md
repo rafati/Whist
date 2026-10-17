@@ -42,10 +42,10 @@ A real-time, 4-player trick-taking partnership card game built with React 19, Vi
   * **Oversized Bold Corner Indices**: Modern, heavy typography (`font-black`) for card ranks with the suit symbol centered directly beneath it, remaining 100% visible even when cards overlap tightly.
   * **Single Giant Center Pip (2–10)**: Clean, high-impact center suit pip eliminating cluttered multi-pip scatter, paired with ornate Ace of Spades and classic court art for J, Q, and K.
   * **Strict Classic 2-Color Palette**: Rich Crimson Red (`#dc2626`) for Hearts & Diamonds and Midnight Black (`#0f172a`) for Spades & Clubs against warm ivory card stock with multi-layer depth shadows.
-* **Dynamic Suit Accordion in Hand**:
-  * When a suit is led in the trick, cards of that required suit **auto-expand horizontally** with generous spacing, revealing their full card faces and giant pips, and elevate slightly with an active amber glow ring.
-  * Ineligible suits **condense tightly** into a compact shingled stack, preserving screen real estate and preventing mobile horizontal scroll.
-  * When void in the led suit or leading, cards smoothly distribute with uniform spacing.
+* **Dynamic Suit Accordion & Natural Card Overlap**:
+  * When a suit is led in the trick, cards of that required suit **auto-expand horizontally** with generous spacing (~55-60% visible on desktop, ~67% on mobile) while maintaining natural card fan overlap (not detached whole cards), and elevate slightly with an active amber glow ring.
+  * Inactive / other suits **condense tightly** into a compact shingled stack showing clear corner indices (~25-28% visible) while **retaining full card brightness (no graying/dimming)**.
+  * When void in the led suit or on opening lead, cards smoothly distribute with uniform spacing across desktop, tablet, and mobile.
 * **Last Trick Cross (Top-Right Playing Area)**:
   * Persistent 4-card cross in the top-right corner of the table felt displaying the cards played in the last completed trick.
   * Arranged to mirror the player's perspective: Top = Partner, Bottom = You, Left = Left Opponent, Right = Right Opponent.

@@ -1523,42 +1523,31 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         : true;
                     const canPlay =
                       gameState.phase === 'playing' && isMyTurnToPlay && isLegal;
-                    const isDimmed =
-                      gameState.phase === 'playing' && isMyTurnToPlay && !isLegal;
+                    // Do not dim cards from other suits - all cards remain bright, crisp white card stock.
+                    // Visual distinction is handled via accordion fanning and playable card elevation.
+                    const isDimmed = false;
                     const isJustPlayed = justPlayedHandCardId === card.id || flyingCard?.card.id === card.id;
 
                     const isRequiredSuit = hasRequiredSuitInHand && card.suit === currentLedSuit;
                     const isCompressedSuit = hasRequiredSuitInHand && card.suit !== currentLedSuit;
 
                     // Dynamic accordion classes:
-                    // Required suit cards auto-expand with extra spacing, while ineligible suits condense tightly
+                    // Required suit cards expand with natural fan overlap, while ineligible suits condense tightly
                     const slotAccordionClass = isRequiredSuit
                       ? 'card-slot-expanded z-20'
                       : isCompressedSuit
                       ? 'card-slot-compressed z-10'
                       : 'card-slot-standard z-10';
 
-                    // Dynamic margin styles for desktop fallback
-                    let customMarginStyle: string | undefined = undefined;
-                    if (idx !== 0) {
-                      if (isRequiredSuit) {
-                        customMarginStyle = '-0.25rem';
-                      } else if (isCompressedSuit) {
-                        customMarginStyle = '-2.2rem';
-                      }
-                    }
-
                     return (
                       <div
                         key={card.id}
                         style={{
-                          ...(customMarginStyle ? ({ '--slot-margin': customMarginStyle } as React.CSSProperties) : {}),
                           transition: 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin 260ms cubic-bezier(0.2, 0.8, 0.2, 1)',
                         }}
                         className={`
                           portrait-card-slot landscape-compact-card-slot relative shrink-0
                           ${slotAccordionClass}
-                          ${idx !== 0 && !hasRequiredSuitInHand ? '-ml-5 sm:-ml-6 md:-ml-8 lg:-ml-9' : ''}
                           ${
                             isJustPlayed
                               ? 'opacity-0 scale-90 pointer-events-none'

@@ -345,10 +345,10 @@ All procedural synthesized audio (card slide/snap clicks, projectile flight whoo
 
 ### 11.2 Dynamic Suit Accordion Spacing (`src/components/VirtualTable.tsx`)
 * **Automatic Suit Expansion**: When a suit is led (`currentLedSuit`) and the player holds cards of that suit:
-  * **Required Suit Cards** (`.card-slot-expanded`): Automatically expand horizontally with minimal overlap (`--slot-margin: -0.25rem` in portrait, `0.15rem` in landscape), exposing nearly the full card face and giant center pip.
-  * **Active Elevation**: Required cards elevate `-8px` (`-translate-y-2.5 sm:-translate-y-3.5`) with an active amber glow ring (`ring-amber-400/80`).
-  * **Ineligible Suit Cards** (`.card-slot-compressed`): Tightly condense into a compact shingled stack (`--slot-margin: -2.2rem` in portrait, `-1.55rem` in landscape) with dimmed opacity (`opacity-40`), exposing only their top-left indices.
-* **Uniform Spacing Fallback**: When no suit is led yet (opening lead) or the player is void in the led suit, all cards distribute with uniform standard spacing.
+  * **Required Suit Cards** (`.card-slot-expanded`): Automatically expand horizontally with comfortable spacing (~55-60% visible on desktop at `-2.35rem`, ~67% on mobile at `-1.05rem`, and `-0.65rem` in landscape). Cards retain natural fan overlap rather than detaching as separate isolated cards.
+  * **Active Elevation**: Required cards elevate `-8px` (`-translate-y-2.5 sm:-translate-y-3.5`) with an active amber glow ring (`ring-amber-400/80`) and gold drop shadow.
+  * **Ineligible / Other Suit Cards** (`.card-slot-compressed`): Tightly condense into a compact shingled stack (`-4.15rem` on desktop, `-2.35rem` on mobile, `-1.8rem` in landscape) exposing their clear corner indices (~25-28% visible) while **retaining full card brightness (no dimming or grayscale)**.
+* **Uniform Spacing Fallback**: When no suit is led yet (opening lead) or the player is void in the led suit, all cards distribute with uniform standard spacing (`.card-slot-standard`).
 * **Zero-Scroll Dynamic Bounds**: The sum of expanded and compressed widths guarantees that a 13-card hand fits within mobile portrait widths ($\le 360\text{px}$) without horizontal scrollbars.
 * **Fluid Physics Transitions**: `transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin 260ms cubic-bezier(0.2, 0.8, 0.2, 1)` ensures smooth card slide animations when turns and tricks transition.
 

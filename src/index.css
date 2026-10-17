@@ -60,6 +60,24 @@
 }
 
 /* ============================================================
+   Player Hand Dynamic Suit Accordion (Desktop & General)
+   ============================================================ */
+/* Default / Balanced Hand fanning */
+.card-slot-standard:not(:first-child) {
+  margin-left: -2.85rem;
+}
+
+/* Expanded required suit: ~55-60% visible, natural overlap, do NOT show whole card */
+.card-slot-expanded:not(:first-child) {
+  margin-left: -2.35rem;
+}
+
+/* Compressed other suits: ~25-30% visible (compact corner index display) */
+.card-slot-compressed:not(:first-child) {
+  margin-left: -4.15rem;
+}
+
+/* ============================================================
    Mobile Portrait Mode Optimizations (Full Native Gameplay)
    ============================================================ */
 .mobile-portrait-overlay {
@@ -131,15 +149,15 @@
   }
 
   .portrait-card-slot:not(:first-child) {
-    margin-left: var(--slot-margin, -1.65rem) !important; /* Overlap for 13 cards */
+    margin-left: -1.65rem !important; /* Overlap for 13 cards */
   }
 
   .portrait-card-slot.card-slot-expanded:not(:first-child) {
-    margin-left: var(--slot-margin, -0.25rem) !important; /* Auto-spaced required suit */
+    margin-left: -1.05rem !important; /* Auto-spaced required suit: fan overlap without detached whole card */
   }
 
   .portrait-card-slot.card-slot-compressed:not(:first-child) {
-    margin-left: var(--slot-margin, -2.2rem) !important; /* Shingled ineligible suits */
+    margin-left: -2.35rem !important; /* Shingled ineligible suits: corner index */
   }
 
   .portrait-trick-card {
@@ -228,13 +246,13 @@
     height: 4.1rem !important;
   }
   .landscape-compact-card-slot:not(:first-child) {
-    margin-left: var(--slot-margin, -1rem) !important;
+    margin-left: -1.15rem !important;
   }
   .landscape-compact-card-slot.card-slot-expanded:not(:first-child) {
-    margin-left: var(--slot-margin, 0.15rem) !important;
+    margin-left: -0.65rem !important;
   }
   .landscape-compact-card-slot.card-slot-compressed:not(:first-child) {
-    margin-left: var(--slot-margin, -1.55rem) !important;
+    margin-left: -1.8rem !important;
   }
   .landscape-compact-modal {
     padding: 0.65rem 0.9rem !important;
@@ -266,13 +284,13 @@
     height: 3.75rem !important;
   }
   .landscape-compact-card-slot:not(:first-child) {
-    margin-left: var(--slot-margin, -0.95rem) !important;
+    margin-left: -1.05rem !important;
   }
   .landscape-compact-card-slot.card-slot-expanded:not(:first-child) {
-    margin-left: var(--slot-margin, 0.1rem) !important;
+    margin-left: -0.55rem !important;
   }
   .landscape-compact-card-slot.card-slot-compressed:not(:first-child) {
-    margin-left: var(--slot-margin, -1.45rem) !important;
+    margin-left: -1.65rem !important;
   }
 }
 
