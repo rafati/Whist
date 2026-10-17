@@ -264,6 +264,20 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const [justPlayedHandCardId, setJustPlayedHandCardId] = useState<string | null>(null);
   const [flyingCard, setFlyingCard] = useState<FlyingCardState | null>(null);
 
+  // Responsive viewport dimensions for dynamic hand accordion spacing
+  const [viewport, setViewport] = useState<{ width: number; height: number }>(() => ({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1024,
+    height: typeof window !== 'undefined' ? window.innerHeight : 768,
+  }));
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Interactive throwable objects state
   const [selectedThrowable, setSelectedThrowable] = useState<ThrowableObjectType | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState<number>(0);
@@ -1516,6 +1530,102 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     sortedMyHand.some((c) => c.suit === currentLedSuit)
                   );
 
+                  // Dynamic per-card slot margins based on viewport geometry & suit accordion:
+                  // Guarantees every card's giant top-left Rank & Suit is 100% uncovered while giving
+                  // the played suit wide, elevated space for effortless selection.
+                  const isPortraitViewport = viewport.height > viewport.width && viewport.width <= 640;
+                  const isCompactLandscapeViewport = viewport.height <= 480 && viewport.width > viewport.height;
+
+                  const cardWidthPx = isPortraitViewport
+                    ? 62
+                    : isCompactLandscapeViewport
+                    ? 52
+                    : viewport.width >= 1024
+                    ? 92
+                    : viewport.width >= 768
+                    ? 84
+                    : 76;
+
+                  const usableHandWidthPx = isPortraitViewport
+                    ? Math.min(460, Math.max(340, viewport.width - 14))
+                    : isCompactLandscapeViewport
+                    ? Math.min(640, Math.max(420, viewport.width - 36))
+                    : Math.min(920, Math.max(540, viewport.width - 48));
+
+                  const minCompVis = isPortraitViewport
+                    ? 21.5
+                    : isCompactLandscapeViewport
+                    ? 19
+                    : Math.round(cardWidthPx * 0.35);
+
+                  const targetCompVis = isPortraitViewport
+                    ? 24
+                    : isCompactLandscapeViewport
+                    ? 21.5
+                    : Math.round(cardWidthPx * 0.38);
+
+                  const targetExpVis = isPortraitViewport
+                    ? 39
+                    : isCompactLandscapeViewport
+                    ? 33
+                    : Math.round(cardWidthPx * 0.60);
+
+                  const targetStdVis = isPortraitViewport
+                    ? 28
+                    : isCompactLandscapeViewport
+                    ? 25
+                    : Math.round(cardWidthPx * 0.48);
+
+                  const boundaryExtraPx = isPortraitViewport ? 6 : isCompactLandscapeViewport ? 4 : 8;
+
+                  const numOverlaps = Math.max(0, sortedMyHand.length - 1);
+                  let computedCompVis = targetCompVis;
+                  let computedExpVis = targetExpVis;
+                  let computedStdVis = targetStdVis;
+
+                  if (numOverlaps > 0) {
+                    if (!hasRequiredSuitInHand) {
+                      const maxAllowedStd = (usableHandWidthPx - cardWidthPx) / numOverlaps;
+                      computedStdVis = Math.max(minCompVis, Math.min(targetStdVis, maxAllowedStd));
+                    } else {
+                      let expOverlaps = 0;
+                      let compOverlaps = 0;
+                      let boundaryCount = 0;
+                      for (let i = 0; i < numOverlaps; i++) {
+                        const prevIsReq = sortedMyHand[i].suit === currentLedSuit;
+                        const nextIsReq = sortedMyHand[i + 1].suit === currentLedSuit;
+                        if (prevIsReq) {
+                          expOverlaps++;
+                          if (!nextIsReq) boundaryCount++;
+                        } else {
+                          compOverlaps++;
+                        }
+                      }
+
+                      const availStripSpace = usableHandWidthPx - cardWidthPx - boundaryCount * boundaryExtraPx;
+                      const desiredSpace = expOverlaps * targetExpVis + compOverlaps * targetCompVis;
+
+                      if (desiredSpace <= availStripSpace) {
+                        computedCompVis = targetCompVis;
+                        computedExpVis = targetExpVis;
+                      } else {
+                        const scale = availStripSpace / desiredSpace;
+                        computedCompVis = Math.max(minCompVis, targetCompVis * scale);
+                        const remainingForExp = availStripSpace - compOverlaps * computedCompVis;
+                        computedExpVis =
+                          expOverlaps > 0
+                            ? Math.min(targetExpVis, Math.max(computedCompVis + 8, remainingForExp / expOverlaps))
+                            : targetExpVis;
+
+                        if (expOverlaps * computedExpVis + compOverlaps * computedCompVis > availStripSpace) {
+                          const tightScale = availStripSpace / (expOverlaps * computedExpVis + compOverlaps * computedCompVis);
+                          computedCompVis = Math.max(minCompVis - 1, computedCompVis * tightScale);
+                          computedExpVis = Math.max(computedCompVis + 6, computedExpVis * tightScale);
+                        }
+                      }
+                    }
+                  }
+
                   return sortedMyHand.map((card, idx) => {
                     const isLegal =
                       gameState.phase === 'playing'
@@ -1524,25 +1634,47 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     const canPlay =
                       gameState.phase === 'playing' && isMyTurnToPlay && isLegal;
                     // Do not dim cards from other suits - all cards remain bright, crisp white card stock.
-                    // Visual distinction is handled via accordion fanning and playable card elevation.
                     const isDimmed = false;
                     const isJustPlayed = justPlayedHandCardId === card.id || flyingCard?.card.id === card.id;
 
                     const isRequiredSuit = hasRequiredSuitInHand && card.suit === currentLedSuit;
-                    const isCompressedSuit = hasRequiredSuitInHand && card.suit !== currentLedSuit;
 
-                    // Dynamic accordion classes:
-                    // Required suit cards expand with natural fan overlap, while ineligible suits condense tightly
-                    const slotAccordionClass = isRequiredSuit
-                      ? 'card-slot-expanded z-20'
-                      : isCompressedSuit
-                      ? 'card-slot-compressed z-10'
-                      : 'card-slot-standard z-10';
+                    // Crucial left-to-right overlap rule:
+                    // marginLeft on card[idx] controls how much of prevCard = card[idx - 1] remains visible!
+                    let slotMarginPx = 0;
+                    let slotAccordionClass = 'card-slot-standard';
+                    if (idx > 0) {
+                      const prevCard = sortedMyHand[idx - 1];
+                      const prevIsRequired = hasRequiredSuitInHand && prevCard.suit === currentLedSuit;
+                      const prevIsLastOfReqGroup = prevIsRequired && card.suit !== currentLedSuit;
+
+                      slotAccordionClass = !hasRequiredSuitInHand
+                        ? 'card-slot-standard'
+                        : prevIsRequired
+                        ? 'card-slot-expanded'
+                        : 'card-slot-compressed';
+
+                      const prevVisibleWidth = !hasRequiredSuitInHand
+                        ? computedStdVis
+                        : prevIsRequired
+                        ? computedExpVis + (prevIsLastOfReqGroup ? boundaryExtraPx : 0)
+                        : computedCompVis;
+
+                      slotMarginPx = -Math.round(cardWidthPx - prevVisibleWidth);
+                    }
 
                     return (
                       <div
                         key={card.id}
                         style={{
+                          ...(idx > 0
+                            ? ({
+                                '--slot-margin': `${slotMarginPx}px`,
+                                marginLeft: `${slotMarginPx}px`,
+                              } as React.CSSProperties)
+                            : {}),
+                          // Strict left-to-right stacking order so no card on the left ever covers the rank/suit index of a card to its right
+                          zIndex: isJustPlayed ? 0 : idx + 1,
                           transition: 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin 260ms cubic-bezier(0.2, 0.8, 0.2, 1)',
                         }}
                         className={`
@@ -1552,9 +1684,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                             isJustPlayed
                               ? 'opacity-0 scale-90 pointer-events-none'
                               : canPlay && isRequiredSuit
-                              ? '-translate-y-2.5 sm:-translate-y-3.5 hover:-translate-y-5 hover:z-40 hover:scale-105 duration-150 ring-1 sm:ring-2 ring-amber-400/80 rounded-lg sm:rounded-xl shadow-[0_0_12px_rgba(251,191,36,0.5)]'
+                              ? '-translate-y-3 sm:-translate-y-4 hover:-translate-y-5 hover:scale-105 duration-150 ring-2 ring-amber-400 rounded-lg sm:rounded-xl shadow-[0_6px_16px_rgba(251,191,36,0.55)]'
+                              : isRequiredSuit
+                              ? '-translate-y-2 sm:-translate-y-2.5 duration-150 ring-1 ring-amber-400/60 rounded-lg sm:rounded-xl'
                               : canPlay
-                              ? '-translate-y-2 sm:-translate-y-2.5 hover:-translate-y-4 hover:z-30 hover:scale-105 duration-150'
+                              ? '-translate-y-2 sm:-translate-y-2.5 hover:-translate-y-4 hover:scale-105 duration-150'
                               : ''
                           }
                         `}

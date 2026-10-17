@@ -64,17 +64,17 @@
    ============================================================ */
 /* Default / Balanced Hand fanning */
 .card-slot-standard:not(:first-child) {
-  margin-left: -2.85rem;
+  margin-left: var(--slot-margin, -2.85rem);
 }
 
 /* Expanded required suit: ~55-60% visible, natural overlap, do NOT show whole card */
 .card-slot-expanded:not(:first-child) {
-  margin-left: -2.35rem;
+  margin-left: var(--slot-margin, -2.35rem);
 }
 
-/* Compressed other suits: ~25-30% visible (compact corner index display) */
+/* Compressed other suits: ~35-38% visible (clear giant corner index display) */
 .card-slot-compressed:not(:first-child) {
-  margin-left: -4.15rem;
+  margin-left: var(--slot-margin, -3.55rem);
 }
 
 /* ============================================================
@@ -106,9 +106,9 @@
   }
 
   .portrait-center-stage {
-    width: 13.5rem !important;
-    height: 13.5rem !important;
-    max-width: 82% !important;
+    width: 14rem !important;
+    height: 14rem !important;
+    max-width: 84% !important;
   }
 
   .portrait-seat-top {
@@ -126,43 +126,43 @@
   }
 
   .portrait-hand-footer {
-    padding-left: 0.25rem !important;
-    padding-right: 0.25rem !important;
-    padding-bottom: 0.25rem !important;
-    max-width: 480px !important;
+    padding-left: 0.15rem !important;
+    padding-right: 0.15rem !important;
+    padding-bottom: 0.2rem !important;
+    max-width: 100% !important;
   }
 
   .portrait-hand-box {
-    padding: 0.35rem 0.35rem !important;
+    padding: 0.3rem 0.2rem !important;
     border-radius: 1rem !important;
   }
 
   .portrait-hand-row {
-    min-height: 74px !important;
-    padding-top: 0.5rem !important;
-    padding-bottom: 0.15rem !important;
+    min-height: 92px !important;
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.1rem !important;
   }
 
   .portrait-hand-card {
-    width: 3.25rem !important; /* 52px */
-    height: 4.75rem !important; /* 76px */
+    width: 3.875rem !important; /* 62px */
+    height: 5.5rem !important; /* 88px */
   }
 
   .portrait-card-slot:not(:first-child) {
-    margin-left: -1.65rem !important; /* Overlap for 13 cards */
+    margin-left: var(--slot-margin, -2.2rem) !important;
   }
 
   .portrait-card-slot.card-slot-expanded:not(:first-child) {
-    margin-left: -1.05rem !important; /* Auto-spaced required suit: fan overlap without detached whole card */
+    margin-left: var(--slot-margin, -1.45rem) !important;
   }
 
   .portrait-card-slot.card-slot-compressed:not(:first-child) {
-    margin-left: -2.35rem !important; /* Shingled ineligible suits: corner index */
+    margin-left: var(--slot-margin, -2.45rem) !important;
   }
 
   .portrait-trick-card {
-    width: 2.85rem !important;
-    height: 4rem !important;
+    width: 3.65rem !important; /* ~58px */
+    height: 5.15rem !important; /* ~82px */
   }
 
   .portrait-console {
@@ -206,8 +206,8 @@
     border-radius: 9999px !important;
   }
   .landscape-compact-trick-card {
-    width: 2.5rem !important;
-    height: 3.5rem !important;
+    width: 2.85rem !important;
+    height: 4rem !important;
   }
   .landscape-hide-bottom-seat {
     display: none !important;
@@ -237,22 +237,22 @@
     border-radius: 0.75rem !important;
   }
   .landscape-compact-hand-row {
-    min-height: 56px !important;
-    padding-top: 0.15rem !important;
+    min-height: 58px !important;
+    padding-top: 0.2rem !important;
     padding-bottom: 0.05rem !important;
   }
   .landscape-compact-card {
-    width: 3.1rem !important;
-    height: 4.1rem !important;
+    width: 3.25rem !important;
+    height: 4.35rem !important;
   }
   .landscape-compact-card-slot:not(:first-child) {
-    margin-left: -1.15rem !important;
+    margin-left: var(--slot-margin, -1.15rem) !important;
   }
   .landscape-compact-card-slot.card-slot-expanded:not(:first-child) {
-    margin-left: -0.65rem !important;
+    margin-left: var(--slot-margin, -0.65rem) !important;
   }
   .landscape-compact-card-slot.card-slot-compressed:not(:first-child) {
-    margin-left: -1.8rem !important;
+    margin-left: var(--slot-margin, -1.65rem) !important;
   }
   .landscape-compact-modal {
     padding: 0.65rem 0.9rem !important;
@@ -270,27 +270,27 @@
     height: 7.25rem !important;
   }
   .landscape-compact-trick-card {
-    width: 2.35rem !important;
-    height: 3.3rem !important;
+    width: 2.55rem !important;
+    height: 3.6rem !important;
   }
   .landscape-compact-console {
     transform: scale(0.72);
   }
   .landscape-compact-hand-row {
-    min-height: 48px !important;
+    min-height: 50px !important;
   }
   .landscape-compact-card {
-    width: 2.85rem !important;
-    height: 3.75rem !important;
+    width: 3rem !important;
+    height: 4rem !important;
   }
   .landscape-compact-card-slot:not(:first-child) {
-    margin-left: -1.05rem !important;
+    margin-left: var(--slot-margin, -1.05rem) !important;
   }
   .landscape-compact-card-slot.card-slot-expanded:not(:first-child) {
-    margin-left: -0.55rem !important;
+    margin-left: var(--slot-margin, -0.55rem) !important;
   }
   .landscape-compact-card-slot.card-slot-compressed:not(:first-child) {
-    margin-left: -1.65rem !important;
+    margin-left: var(--slot-margin, -1.55rem) !important;
   }
 }
 

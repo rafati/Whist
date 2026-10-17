@@ -194,8 +194,8 @@ export const CardView: React.FC<CardViewProps> = ({
   // Proportional standard card dimensions (classic 1 : 1.4 ratio)
   const sizeClasses = {
     xs: 'w-7 h-10 sm:w-8 sm:h-11 rounded-sm sm:rounded-md',
-    sm: 'portrait-trick-card landscape-compact-trick-card w-12 h-17 sm:w-14 sm:h-20 md:w-16 md:h-23 rounded-lg sm:rounded-xl',
-    hand: 'portrait-hand-card landscape-compact-card w-13 h-19 sm:w-16 sm:h-23 md:w-20 md:h-28 lg:w-23 lg:h-33 rounded-lg sm:rounded-xl',
+    sm: 'portrait-trick-card landscape-compact-trick-card w-15 h-21 sm:w-18 sm:h-25 md:w-20 md:h-28 rounded-lg sm:rounded-xl',
+    hand: 'portrait-hand-card landscape-compact-card w-15.5 h-22 sm:w-19 sm:h-27 md:w-21 md:h-30 lg:w-23 lg:h-33 rounded-lg sm:rounded-xl',
     md: 'w-16 h-23 sm:w-20 sm:h-28 rounded-xl',
     lg: 'w-20 h-28 sm:w-28 sm:h-39 rounded-2xl',
     xl: 'w-28 h-39 sm:w-36 sm:h-50 rounded-2xl',
@@ -236,11 +236,47 @@ export const CardView: React.FC<CardViewProps> = ({
   // Strict Classic 2-Color tournament deck: Hearts & Diamonds rich crimson (#dc2626), Spades & Clubs deep midnight black (#0f172a)
   const isRed = card.suit === 'H' || card.suit === 'D';
   const suitColorHex = isRed ? '#dc2626' : '#0f172a';
-  const symbol = SUIT_SYMBOLS[card.suit];
+  const isTen = card.rank === '10';
 
   const isCourtCard = card.rank === 'J' || card.rank === 'Q' || card.rank === 'K';
   const isAce = card.rank === 'A';
   const isAceOfSpades = isAce && card.suit === 'S';
+
+  // Size-specific typography & top-left suit icon scaling
+  const indexContainerClass =
+    size === 'xs'
+      ? 'top-0.5 left-0.5 w-[13px] sm:w-[15px]'
+      : size === 'sm'
+      ? 'top-1 left-1 sm:top-1.5 sm:left-1.5 w-[19px] sm:w-[23px] md:w-[26px]'
+      : size === 'hand'
+      ? 'top-1 left-[3px] sm:top-1.5 sm:left-1.5 w-[19px] sm:w-[24px] md:w-[27px] lg:w-[30px]'
+      : 'top-1.5 left-1.5 sm:top-2 sm:left-2 w-[24px] sm:w-[30px]';
+
+  const rankFontClass =
+    size === 'xs'
+      ? isTen
+        ? 'text-[10px] sm:text-[11px] tracking-[-0.12em]'
+        : 'text-[12px] sm:text-[13px] tracking-tight'
+      : size === 'sm'
+      ? isTen
+        ? 'text-[19px] sm:text-[23px] md:text-[26px] tracking-[-0.12em]'
+        : 'text-[23px] sm:text-[27px] md:text-[31px] tracking-tight'
+      : size === 'hand'
+      ? isTen
+        ? 'text-[20px] sm:text-[24px] md:text-[27px] lg:text-[30px] tracking-[-0.12em]'
+        : 'text-[24px] sm:text-[28px] md:text-[32px] lg:text-[36px] tracking-tight'
+      : isTen
+      ? 'text-[24px] sm:text-[30px] md:text-[34px] tracking-[-0.12em]'
+      : 'text-[28px] sm:text-[34px] md:text-[40px] tracking-tight';
+
+  const indexSuitSvgClass =
+    size === 'xs'
+      ? 'w-[9px] h-[9px] sm:w-[10px] sm:h-[10px] mt-[1px]'
+      : size === 'sm'
+      ? 'w-[15px] h-[15px] sm:w-[18px] sm:h-[18px] md:w-[21px] md:h-[21px] mt-[2px]'
+      : size === 'hand'
+      ? 'w-[16px] h-[16px] sm:w-[19px] sm:h-[19px] md:w-[22px] md:h-[22px] lg:w-[25px] lg:h-[25px] mt-[2px]'
+      : 'w-[18px] h-[18px] sm:w-[22px] sm:h-[22px] md:w-[26px] md:h-[26px] mt-0.5';
 
   return (
     <div
@@ -257,7 +293,7 @@ export const CardView: React.FC<CardViewProps> = ({
           ? '0 20px 40px -6px rgba(245, 158, 11, 0.7), 0 6px 18px -2px rgba(245, 158, 11, 0.5)'
           : isSelected
           ? '0 12px 28px -3px rgba(245, 158, 11, 0.65), 0 4px 10px -2px rgba(245, 158, 11, 0.5)'
-          : '0 4px 14px -1px rgba(0, 0, 0, 0.35), 0 2px 6px -1px rgba(0, 0, 0, 0.2)',
+          : '0 4px 14px -1px rgba(0, 0, 0, 0.38), 0 2px 6px -1px rgba(0, 0, 0, 0.22)',
         transform: dragOffset
           ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) scale(1.08) rotate(${Math.min(16, Math.max(-16, dragOffset.x * 0.12))}deg)`
           : undefined,
@@ -268,12 +304,12 @@ export const CardView: React.FC<CardViewProps> = ({
       className={`
         ${sizeClasses}
         shrink-0
-        border border-slate-300 sm:border-slate-400
+        border-[1.5px] border-slate-300 sm:border-slate-400
         relative
         select-none
         overflow-hidden
         ${isDimmed ? 'opacity-80 pointer-events-none' : ''}
-        ${isPlayable && !isDimmed ? 'cursor-pointer hover:-translate-y-2.5 hover:shadow-2xl hover:ring-2 hover:ring-amber-400 active:scale-95 z-20' : ''}
+        ${isPlayable && !isDimmed ? 'cursor-pointer hover:-translate-y-2.5 hover:shadow-2xl hover:ring-2 hover:ring-amber-400 active:scale-95' : ''}
         ${isSelected ? 'ring-2 sm:ring-3 ring-amber-400 -translate-y-2.5 sm:-translate-y-3 scale-105 z-40' : ''}
         ${className}
       `}
@@ -287,49 +323,39 @@ export const CardView: React.FC<CardViewProps> = ({
       )}
 
       {/* Subtle Inner Card Border Frame (Classic casino hairline frame) */}
-      <div className="absolute inset-0.5 sm:inset-1 border border-slate-200/90 rounded-[4px] sm:rounded-md pointer-events-none select-none z-10" />
+      <div className="absolute inset-0.5 sm:inset-1 border border-slate-200/80 rounded-[4px] sm:rounded-md pointer-events-none select-none z-10" />
 
-      {/* Top-Left Rank & Suit Index (Oversized, extra-bold high clarity) */}
+      {/* Top-Left Giant Rank & Vector Suit Index (High-clarity column visible even when shingled) */}
       <div
-        className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 flex flex-col items-center leading-none select-none z-20 pointer-events-none"
+        className={`absolute ${indexContainerClass} flex flex-col items-center leading-none select-none z-20 pointer-events-none`}
         style={{ color: suitColorHex }}
       >
-        <span className="font-sans font-black text-xs sm:text-sm md:text-base lg:text-lg leading-none tracking-tight">
+        <span className={`font-sans font-black ${rankFontClass} leading-[0.82]`}>
           {card.rank}
         </span>
-        <span className="text-[11px] sm:text-xs md:text-sm lg:text-base leading-none mt-0.5 font-bold">
-          {symbol}
-        </span>
+        <svg
+          viewBox="0 0 32 30"
+          className={`${indexSuitSvgClass} shrink-0 select-none`}
+          aria-hidden="true"
+        >
+          <path d={SUIT_PATHS[card.suit]} fill={suitColorHex} />
+        </svg>
       </div>
 
-      {/* Bottom-Right Mirrored Rank & Suit Index (Reversible Card Standard) */}
-      <div
-        className="absolute bottom-1 right-1 sm:bottom-1.5 sm:right-1.5 flex flex-col items-center leading-none select-none z-20 rotate-180 pointer-events-none"
-        style={{ color: suitColorHex }}
-      >
-        <span className="font-sans font-black text-xs sm:text-sm md:text-base lg:text-lg leading-none tracking-tight">
-          {card.rank}
-        </span>
-        <span className="text-[11px] sm:text-xs md:text-sm lg:text-base leading-none mt-0.5 font-bold">
-          {symbol}
-        </span>
-      </div>
-
-      {/* Center Artwork & Pip Area */}
+      {/* Lower-Right / Center-Bottom Feature Pip or Upright Royal Court Art */}
       {isCourtCard ? (
-        /* Traditional Double-Headed Court Card Frame */
-        <div className="absolute inset-2 sm:inset-2.5 md:inset-3 flex items-center justify-center overflow-hidden rounded-[2px]">
+        /* Upright Royal Court Portrait positioned in lower-right so top-left index has 100% pure white contrast */
+        <div className="absolute bottom-0.5 right-0.5 w-[74%] h-[63%] flex items-end justify-end overflow-hidden rounded-br-[5px] pointer-events-none select-none z-10">
           <RoyalCourtArt rank={card.rank} suit={card.suit} />
         </div>
       ) : isAceOfSpades ? (
-        /* Legendary Bicycle Ornate Ace of Spades */
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none p-3">
-          <svg viewBox="0 0 100 130" className="w-[68%] h-[68%] drop-shadow-sm select-none">
+        /* Ornate Ace of Spades Emblem in prominent lower-right position */
+        <div className="absolute bottom-1 right-1 sm:bottom-1.5 sm:right-1.5 w-[60%] h-[58%] flex items-center justify-center pointer-events-none select-none z-10">
+          <svg viewBox="0 0 100 130" className="w-full h-full drop-shadow-xs select-none">
             <path
               d="M50 14 C40 32, 16 58, 16 78 C16 94, 30 102, 42 92 C38 100, 32 108, 28 112 L72 112 C68 108, 62 100, 58 92 C70 102, 84 94, 84 78 C84 58, 60 32, 50 14 Z"
               fill="#0f172a"
             />
-            {/* Center Ornate Gold Filigree Inlay */}
             <circle cx="50" cy="68" r="8" fill="#eab308" stroke="#ca8a04" strokeWidth="1" />
             <path
               d="M50 63 L52 67 L57 67 L53 70 L55 75 L50 72 L45 75 L47 70 L43 67 L48 67 Z"
@@ -339,9 +365,9 @@ export const CardView: React.FC<CardViewProps> = ({
           </svg>
         </div>
       ) : (
-        /* High-Clarity Single Giant Center Pip for Number Cards (2 to 10) & Aces */
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none p-2 sm:p-2.5">
-          <svg viewBox="0 0 32 30" className="w-[52%] h-[52%] drop-shadow-xs select-none">
+        /* High-Clarity Giant Suit Pip in lower-right area for Number Cards (2 to 10) & Aces */
+        <div className="absolute bottom-1 right-1 sm:bottom-1.5 sm:right-1.5 w-[56%] h-[54%] flex items-center justify-center pointer-events-none select-none z-10">
+          <svg viewBox="0 0 32 30" className="w-full h-full drop-shadow-xs select-none">
             <path
               d={SUIT_PATHS[card.suit]}
               fill={suitColorHex}

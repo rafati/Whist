@@ -71,32 +71,16 @@ export const RoyalCourtArt: React.FC<RoyalCourtArtProps> = ({ rank, suit, classN
 
     return (
       <svg
-        viewBox="0 0 100 130"
+        viewBox="12 0 78 65"
         className={`w-full h-full select-none pointer-events-none ${className}`}
-        preserveAspectRatio="none"
+        preserveAspectRatio="xMidYMax meet"
       >
-        {/* Background & Inner Border */}
-        <rect x="1" y="1" width="98" height="128" rx="2" fill="#faf9f5" />
-        <rect x="3" y="3" width="94" height="124" rx="1.5" fill="none" stroke="#e2e8f0" strokeWidth="0.75" />
-
-        {/* Top Half */}
-        <g clipPath="url(#topHalfClip)">
-          <HalfKing />
-        </g>
-
-        {/* Center Diagonal Divider */}
-        <line x1="0" y1="65" x2="100" y2="65" stroke="#cbd5e1" strokeWidth="0.8" />
-        <line x1="0" y1="65" x2="100" y2="65" stroke={gold} strokeWidth="0.4" strokeDasharray="3 2" />
-
-        {/* Bottom Half (Reversible 180° Rotated) */}
-        <g transform="rotate(180 50 65)">
-          <HalfKing />
-        </g>
+        <HalfKing />
       </svg>
     );
   }
 
-  // Symmetrical Double-Headed Queen
+  // Upright Royal Queen
   if (rank === 'Q') {
     const HalfQueen = () => (
       <g>
@@ -140,26 +124,16 @@ export const RoyalCourtArt: React.FC<RoyalCourtArtProps> = ({ rank, suit, classN
 
     return (
       <svg
-        viewBox="0 0 100 130"
+        viewBox="12 0 78 65"
         className={`w-full h-full select-none pointer-events-none ${className}`}
-        preserveAspectRatio="none"
+        preserveAspectRatio="xMidYMax meet"
       >
-        <rect x="1" y="1" width="98" height="128" rx="2" fill="#faf9f5" />
-        <rect x="3" y="3" width="94" height="124" rx="1.5" fill="none" stroke="#e2e8f0" strokeWidth="0.75" />
-
         <HalfQueen />
-
-        <line x1="0" y1="65" x2="100" y2="65" stroke="#cbd5e1" strokeWidth="0.8" />
-        <line x1="0" y1="65" x2="100" y2="65" stroke={gold} strokeWidth="0.4" strokeDasharray="3 2" />
-
-        <g transform="rotate(180 50 65)">
-          <HalfQueen />
-        </g>
       </svg>
     );
   }
 
-  // Symmetrical Double-Headed Jack
+  // Upright Royal Jack
   const HalfJack = () => (
     <g>
       {/* Tunic */}
@@ -203,21 +177,11 @@ export const RoyalCourtArt: React.FC<RoyalCourtArtProps> = ({ rank, suit, classN
 
   return (
     <svg
-      viewBox="0 0 100 130"
+      viewBox="12 0 78 65"
       className={`w-full h-full select-none pointer-events-none ${className}`}
-      preserveAspectRatio="none"
+      preserveAspectRatio="xMidYMax meet"
     >
-      <rect x="1" y="1" width="98" height="128" rx="2" fill="#faf9f5" />
-      <rect x="3" y="3" width="94" height="124" rx="1.5" fill="none" stroke="#e2e8f0" strokeWidth="0.75" />
-
       <HalfJack />
-
-      <line x1="0" y1="65" x2="100" y2="65" stroke="#cbd5e1" strokeWidth="0.8" />
-      <line x1="0" y1="65" x2="100" y2="65" stroke={gold} strokeWidth="0.4" strokeDasharray="3 2" />
-
-      <g transform="rotate(180 50 65)">
-        <HalfJack />
-      </g>
     </svg>
   );
 };

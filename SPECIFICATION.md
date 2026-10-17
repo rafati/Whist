@@ -338,18 +338,19 @@ All procedural synthesized audio (card slide/snap clicks, projectile flight whoo
 ## 11. High-Clarity Card Rendering & Dynamic Suit Accordion Engine
 
 ### 11.1 High-Clarity Card Faces (`src/components/CardView.tsx`)
-* **Single Giant Center Pip (Ranks 2–10)**: Replaced scattered multi-pip geometric clusters with a single, massive, bold vector suit pip centered in the card face, maximizing instant recognition across all display scales.
-* **Oversized Bold Corner Indices**: Modern high-weight typography (`font-black`) for the rank with the suit symbol centered directly beneath it, remaining fully readable even when cards are densely shingled.
+* **Giant Top-Left Rank & Vector Suit Indices**: Extra-large bold rank typography (`24px–36px font-black` on hand cards, `23px–31px` on trick cards, with tight tracking on `'10'`) paired with a crisp inline vector SVG suit icon (`16px–25px`) directly beneath it inside a dedicated left-edge index column (`19px` wide on mobile, `27px–30px` on desktop).
+* **Giant Lower-Right Suit Pip & Upright Court Portraits**: Upside-down bottom-right indices are omitted so that:
+  * Number cards (`2–10`) and Aces display a massive vector suit pip (`w-[56%] h-[54%]`) in the lower-right area (`bottom-1 right-1`).
+  * Court cards (`J, Q, K`) display a large, upright royal portrait (`RoyalCourtArt` in `w-[74%] h-[63%]` at `bottom-0.5 right-0.5`), leaving the top-left corner 100% pure ivory card stock behind the rank and suit.
 * **Strict Classic 2-Color Palette**: Deep Midnight Black (`#0f172a`) for Spades & Clubs, and Rich Crimson Red (`#dc2626`) for Hearts & Diamonds, rendered against a warm ivory card surface (`#fdfdfc`) with multi-layer depth drop shadows.
-* **Face Cards & Hero Aces**: Royal double-headed court illustrations (`RoyalCourtArt`) for Jack, Queen, and King; iconic ornate filigree design for the Ace of Spades.
 
-### 11.2 Dynamic Suit Accordion Spacing (`src/components/VirtualTable.tsx`)
-* **Automatic Suit Expansion**: When a suit is led (`currentLedSuit`) and the player holds cards of that suit:
-  * **Required Suit Cards** (`.card-slot-expanded`): Automatically expand horizontally with comfortable spacing (~55-60% visible on desktop at `-2.35rem`, ~67% on mobile at `-1.05rem`, and `-0.65rem` in landscape). Cards retain natural fan overlap rather than detaching as separate isolated cards.
-  * **Active Elevation**: Required cards elevate `-8px` (`-translate-y-2.5 sm:-translate-y-3.5`) with an active amber glow ring (`ring-amber-400/80`) and gold drop shadow.
-  * **Ineligible / Other Suit Cards** (`.card-slot-compressed`): Tightly condense into a compact shingled stack (`-4.15rem` on desktop, `-2.35rem` on mobile, `-1.8rem` in landscape) exposing their clear corner indices (~25-28% visible) while **retaining full card brightness (no dimming or grayscale)**.
+### 11.2 Dynamic Suit Accordion & 100% Card Visibility (`src/components/VirtualTable.tsx`)
+* **Left-to-Right `prevCard` Overlap Rule**: Because `margin-left` on `card[idx]` shifts `card[idx]` over `card[idx - 1]`, each card's `marginLeft` (`--slot-margin`) is calculated from whether **`prevCard = sortedMyHand[idx - 1]`** belongs to the required led suit (`currentLedSuit`).
+* **Strict Left-to-Right Stacking (`zIndex: idx + 1`)**: Every card slot in the hand is assigned `zIndex: idx + 1` from left (`1`) to right (`N`), ensuring no card on the left ever covers the top-left rank and suit index of a card to its right.
+* **Proportional Viewport-Aware Width Allocation**:
+  * **Required Suit Cards** (`.card-slot-expanded`): Expose `36px–45px` on mobile portrait (`55px–63px` on desktop, `~58–68%` of card width) with extra boundary clearance on the last card of the required suit group, and elevate (`-translate-y-3 sm:-translate-y-4`) with a golden-amber ring (`ring-2 ring-amber-400`).
+  * **Other Suit Cards** (`.card-slot-compressed`): Expose `22px–24px` on mobile portrait (`35px` on desktop), exceeding the `19px` (`27px` desktop) top-left index column width so 100% of all 13 cards remain clearly readable while **retaining full card brightness (no dimming or grayscale)**.
 * **Uniform Spacing Fallback**: When no suit is led yet (opening lead) or the player is void in the led suit, all cards distribute with uniform standard spacing (`.card-slot-standard`).
-* **Zero-Scroll Dynamic Bounds**: The sum of expanded and compressed widths guarantees that a 13-card hand fits within mobile portrait widths ($\le 360\text{px}$) without horizontal scrollbars.
 * **Fluid Physics Transitions**: `transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin 260ms cubic-bezier(0.2, 0.8, 0.2, 1)` ensures smooth card slide animations when turns and tricks transition.
 
 

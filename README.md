@@ -38,14 +38,14 @@ A real-time, 4-player trick-taking partnership card game built with React 19, Vi
   * 3D parabolic Bezier flight trajectories with rotational tumbling, particle trails, and cartoon impact explosions (dust & stars, foam splash, golden sparkles).
   * Recoil animations and reaction bubbles for both human and AI bot avatars.
   * Synthesized procedural sound effects via native Web Audio API.
-* **High-Clarity Card Redesign & Single Giant Center Pip**:
-  * **Oversized Bold Corner Indices**: Modern, heavy typography (`font-black`) for card ranks with the suit symbol centered directly beneath it, remaining 100% visible even when cards overlap tightly.
-  * **Single Giant Center Pip (2–10)**: Clean, high-impact center suit pip eliminating cluttered multi-pip scatter, paired with ornate Ace of Spades and classic court art for J, Q, and K.
+* **High-Clarity Card Redesign & Giant Rank/Suit Indices**:
+  * **Giant Top-Left Rank & Vector Suit Indices**: Extra-large bold rank typography (`24px–36px font-black`) paired with a crisp inline vector SVG suit symbol (`16px–25px`) directly beneath it, remaining 100% uncovered even when cards are shingled.
+  * **Giant Lower-Right Suit Pip & Upright Court Portraits**: Removing upside-down bottom-right index clutter allows a massive suit pip (`56%` width) on number/Ace cards and a large upright royal portrait (`RoyalCourtArt`) in the lower-right of `J, Q, K` cards.
   * **Strict Classic 2-Color Palette**: Rich Crimson Red (`#dc2626`) for Hearts & Diamonds and Midnight Black (`#0f172a`) for Spades & Clubs against warm ivory card stock with multi-layer depth shadows.
-* **Dynamic Suit Accordion & Natural Card Overlap**:
-  * When a suit is led in the trick, cards of that required suit **auto-expand horizontally** with generous spacing (~55-60% visible on desktop, ~67% on mobile) while maintaining natural card fan overlap (not detached whole cards), and elevate slightly with an active amber glow ring.
-  * Inactive / other suits **condense tightly** into a compact shingled stack showing clear corner indices (~25-28% visible) while **retaining full card brightness (no graying/dimming)**.
-  * When void in the led suit or on opening lead, cards smoothly distribute with uniform spacing across desktop, tablet, and mobile.
+* **Dynamic Suit Accordion & 100% Card Visibility**:
+  * **Left-to-Right `prevCard` Overlap & Stacking (`zIndex: idx + 1`)**: Each card's negative `margin-left` is calculated from the card it overlaps (`card[idx - 1]`) with strictly increasing left-to-right `z-index`, ensuring no card on the left ever covers the rank/suit index of a card to its right.
+  * **Auto-Expanding Played Suit**: Cards of the required suit expand (`~58-68%` visible) and elevate with an amber glow ring for effortless selection while keeping natural card fan overlap.
+  * **100% Visible Non-Played Suits**: Other suits condense cleanly while guaranteeing at least `22px–24px` of visible strip on mobile (`35px` on desktop) and retaining full card brightness (no dimming/graying).
 * **Last Trick Cross (Top-Right Playing Area)**:
   * Persistent 4-card cross in the top-right corner of the table felt displaying the cards played in the last completed trick.
   * Arranged to mirror the player's perspective: Top = Partner, Bottom = You, Left = Left Opponent, Right = Right Opponent.
