@@ -306,4 +306,32 @@ All procedural synthesized audio (card slide/snap clicks, projectile flight whoo
 2. **Virtual Table Header Bar**: Direct 1-click mute/unmute button next to the *Standings* button.
 3. **Table Options Dropdown**: Integrated *Sound & Clicks* switch row with live On / Muted pill button.
 
+---
+
+## 10. In-Game Table HUD Architecture (Last Trick Cross & Live Contract/Tricks Panel)
+
+### 10.1 Last Trick Cross (Top-Right Playing Area)
+* **Component**: [src/components/LastTrickCross.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/LastTrickCross.tsx)
+* **Location**: Top-right corner of the inner casino felt (`portrait-felt`), `absolute top-1.5 right-1.5 sm:top-2.5 sm:right-3 z-20`.
+* **Arrangement**: A 4-card cross representing the 4 player seats dynamically mapped from each client's viewpoint (`getSeatVisualPos(seat, mySeat)`):
+  * **Top**: Partner
+  * **Bottom**: Local Player (You)
+  * **Left**: Left Opponent
+  * **Right**: Right Opponent
+* **Winner Highlighting**: The trick's winning card is decorated with an amber border, ring glow, and golden crown icon (`👑`), with a footer badge displaying `★ {winnerName} won`.
+* **Interactive Inspection**: Clicking/tapping toggles an expanded review popover showing trick number, winning card details, and led suit.
+
+### 10.2 Live Contract & Team Trick Tracker (Bottom-Left Playing Area)
+* **Component**: [src/components/ContractHud.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/ContractHud.tsx)
+* **Location**: Bottom-left corner of the inner casino felt (`portrait-felt`), `absolute bottom-1.5 left-1.5 sm:bottom-2.5 sm:left-3 z-20`.
+* **Contract Display**:
+  * Large, high-visibility bid level number (font size `text-2xl sm:text-3xl font-black text-amber-300`).
+  * Big suit icon (`♠`, `♥`, `♦`, `♣`) with suit name, or bold `NT` pill with `No Trump`.
+  * Contract Goal indicator ($6 + \text{level}$ tricks needed).
+* **Live Team Trick Counts**:
+  * Real-time trick counter for **Team 1** (`teamTricksWon.TeamA`) styled in emerald.
+  * Real-time trick counter for **Team 2** (`teamTricksWon.TeamB`) styled in blue.
+  * Contextual `You` chip highlighting the local player's team and needed trick countdown.
+
+
 

@@ -106,6 +106,20 @@ export function getPartner(seat: Seat): Seat {
   }
 }
 
+/**
+ * Returns visual position ('bottom' | 'top' | 'left' | 'right') of a seat
+ * relative to the current player's viewpoint (mySeat).
+ */
+export function getSeatVisualPos(seat: Seat, mySeat: Seat | null): 'bottom' | 'top' | 'left' | 'right' {
+  const bottomSeat: Seat = mySeat || 'South';
+  const topSeat: Seat = mySeat ? getPartner(mySeat) : 'North';
+  const leftSeat: Seat = mySeat ? getPrevSeat(mySeat) : 'West';
+  if (seat === bottomSeat) return 'bottom';
+  if (seat === topSeat) return 'top';
+  if (seat === leftSeat) return 'left';
+  return 'right';
+}
+
 // Generate Standard 52 Card Deck
 export function createDeck(): Card[] {
   const deck: Card[] = [];

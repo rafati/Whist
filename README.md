@@ -38,6 +38,13 @@ A real-time, 4-player trick-taking partnership card game built with React 19, Vi
   * 3D parabolic Bezier flight trajectories with rotational tumbling, particle trails, and cartoon impact explosions (dust & stars, foam splash, golden sparkles).
   * Recoil animations and reaction bubbles for both human and AI bot avatars.
   * Synthesized procedural sound effects via native Web Audio API.
+* **Last Trick Cross (Top-Right Playing Area)**:
+  * Persistent 4-card cross in the top-right corner of the table felt displaying the cards played in the last completed trick.
+  * Arranged to mirror the player's perspective: Top = Partner, Bottom = You, Left = Left Opponent, Right = Right Opponent.
+  * Winning card is highlighted with a golden border, glow halo, and crown badge; click/tap reveals trick review details.
+* **Live Contract & Team Trick Tracker (Bottom-Left Playing Area)**:
+  * High-visibility casino HUD card showing the winning bid number and declared suit (or NT) in large, bold typography.
+  * Live trick count counters tracking tricks won by **Team 1** and **Team 2** this round with contract target progress.
 * **Sound & Clicks Toggle & Persistence**:
   * Easily disable or enable all procedural game audio (card landing snap, projectile whooshes, impacts, and medal chimes) and interactive click feedback.
   * 1-click access via the **Lobby header**, **Table header**, and inside the **Table Options** menu.
@@ -83,6 +90,7 @@ Visit `http://localhost:3000` in your browser.
 | `npx tsx scripts/test_touch_gestures.ts` | Tests touch emulation, single-tap play, and swipe-up throw gestures via Headless Chrome CDP |
 | `npx tsx scripts/test_ui_portrait.ts` | Tests end-to-end UI layout, auction, and trick taking on iPhone portrait viewport |
 | `npx tsx scripts/test_sound_setting.ts` | Verifies sound & clicks mute/unmute state, persistence, reactive subscriptions, and synthesis guards |
+| `npx tsx scripts/test_new_ui_elements.ts` | Verifies Last Trick Cross orientation, winner highlighting, Big Contract display, and live team trick counts |
 
 ---
 

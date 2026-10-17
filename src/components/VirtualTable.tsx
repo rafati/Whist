@@ -32,6 +32,8 @@ import { SimulationModal } from './SimulationModal.tsx';
 import { VoiceChatBar } from './VoiceChatBar.tsx';
 import { ThrowableDock } from './ThrowableDock.tsx';
 import { ThrowableOverlay } from './ThrowableOverlay.tsx';
+import { LastTrickCross } from './LastTrickCross.tsx';
+import { ContractHud } from './ContractHud.tsx';
 import { useVoiceChat } from '../lib/useVoiceChat.ts';
 import { playCardSnapSound, useSoundSetting, playClickSound } from '../lib/throwSounds.ts';
 import {
@@ -1094,6 +1096,33 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               } ${gameState.phase !== 'playing' ? 'landscape-console-bottom-seat' : ''}`
             )}
             {renderSeat(rightSeat, 'portrait-seat-right landscape-seat-right right-1 sm:right-2 top-1/2 -translate-y-1/2')}
+
+            {/* 1. Last Trick Cross Display (Top Right Corner of Playing Area) */}
+            {gameState.phase === 'playing' && (
+              <div className="absolute top-1.5 right-1.5 sm:top-2.5 sm:right-3 z-20">
+                <LastTrickCross
+                  trick={
+                    gameState.tricksHistory.length > 0
+                      ? gameState.tricksHistory[gameState.tricksHistory.length - 1]
+                      : null
+                  }
+                  mySeat={mySeat}
+                  seats={seats}
+                  getSeatVisualPos={getSeatVisualPos}
+                />
+              </div>
+            )}
+
+            {/* 2. Big Bold Contract & Live Team Trick Counts (Bottom Left Side of Playing Area) */}
+            {(gameState.phase === 'playing' || gameState.phase === 'declaring') && (
+              <div className="absolute bottom-1.5 left-1.5 sm:bottom-2.5 sm:left-3 z-20">
+                <ContractHud
+                  gameState={gameState}
+                  mySeat={mySeat}
+                  seats={seats}
+                />
+              </div>
+            )}
 
             {/* Center Table Stage */}
             <div className="portrait-center-stage landscape-compact-center-stage relative w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 lg:w-80 lg:h-80 rounded-full border border-emerald-600/20 bg-black/25 flex items-center justify-center p-1 overflow-visible">
