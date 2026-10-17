@@ -4,14 +4,27 @@ import { SUIT_SYMBOLS } from '../logic/gameLogic.ts';
 import { RoyalCourtArt } from './RoyalCourtArt.tsx';
 import { playClickSound } from '../lib/throwSounds.ts';
 
+export interface CardReleaseGesture {
+  centerX: number;
+  centerY: number;
+  width: number;
+  height: number;
+  scale: number;
+  rotateDeg: number;
+  vx: number;
+  vy: number;
+  wasDragged: boolean;
+}
+
 export interface CardViewProps {
   card?: Card;
   faceDown?: boolean;
   isPlayable?: boolean;
   isSelected?: boolean;
   isDimmed?: boolean;
-  onClick?: (e?: React.MouseEvent<HTMLDivElement>, startRect?: DOMRect) => void;
-  onSwipePlay?: (startRect?: DOMRect) => void;
+  onClick?: (e?: React.MouseEvent<HTMLDivElement>, releaseGesture?: CardReleaseGesture) => void;
+  onSwipePlay?: (releaseGesture?: CardReleaseGesture) => void;
+  onDragStateChange?: (isDragging: boolean) => void;
   size?: 'xs' | 'sm' | 'hand' | 'md' | 'lg' | 'xl';
   className?: string;
 }
@@ -32,25 +45,85 @@ export const CardView: React.FC<CardViewProps> = ({
   isDimmed = false,
   onClick,
   onSwipePlay,
+  onDragStateChange,
   size = 'hand',
   className = '',
 }) => {
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [dragOffset, setDragOffset] = useState<{ y: number; x: number } | null>(null);
+  const [dragState, setDragState] = useState<{
+    x: number;
+    y: number;
+    scale: number;
+    rotateDeg: number;
+  } | null>(null);
+  const dragStateRef = useRef<{
+    x: number;
+    y: number;
+    scale: number;
+    rotateDeg: number;
+  } | null>(null);
   const dragStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const pointerSamplesRef = useRef<Array<{ x: number; y: number; time: number }>>([]);
   const isDraggingRef = useRef(false);
   const hasMovedRef = useRef(false);
   const touchHandledRef = useRef(false);
+
+  const updateDragState = (
+    next: { x: number; y: number; scale: number; rotateDeg: number } | null
+  ) => {
+    dragStateRef.current = next;
+    setDragState(next);
+  };
+
+  const computeRollingVelocity = (nowX: number, nowY: number, nowTime: number) => {
+    const samples = pointerSamplesRef.current;
+    // Prune samples older than 90ms
+    while (samples.length > 1 && nowTime - samples[0].time > 90) {
+      samples.shift();
+    }
+    const anchor = samples[0] || dragStartRef.current;
+    if (!anchor) return { vx: 0, vy: 0 };
+    const dt = Math.max(8, nowTime - anchor.time);
+    return {
+      vx: (nowX - anchor.x) / dt,
+      vy: (nowY - anchor.y) / dt,
+    };
+  };
+
+  const captureReleaseGesture = (
+    vx: number,
+    vy: number,
+    wasDragged: boolean
+  ): CardReleaseGesture | undefined => {
+    const el = cardRef.current;
+    if (!el) return undefined;
+    const rect = el.getBoundingClientRect();
+    const current = dragStateRef.current;
+    return {
+      // Center of an AABB is mathematically invariant under any rotation and uniform scale around center!
+      centerX: rect.left + rect.width / 2,
+      centerY: rect.top + rect.height / 2,
+      width: el.offsetWidth || rect.width,
+      height: el.offsetHeight || rect.height,
+      scale: wasDragged && current ? current.scale : 1,
+      rotateDeg: wasDragged && current ? current.rotateDeg : 0,
+      vx,
+      vy,
+      wasDragged,
+    };
+  };
 
   // Common gesture start
   const handleDragStart = (clientX: number, clientY: number) => {
     if (!isPlayable || isDimmed) return;
     playClickSound();
+    const now = performance.now();
     dragStartRef.current = {
       x: clientX,
       y: clientY,
-      time: Date.now(),
+      time: now,
     };
+    pointerSamplesRef.current = [{ x: clientX, y: clientY, time: now }];
     isDraggingRef.current = true;
     hasMovedRef.current = false;
   };
@@ -58,20 +131,45 @@ export const CardView: React.FC<CardViewProps> = ({
   // Common gesture move
   const handleDragMove = (clientX: number, clientY: number) => {
     if (!isDraggingRef.current || !dragStartRef.current) return;
+    const now = performance.now();
+    pointerSamplesRef.current.push({ x: clientX, y: clientY, time: now });
+    while (pointerSamplesRef.current.length > 1 && now - pointerSamplesRef.current[0].time > 90) {
+      pointerSamplesRef.current.shift();
+    }
+
     const deltaY = clientY - dragStartRef.current.y;
     const deltaX = clientX - dragStartRef.current.x;
 
-    if (Math.abs(deltaY) > 8 || Math.abs(deltaX) > 8) {
+    if (!hasMovedRef.current && (Math.abs(deltaY) > 5 || Math.abs(deltaX) > 5)) {
       hasMovedRef.current = true;
+      onDragStateChange?.(true);
     }
 
+    if (!hasMovedRef.current) return;
+
+    const { vx } = computeRollingVelocity(clientX, clientY, now);
+
     if (deltaY < 0) {
-      // Extensive upward swipe toward and into playing area felt (up to -650px)
-      const clampedY = Math.max(-650, deltaY);
-      setDragOffset({ y: clampedY, x: deltaX * 0.75 });
+      // Smooth 1:1 upward tracking toward and into the playing felt
+      const clampedY = Math.max(-680, deltaY);
+      const liftProgress = Math.min(1, Math.abs(clampedY) / 140);
+      const scale = 1 + 0.07 * liftProgress;
+      // Natural wrist banking combining horizontal offset and instantaneous lateral velocity
+      const rotateDeg = Math.max(-14, Math.min(14, deltaX * 0.065 + vx * 4.5));
+      updateDragState({
+        x: deltaX,
+        y: clampedY,
+        scale,
+        rotateDeg,
+      });
     } else {
-      // Downward resistance
-      setDragOffset({ y: Math.min(25, deltaY * 0.2), x: deltaX * 0.3 });
+      // Soft elastic resistance when pulling downward
+      updateDragState({
+        x: deltaX * 0.35,
+        y: Math.min(22, deltaY * 0.22),
+        scale: 1,
+        rotateDeg: Math.max(-5, Math.min(5, deltaX * 0.03)),
+      });
     }
   };
 
@@ -80,58 +178,67 @@ export const CardView: React.FC<CardViewProps> = ({
     if (!isDraggingRef.current || !dragStartRef.current) {
       isDraggingRef.current = false;
       dragStartRef.current = null;
-      setDragOffset(null);
+      pointerSamplesRef.current = [];
+      updateDragState(null);
+      onDragStateChange?.(false);
       return;
     }
 
+    const now = performance.now();
     const start = dragStartRef.current;
     const deltaY = clientY - start.y;
     const deltaX = clientX - start.x;
-    const elapsed = Date.now() - start.time;
-    const speedY = deltaY / Math.max(1, elapsed); // px/ms
+    const { vx, vy } = computeRollingVelocity(clientX, clientY, now);
 
     isDraggingRef.current = false;
     dragStartRef.current = null;
+    pointerSamplesRef.current = [];
 
     // Upward swipe / throw check:
-    // 1. Dragged up by 40px or more (deltaY <= -40)
-    // 2. OR fast flick upward (deltaY <= -18 and speedY < -0.25)
-    // with primarily vertical orientation
-    const isVerticalMove = Math.abs(deltaY) >= Math.abs(deltaX) * 0.6;
-    const isUpwardThrow = isVerticalMove && (deltaY <= -40 || (deltaY <= -18 && speedY < -0.25));
+    // 1. Lifted upward by 38px or more (and not actively yanked fast downward: vy < 0.35)
+    // 2. OR crisp upward flick (deltaY <= -14 and rolling vy < -0.22 px/ms)
+    const isVerticalEnough = Math.abs(deltaY) >= Math.abs(deltaX) * 0.45 || deltaY <= -55;
+    const isPulledBackDown = vy > 0.38 && deltaY > -90;
+    const isUpwardThrow =
+      isVerticalEnough &&
+      !isPulledBackDown &&
+      (deltaY <= -38 || (deltaY <= -14 && vy < -0.22));
 
-    // Tap / Click check: very small finger/mouse movement
+    // Tap / Click check: minimal movement
     const isTapOrClick = !hasMovedRef.current || (Math.abs(deltaY) < 10 && Math.abs(deltaX) < 10);
 
     if (isUpwardThrow) {
       touchHandledRef.current = true;
       if (e && e.cancelable) e.preventDefault();
-      // Capture current bounding rect right where released!
-      const rect = cardRef.current?.getBoundingClientRect();
-      setDragOffset(null);
+      // Capture exact center, unrotated size, scale, tilt, and velocity before clearing dragState
+      const gesture = captureReleaseGesture(vx, vy, true);
+      updateDragState(null);
+      onDragStateChange?.(false);
       if (onSwipePlay) {
-        onSwipePlay(rect);
+        onSwipePlay(gesture);
       } else if (onClick) {
-        onClick(undefined, rect);
+        onClick(undefined, gesture);
       }
       setTimeout(() => {
         touchHandledRef.current = false;
-      }, 400);
+      }, 380);
     } else if (isTapOrClick) {
       touchHandledRef.current = true;
       if (e && e.cancelable) e.preventDefault();
-      const rect = cardRef.current?.getBoundingClientRect();
-      setDragOffset(null);
+      const gesture = captureReleaseGesture(0, -0.6, false);
+      updateDragState(null);
+      onDragStateChange?.(false);
       if (onClick) {
-        onClick(undefined, rect);
+        onClick(undefined, gesture);
       }
       setTimeout(() => {
         touchHandledRef.current = false;
-      }, 400);
+      }, 380);
     } else {
-      // User dragged back down towards the cards or panned horizontally:
-      // Cancel and smoothly snap back to hand!
-      setDragOffset(null);
+      // User pulled card back down towards hand or panned horizontally:
+      // Cancel and smoothly spring back into the hand slot!
+      updateDragState(null);
+      onDragStateChange?.(false);
     }
   };
 
@@ -150,14 +257,20 @@ export const CardView: React.FC<CardViewProps> = ({
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!isDraggingRef.current) return;
-    const touch = e.changedTouches[0] || (dragStartRef.current ? { clientX: dragStartRef.current.x, clientY: dragStartRef.current.y } : { clientX: 0, clientY: 0 });
+    const touch =
+      e.changedTouches[0] ||
+      (dragStartRef.current
+        ? { clientX: dragStartRef.current.x, clientY: dragStartRef.current.y }
+        : { clientX: 0, clientY: 0 });
     handleDragEnd(touch.clientX, touch.clientY, e);
   };
 
   const handleTouchCancel = () => {
     isDraggingRef.current = false;
     dragStartRef.current = null;
-    setDragOffset(null);
+    pointerSamplesRef.current = [];
+    updateDragState(null);
+    onDragStateChange?.(false);
   };
 
   // Mouse drag on desktop
@@ -186,8 +299,8 @@ export const CardView: React.FC<CardViewProps> = ({
     if (touchHandledRef.current) return;
     if (isPlayable && !isDimmed && onClick) {
       playClickSound();
-      const rect = cardRef.current?.getBoundingClientRect();
-      onClick(e, rect);
+      const gesture = captureReleaseGesture(0, -0.6, false);
+      onClick(e, gesture);
     }
   };
 
@@ -289,17 +402,22 @@ export const CardView: React.FC<CardViewProps> = ({
       onTouchCancel={isPlayable && !isDimmed ? handleTouchCancel : undefined}
       style={{
         backgroundColor: '#fdfdfc',
-        boxShadow: dragOffset && dragOffset.y < -20
-          ? '0 20px 40px -6px rgba(245, 158, 11, 0.7), 0 6px 18px -2px rgba(245, 158, 11, 0.5)'
-          : isSelected
-          ? '0 12px 28px -3px rgba(245, 158, 11, 0.65), 0 4px 10px -2px rgba(245, 158, 11, 0.5)'
-          : '0 4px 14px -1px rgba(0, 0, 0, 0.38), 0 2px 6px -1px rgba(0, 0, 0, 0.22)',
-        transform: dragOffset
-          ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) scale(1.08) rotate(${Math.min(16, Math.max(-16, dragOffset.x * 0.12))}deg)`
+        boxShadow:
+          dragState && dragState.y < -18
+            ? '0 22px 44px -8px rgba(0, 0, 0, 0.72), 0 0 22px rgba(245, 158, 11, 0.55)'
+            : isSelected
+            ? '0 12px 28px -3px rgba(245, 158, 11, 0.65), 0 4px 10px -2px rgba(245, 158, 11, 0.5)'
+            : '0 4px 14px -1px rgba(0, 0, 0, 0.38), 0 2px 6px -1px rgba(0, 0, 0, 0.22)',
+        transform: dragState
+          ? `translate3d(${dragState.x}px, ${dragState.y}px, 0) scale(${dragState.scale}) rotate(${dragState.rotateDeg}deg)`
           : undefined,
-        zIndex: dragOffset ? 60 : undefined,
-        transition: dragOffset ? 'none' : 'transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 220ms ease',
-        touchAction: isPlayable && !isDimmed ? 'pan-x' : undefined,
+        transformOrigin: 'center center',
+        zIndex: dragState ? 80 : undefined,
+        transition: dragState
+          ? 'none'
+          : 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms ease',
+        touchAction: isPlayable && !isDimmed ? 'none' : undefined,
+        willChange: isPlayable ? 'transform' : undefined,
       }}
       className={`
         ${sizeClasses}
@@ -309,13 +427,19 @@ export const CardView: React.FC<CardViewProps> = ({
         select-none
         overflow-hidden
         ${isDimmed ? 'opacity-80 pointer-events-none' : ''}
-        ${isPlayable && !isDimmed ? 'cursor-pointer hover:-translate-y-2.5 hover:shadow-2xl hover:ring-2 hover:ring-amber-400 active:scale-95' : ''}
-        ${isSelected ? 'ring-2 sm:ring-3 ring-amber-400 -translate-y-2.5 sm:-translate-y-3 scale-105 z-40' : ''}
+        ${
+          isPlayable && !isDimmed
+            ? dragState
+              ? 'cursor-grabbing ring-2 ring-amber-400'
+              : 'cursor-grab hover:-translate-y-2.5 hover:shadow-2xl hover:ring-2 hover:ring-amber-400 active:scale-95'
+            : ''
+        }
+        ${isSelected && !dragState ? 'ring-2 sm:ring-3 ring-amber-400 -translate-y-2.5 sm:-translate-y-3 scale-105 z-40' : ''}
         ${className}
       `}
     >
-      {/* Throw Badge when dragging up on touch */}
-      {dragOffset && dragOffset.y < -24 && (
+      {/* Throw Badge when dragging up on touch/mouse */}
+      {dragState && dragState.y < -28 && (
         <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-50 bg-amber-400 text-slate-950 font-black text-[7px] sm:text-[8px] uppercase tracking-wider px-1.5 py-[1px] rounded-full shadow-md border border-white whitespace-nowrap pointer-events-none flex items-center gap-0.5 animate-pulse">
           <span>Throw</span>
           <span className="text-[9px] font-bold leading-none">↑</span>

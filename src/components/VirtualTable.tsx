@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useAuth } from '../lib/authContext.tsx';
 import { useSocket } from '../lib/socketContext.tsx';
 import {
@@ -22,7 +22,7 @@ import {
   sortHand,
 } from '../logic/gameLogic.ts';
 import { ANIMATION_CONFIG } from '../logic/animationConfig.ts';
-import { CardView } from './CardView.tsx';
+import { CardView, CardReleaseGesture } from './CardView.tsx';
 import { BiddingPanel } from './BiddingPanel.tsx';
 import { SuitDeclarationModal } from './SuitDeclarationModal.tsx';
 import { RoundSummaryModal } from './RoundSummaryModal.tsx';
@@ -114,6 +114,7 @@ interface TrickCardItemProps {
   isWinningCard: boolean;
   isLeadCard: boolean;
   isLocallyFlying?: boolean;
+  wasLocallyPlayed?: boolean;
 }
 
 const TrickCardItem: React.FC<TrickCardItemProps> = ({
@@ -124,15 +125,20 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
   isWinningCard,
   isLeadCard,
   isLocallyFlying,
+  wasLocallyPlayed,
 }) => {
-  const [hasEntered, setHasEntered] = useState(false);
+  const [hasEntered, setHasEntered] = useState(() => Boolean(wasLocallyPlayed || isLocallyFlying));
 
   useEffect(() => {
+    if (wasLocallyPlayed || isLocallyFlying) {
+      setHasEntered(true);
+      return;
+    }
     const timer = setTimeout(() => {
       setHasEntered(true);
     }, 20);
     return () => clearTimeout(timer);
-  }, []);
+  }, [wasLocallyPlayed, isLocallyFlying]);
 
   const entry = getVisualEntryVector(visualPos);
   const gather = winnerVisualPos ? getVisualGatherVector(visualPos, winnerVisualPos) : { x: 0, y: 0, rotate: 0 };
@@ -147,6 +153,12 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
     transition = `transform ${ANIMATION_CONFIG.TRICK_COLLECT_DURATION_MS}ms ${ANIMATION_CONFIG.TRICK_SWEEP_EASING}, opacity ${ANIMATION_CONFIG.TRICK_COLLECT_DURATION_MS}ms ease-in`;
   } else if (isLocallyFlying) {
     opacity = 0;
+    transition = 'none';
+  } else if (wasLocallyPlayed) {
+    // Seamless single-frame handoff from FlyingCardOverlay without re-running entry transition or opacity fade
+    transform = 'translate3d(0, 0, 0) scale(1) rotate(0deg)';
+    opacity = 1;
+    transition = 'none';
   } else if (!hasEntered) {
     transform = `translate3d(${entry.x}px, ${entry.y}px, 0) scale(0.88) rotate(${entry.rotate}deg)`;
     opacity = 0.2;
@@ -158,8 +170,6 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
     left: 'left-3.5 sm:left-4 top-1/2 -translate-y-1/2',
     right: 'right-3.5 sm:right-4 top-1/2 -translate-y-1/2',
   }[visualPos];
-
-  const team = getTeam(played.seat);
 
   const naturalTilt = {
     top: -1.5,
@@ -204,17 +214,122 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
 interface FlyingCardState {
   id: string;
   card: Card;
-  startX: number;
-  startY: number;
+  startCenterX: number;
+  startCenterY: number;
   startWidth: number;
   startHeight: number;
-  targetX: number;
-  targetY: number;
+  startScale: number;
+  startRotateDeg: number;
+  targetCenterX: number;
+  targetCenterY: number;
   targetWidth: number;
   targetHeight: number;
+  targetRotateDeg: number;
+  vx: number;
+  vy: number;
+  wasDragged: boolean;
   duration: number;
-  isLanded: boolean;
 }
+
+const FlyingCardOverlay: React.FC<{
+  flight: FlyingCardState;
+  onComplete: (flightId: string) => void;
+}> = ({ flight, onComplete }) => {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const completedRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const el = overlayRef.current;
+    completedRef.current = false;
+
+    const finish = () => {
+      if (completedRef.current) return;
+      completedRef.current = true;
+      onComplete(flight.id);
+    };
+
+    const dx = flight.targetCenterX - flight.startCenterX;
+    const dy = flight.targetCenterY - flight.startCenterY;
+    const dist = Math.hypot(dx, dy);
+    const targetScale = flight.targetWidth / Math.max(1, flight.startWidth);
+
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const effectiveDuration = prefersReducedMotion ? 40 : flight.duration;
+
+    // Aerodynamic mid-flight apex: carries lateral wrist momentum and lifts slightly before settling onto felt
+    const lateralCarry = Math.max(-18, Math.min(18, flight.vx * 16));
+    const arcLift = dist > 32 ? Math.min(16, dist * 0.065) : 0;
+    const midX = dx * 0.54 + lateralCarry;
+    const midY = dy * 0.54 - arcLift;
+    const midScale =
+      flight.startScale * 0.45 + targetScale * 0.55 + (dist > 40 ? 0.035 : 0.01);
+    const midRotate = flight.startRotateDeg * 0.4 + flight.targetRotateDeg * 0.6;
+
+    const startTransform = `translate3d(0px, 0px, 0) scale(${flight.startScale}) rotate(${flight.startRotateDeg}deg)`;
+    const midTransform = `translate3d(${midX}px, ${midY}px, 0) scale(${midScale}) rotate(${midRotate}deg)`;
+    const endTransform = `translate3d(${dx}px, ${dy}px, 0) scale(${targetScale}) rotate(${flight.targetRotateDeg}deg)`;
+
+    let anim: Animation | null = null;
+    if (el && typeof el.animate === 'function' && !prefersReducedMotion) {
+      anim = el.animate(
+        [
+          {
+            transform: startTransform,
+            offset: 0,
+          },
+          {
+            transform: midTransform,
+            offset: 0.48,
+          },
+          {
+            transform: endTransform,
+            offset: 1,
+          },
+        ],
+        {
+          duration: effectiveDuration,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          fill: 'forwards',
+        }
+      );
+      anim.onfinish = finish;
+    } else if (el) {
+      el.style.transform = endTransform;
+    }
+
+    const fallbackTimer = setTimeout(finish, effectiveDuration + 35);
+    return () => {
+      clearTimeout(fallbackTimer);
+      if (anim) {
+        anim.onfinish = null;
+        anim.cancel();
+      }
+    };
+  }, [flight, onComplete]);
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed pointer-events-none z-[80] rounded-lg sm:rounded-xl"
+      style={{
+        left: flight.startCenterX - flight.startWidth / 2,
+        top: flight.startCenterY - flight.startHeight / 2,
+        width: flight.startWidth,
+        height: flight.startHeight,
+        transformOrigin: 'center center',
+        transform: `translate3d(0px, 0px, 0) scale(${flight.startScale}) rotate(${flight.startRotateDeg}deg)`,
+        boxShadow: '0 18px 36px -6px rgba(0, 0, 0, 0.68), 0 4px 12px -2px rgba(0, 0, 0, 0.45)',
+        willChange: 'transform',
+      }}
+    >
+      <CardView card={flight.card} size="hand" />
+    </div>
+  );
+};
 
 interface VirtualTableProps {
   room: Room;
@@ -263,7 +378,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const [winnerInfo, setWinnerInfo] = useState<{ winner: Seat; winningCard: Card } | null>(null);
   const [celebratedSeat, setCelebratedSeat] = useState<Seat | null>(null);
   const [justPlayedHandCardId, setJustPlayedHandCardId] = useState<string | null>(null);
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [flyingCard, setFlyingCard] = useState<FlyingCardState | null>(null);
+  const locallyPlayedCardIdsRef = useRef<Set<string>>(new Set());
 
   // Responsive viewport dimensions for dynamic hand accordion spacing
   const [viewport, setViewport] = useState<{ width: number; height: number }>(() => ({
@@ -378,6 +495,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   // Clear any lingering celebration badges whenever phase or round changes
   useEffect(() => {
     clearTrickAnimationTimers();
+    locallyPlayedCardIdsRef.current.clear();
+    setDraggingCardId(null);
+    setFlyingCard(null);
     setCelebratedSeat(null);
     setWinnerInfo(null);
     setIsGathering(false);
@@ -494,101 +614,161 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     gameState.currentTrick.length > 0 ? gameState.currentTrick[0].card.suit : null;
 
   const getTrickTargetRect = (visualPos: 'bottom' | 'top' | 'left' | 'right') => {
-    // 1. Try finding slot element directly in the DOM
-    const slotEl = document.querySelector(`[data-trick-slot="${visualPos}"]`);
-    if (slotEl) {
-      const rect = slotEl.getBoundingClientRect();
+    // 1. Measure permanent unrotated slot anchor in the DOM (pixel-exact across all viewports)
+    const anchorEl = document.querySelector(
+      `[data-trick-anchor="${visualPos}"]`
+    ) as HTMLElement | null;
+    if (anchorEl) {
+      const rect = anchorEl.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
         return {
-          x: rect.left,
-          y: rect.top,
-          width: rect.width,
-          height: rect.height,
+          centerX: rect.left + rect.width / 2,
+          centerY: rect.top + rect.height / 2,
+          width: anchorEl.offsetWidth || rect.width,
+          height: anchorEl.offsetHeight || rect.height,
         };
       }
     }
 
-    // 2. Center stage / arena fallback calculation
+    // 2. Fallback to existing slot element if present
+    const slotEl = document.querySelector(`[data-trick-slot="${visualPos}"]`) as HTMLElement | null;
+    if (slotEl) {
+      const rect = slotEl.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        return {
+          centerX: rect.left + rect.width / 2,
+          centerY: rect.top + rect.height / 2,
+          width: slotEl.offsetWidth || rect.width,
+          height: slotEl.offsetHeight || rect.height,
+        };
+      }
+    }
+
+    // 3. Center stage / arena fallback calculation
     const arenaEl = document.querySelector('[data-trick-arena]');
-    const cardW = 56;
-    const cardH = 80;
+    const cardW = 72;
+    const cardH = 100;
     if (arenaEl) {
       const arenaRect = arenaEl.getBoundingClientRect();
       const centerX = arenaRect.left + arenaRect.width / 2;
       const centerY = arenaRect.top + arenaRect.height / 2;
       switch (visualPos) {
         case 'bottom':
-          return { x: centerX - cardW / 2, y: arenaRect.bottom - cardH - 12, width: cardW, height: cardH };
+          return {
+            centerX,
+            centerY: arenaRect.bottom - cardH / 2 - 14,
+            width: cardW,
+            height: cardH,
+          };
         case 'top':
-          return { x: centerX - cardW / 2, y: arenaRect.top + 12, width: cardW, height: cardH };
+          return {
+            centerX,
+            centerY: arenaRect.top + cardH / 2 + 14,
+            width: cardW,
+            height: cardH,
+          };
         case 'left':
-          return { x: arenaRect.left + 12, y: centerY - cardH / 2, width: cardW, height: cardH };
+          return {
+            centerX: arenaRect.left + cardW / 2 + 14,
+            centerY,
+            width: cardW,
+            height: cardH,
+          };
         case 'right':
-          return { x: arenaRect.right - cardW - 12, y: centerY - cardH / 2, width: cardW, height: cardH };
+          return {
+            centerX: arenaRect.right - cardW / 2 - 14,
+            centerY,
+            width: cardW,
+            height: cardH,
+          };
       }
     }
 
     const w = typeof window !== 'undefined' ? window.innerWidth : 1000;
     const h = typeof window !== 'undefined' ? window.innerHeight : 700;
     return {
-      x: w * 0.5 - 28,
-      y: h * 0.54 - 40,
-      width: 56,
-      height: 80,
+      centerX: w * 0.5,
+      centerY: h * 0.54,
+      width: 72,
+      height: 100,
     };
   };
 
-  const handleCardInteraction = (card: Card, startRect?: DOMRect) => {
+  const handleCompleteFlight = React.useCallback((flightId: string) => {
+    setFlyingCard((prev) => {
+      if (!prev || prev.id !== flightId) return prev;
+      playCardSnapSound();
+      return null;
+    });
+  }, []);
+
+  const handleCardInteraction = (card: Card, gesture?: CardReleaseGesture) => {
     if (!mySeat || !isMyTurnToPlay) return;
     if (!isCardLegal(card, myHand, currentLedSuit)) return;
 
-    // Calculate trajectory from startRect (or fallback from hand) to the trick center
     const target = getTrickTargetRect('bottom');
-    const sRect = startRect || {
-      left: typeof window !== 'undefined' ? window.innerWidth * 0.5 - 32 : 500,
-      top: typeof window !== 'undefined' ? window.innerHeight - 100 : 600,
-      width: 64,
-      height: 92,
-    };
+    const fallbackW = 76;
+    const fallbackH = 108;
+    const startCenterX =
+      gesture?.centerX ?? (typeof window !== 'undefined' ? window.innerWidth * 0.5 : 500);
+    const startCenterY =
+      gesture?.centerY ?? (typeof window !== 'undefined' ? window.innerHeight - 80 : 620);
+    const startWidth = gesture?.width || fallbackW;
+    const startHeight = gesture?.height || fallbackH;
+    const startScale = gesture?.scale ?? 1;
+    const startRotateDeg = gesture?.rotateDeg ?? 0;
+    const vx = gesture?.vx ?? 0;
+    const vy = gesture?.vy ?? -0.5;
+    const wasDragged = Boolean(gesture?.wasDragged);
 
-    const dx = target.x - sRect.left;
-    const dy = target.y - sRect.top;
+    const dx = target.centerX - startCenterX;
+    const dy = target.centerY - startCenterY;
     const dist = Math.hypot(dx, dy);
-    // Dynamic flight duration proportional to remaining distance (140ms base + dist scaling, capped at 380ms)
-    const flightDuration = Math.min(380, 140 + Math.round(dist * 0.8));
 
-    const flightId = `flight_${Date.now()}`;
+    // Velocity-aware flight duration:
+    // - Dropped directly onto or near the trick slot: crisp 120-160ms settle
+    // - Fast upward flick: scales down duration with upward release velocity
+    // - Tap/click from hand: smooth 220-310ms dealer toss
+    const upwardSpeed = Math.max(0.25, -vy);
+    let flightDuration: number;
+    if (dist < 42) {
+      flightDuration = 125;
+    } else if (wasDragged) {
+      const speedAdjusted = (dist / Math.min(2.2, Math.max(0.55, upwardSpeed * 1.1))) * 0.48;
+      flightDuration = Math.round(Math.max(135, Math.min(300, 95 + speedAdjusted)));
+    } else {
+      flightDuration = Math.round(Math.max(210, Math.min(315, 145 + dist * 0.45)));
+    }
+
+    const flightId = `flight_${Date.now()}_${card.id}`;
+    locallyPlayedCardIdsRef.current.add(card.id);
+    setDraggingCardId(null);
+
     setFlyingCard({
       id: flightId,
       card,
-      startX: sRect.left,
-      startY: sRect.top,
-      startWidth: sRect.width,
-      startHeight: sRect.height,
-      targetX: target.x,
-      targetY: target.y,
+      startCenterX,
+      startCenterY,
+      startWidth,
+      startHeight,
+      startScale,
+      startRotateDeg,
+      targetCenterX: target.centerX,
+      targetCenterY: target.centerY,
       targetWidth: target.width,
       targetHeight: target.height,
+      targetRotateDeg: 1, // Matches bottom slot naturalTilt
+      vx,
+      vy,
+      wasDragged,
       duration: flightDuration,
-      isLanded: false,
     });
-
-    // Trigger transition on next animation frame
-    requestAnimationFrame(() => {
-      setFlyingCard((prev) => (prev && prev.id === flightId ? { ...prev, isLanded: true } : prev));
-    });
-
-    // Complete flight and play crisp card snap sound on landing
-    setTimeout(() => {
-      setFlyingCard((prev) => (prev && prev.id === flightId ? null : prev));
-      playCardSnapSound();
-    }, flightDuration);
 
     setJustPlayedHandCardId(card.id);
     playCard(room.id, mySeat, card);
     setTimeout(() => {
-      setJustPlayedHandCardId(null);
-    }, flightDuration + 100);
+      setJustPlayedHandCardId((prev) => (prev === card.id ? null : prev));
+    }, flightDuration + 90);
   };
 
   const handleSeatClick = (seat: Seat) => {
@@ -1451,6 +1631,23 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               {/* Playing Phase: Current Trick Center Arena */}
               {gameState.phase === 'playing' && (
                 <div data-trick-arena className="relative w-full h-full flex items-center justify-center">
+                  {/* Permanent invisible slot anchors for pixel-exact flight targeting */}
+                  {(['top', 'bottom', 'left', 'right'] as const).map((pos) => (
+                    <div
+                      key={`trick-anchor-${pos}`}
+                      data-trick-anchor={pos}
+                      aria-hidden="true"
+                      className={`absolute ${
+                        {
+                          top: 'top-3.5 sm:top-4 left-1/2 -translate-x-1/2',
+                          bottom: 'bottom-3.5 sm:bottom-4 left-1/2 -translate-x-1/2',
+                          left: 'left-3.5 sm:left-4 top-1/2 -translate-y-1/2',
+                          right: 'right-3.5 sm:right-4 top-1/2 -translate-y-1/2',
+                        }[pos]
+                      } portrait-trick-card landscape-compact-trick-card w-15 h-21 sm:w-18 sm:h-25 md:w-20 md:h-28 opacity-0 pointer-events-none select-none`}
+                    />
+                  ))}
+
                   {/* 4 Cards Placement in Trick with Smooth Play & Collect Animations */}
                   {displayTrick.map((played, idx) => {
                     const isWinningCard = Boolean(
@@ -1460,6 +1657,10 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     const winnerVisualPos = winnerInfo
                       ? getSeatVisualPos(winnerInfo.winner)
                       : null;
+                    const wasLocallyPlayed = Boolean(
+                      (mySeat && played.seat === mySeat) ||
+                        locallyPlayedCardIdsRef.current.has(played.card.id)
+                    );
                     return (
                       <TrickCardItem
                         key={played.card.id}
@@ -1470,6 +1671,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         isWinningCard={isWinningCard}
                         isLeadCard={idx === 0}
                         isLocallyFlying={Boolean(flyingCard && flyingCard.card.id === played.card.id)}
+                        wasLocallyPlayed={wasLocallyPlayed}
                       />
                     );
                   })}
@@ -1807,6 +2009,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                       slotMarginPx = -Math.round(cardWidthPx - prevVisibleWidth);
                     }
 
+                    const isDraggingThisCard = draggingCardId === card.id;
+
                     return (
                       <div
                         key={card.id}
@@ -1817,9 +2021,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                                 marginLeft: `${slotMarginPx}px`,
                               } as React.CSSProperties)
                             : {}),
-                          // Strict left-to-right stacking order so no card on the left ever covers the rank/suit index of a card to its right
-                          zIndex: isJustPlayed ? 0 : idx + 1,
-                          transition: 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin 260ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+                          // Elevate actively dragged card above all sibling slots; otherwise strict left-to-right stacking order
+                          zIndex: isJustPlayed ? 0 : isDraggingThisCard ? 100 : idx + 1,
+                          transition: isDraggingThisCard
+                            ? 'margin 260ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+                            : 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin 260ms cubic-bezier(0.2, 0.8, 0.2, 1)',
                         }}
                         className={`
                           portrait-card-slot landscape-compact-card-slot relative shrink-0
@@ -1827,6 +2033,10 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                           ${
                             isJustPlayed
                               ? 'opacity-0 scale-90 pointer-events-none'
+                              : isDraggingThisCard
+                              ? isRequiredSuit
+                                ? '-translate-y-3 sm:-translate-y-4 rounded-lg sm:rounded-xl'
+                                : '-translate-y-2 sm:-translate-y-2.5'
                               : canPlay && isRequiredSuit
                               ? '-translate-y-3 sm:-translate-y-4 hover:-translate-y-5 hover:scale-105 duration-150 ring-2 ring-amber-400 rounded-lg sm:rounded-xl shadow-[0_6px_16px_rgba(251,191,36,0.55)]'
                               : isRequiredSuit
@@ -1842,14 +2052,19 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                           size="hand"
                           isPlayable={Boolean(canPlay && !isJustPlayed)}
                           isDimmed={isDimmed}
-                          onClick={(e, startRect) => {
+                          onDragStateChange={(isDragging) => {
+                            setDraggingCardId((prev) =>
+                              isDragging ? card.id : prev === card.id ? null : prev
+                            );
+                          }}
+                          onClick={(e, releaseGesture) => {
                             if (gameState.phase === 'playing') {
-                              handleCardInteraction(card, startRect);
+                              handleCardInteraction(card, releaseGesture);
                             }
                           }}
-                          onSwipePlay={(startRect) => {
+                          onSwipePlay={(releaseGesture) => {
                             if (gameState.phase === 'playing') {
-                              handleCardInteraction(card, startRect);
+                              handleCardInteraction(card, releaseGesture);
                             }
                           }}
                         />
@@ -1873,30 +2088,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
         </div>
       )}
 
-      {/* Active Flying Played Card Layer (Continuous release flight onto the table) */}
+      {/* Active Flying Played Card Layer (Continuous momentum trajectory onto the table) */}
       {flyingCard && (
-        <div
-          className="fixed pointer-events-none z-[80]"
-          style={{
-            left: flyingCard.startX,
-            top: flyingCard.startY,
-            width: flyingCard.startWidth,
-            height: flyingCard.startHeight,
-            transform: flyingCard.isLanded
-              ? `translate3d(${flyingCard.targetX - flyingCard.startX}px, ${flyingCard.targetY - flyingCard.startY}px, 0) scale(${flyingCard.targetWidth / flyingCard.startWidth}) rotate(3deg)`
-              : 'translate3d(0, 0, 0) scale(1) rotate(0deg)',
-            transition: flyingCard.isLanded
-              ? `transform ${flyingCard.duration}ms cubic-bezier(0.2, 0.85, 0.3, 1), box-shadow ${flyingCard.duration}ms ease`
-              : 'none',
-            transformOrigin: 'top left',
-            boxShadow: flyingCard.isLanded
-              ? '0 4px 12px rgba(0,0,0,0.45)'
-              : '0 24px 45px -8px rgba(0, 0, 0, 0.65), 0 0 25px rgba(245, 158, 11, 0.5)',
-            willChange: 'transform',
-          }}
-        >
-          <CardView card={flyingCard.card} size="hand" />
-        </div>
+        <FlyingCardOverlay flight={flyingCard} onComplete={handleCompleteFlight} />
       )}
 
       {/* Global Interactive Projectile & Impact FX Layer */}
