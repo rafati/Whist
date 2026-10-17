@@ -1,6 +1,6 @@
-# Remix Online Multiplayer Card Game — Technical Specification
+# تدفيع الثمن (Remix) — Technical Specification
 
-**Version:** 3.0 (Verified Implementation)  
+**Version:** 3.2 (Verified Implementation)  
 **Status:** Active & Implemented  
 **Platform:** Full-Stack Node.js (Express + WebSocket `ws`) & React 19 SPA (Vite + Tailwind CSS v4)  
 **Primary Entry Points:** [server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts), [src/main.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/main.tsx), [src/App.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/App.tsx)
@@ -9,7 +9,7 @@
 
 ## 1. System Overview & Game Core
 
-Remix is an online, real-time, 4-player trick-taking partnership card game. Four players sit at a virtual table divided into two competing partnerships: **Team 1** and **Team 2**.
+**تدفيع الثمن** (Remix) is an online, real-time, 4-player trick-taking partnership card game. Four players sit at a virtual table divided into two competing partnerships: **Team 1** and **Team 2**.
 
 ### 1.1 Team Structure & Partnerships
 * **4 Players / Seats**: Two partnerships of 2 players each.
@@ -76,7 +76,7 @@ Play proceeds strictly in a **Counter-Clockwise** direction across all phases:
    * **In No Trump (`NT`) games**: The **Declarer leads first**.
    * **In Suit games**: The **player to the immediate right of the Declarer** (`getNextSeat(state.declarer)`) leads first.
    * *Subsequent tricks* are led by the winner of the previous trick.
-2. **Following Suit (Mandatory Follow)**: Players must follow the suit led if they hold at least one card in that suit ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L228-L233)).
+2. **Following Suit (Mandatory Follow)**: Players must follow the suit led if they hold at least one card in that suit ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L228-L233)). In the UI ([VirtualTable.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/VirtualTable.tsx)), `currentLedSuit` is always derived from the authoritative server state (`gameState.currentTrick.length > 0 ? gameState.currentTrick[0].card.suit : null`) rather than the animation-buffered `displayTrick`, and trick review/sweep timers (`gatherTimerRef`, `finishTimerRef`, `celebrateTimerRef`) are stored in refs so winning the 4th card of a trick immediately allows the winner to lead any suit on the next trick.
 3. **Trumping & Discarding**: If void in the led suit, a player may play any card (trump or discard).
 4. **Trick Evaluation** ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L238-L284)):
    * In Suit games: If any trump cards are played, the highest trump card wins.

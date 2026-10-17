@@ -136,10 +136,10 @@ Visit `http://localhost:3000` in your browser.
    * Target: **+10 points** to win the match.
    * Danger: **-10 points** eliminates a team.
 6. **Interactive Throwable Objects & Banter**:
-   * Players can throw interactive items across the table at any player or bot:
-     * 👞 **Used Shoe**: Tumbles $720^\circ$ end-over-end, triggering comic recoil and dust bursts.
-     * 🍾 **Open Beer Bottle**: Arcs with frothy liquid bubbles, producing a splashing spray burst on hit.
-     * 🥇 **Gold Medal**: Twinkles with ribbon trails and explodes with golden celebration confetti.
+   * Players can throw custom multi-layered SVG items ([`src/components/ThrowableArts.tsx`](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/ThrowableArts.tsx)) across the table at any player or bot:
+     * 👞 **Worn Leather Boot (`shoe`)**: Tumbles $900^\circ$ end-over-end with a separated ground shadow and dust wake trail; impacts with a spiky comic starburst flash, stamps a muddy sole tread on the avatar, orbits 4 golden dazed stars, and ricochet-bounces off along a gravity parabola.
+     * 🍾 **Foaming Beer Bottle (`beer`)**: Spins $540^\circ$ trailing golden fizz droplets and white foam bubbles; tilts and pops a 14-droplet gravity fountain of golden beer and white foam that splashes and drips down over the target's seat pod.
+     * 🥇 **Royal Gold Medal (`medal`)**: Swings along a high arc leaving 4-point golden star glints; settles onto the target's avatar with a CSS `linear()` bounce/spring drop, rotating golden sunburst god-rays, and 16 fluttering multi-colored confetti ribbons.
    * **Multi-Device Dynamic Perspective**: Projectiles launch from the thrower's screen position and land on the target's avatar pod on every device, adapting in real time to each player's rotated seat view.
    * **Web Audio Synthesis**: Procedural sound effects synthesize whoosh and impact sounds directly in the browser with no external assets.
 
@@ -154,7 +154,10 @@ export const ANIMATION_CONFIG = {
   CARD_PLAY_DURATION_MS: 400,          // Time for card to glide onto table
   TRICK_REVIEW_DELAY_MS: 750,          // Pause to review completed 4-card trick
   TRICK_COLLECT_DURATION_MS: 550,      // Time to sweep trick to winner
-  WINNER_CELEBRATION_DURATION_MS: 1000 // Celebration badge highlight duration
+  WINNER_CELEBRATION_DURATION_MS: 1000,// Celebration badge highlight duration
+  THROW_FLIGHT_DURATION_MS: 700,       // Parabolic flight time for thrown objects
+  THROW_HIT_DURATION_MS: 1450,         // Post-impact physics choreography duration
+  THROW_COOLDOWN_MS: 2500              // Cooldown between consecutive throws
 };
 ```
 
@@ -178,7 +181,7 @@ To enable Google Sign-In with real Google profiles:
 ## Project Structure
 
 ```
-├── server.ts                    # Express + WebSocket backend server & WebRTC signaling
+├── server.ts                    # Express + WebSocket backend server, 10s disconnect bot replacement & WebRTC signaling
 ├── SPECIFICATION.md             # Core technical specification
 ├── README.md                    # Project overview and quickstart guide
 ├── package.json                 # Dependencies and npm scripts
@@ -187,19 +190,31 @@ To enable Google Sign-In with real Google profiles:
 ├── vercel.json                  # Static hosting routing configuration
 ├── scripts/
 │   ├── train.ts                 # CLI script for local bot simulation training
-│   └── ai_optimize_superbot.ts  # CLI script for Gemini AI bot strategy synthesis
+│   ├── ai_optimize_superbot.ts  # CLI script for Gemini AI bot strategy synthesis
+│   ├── test_player_disconnect_bot_replace.ts # Verifies human leave indicator, 10s grace return & bot takeover
+│   ├── test_suit_accordion.ts   # Verifies dynamic suit accordion expansion & card visibility
+│   ├── test_new_ui_elements.ts  # Verifies Last Trick Cross & Contract HUD
+│   ├── test_sound_setting.ts    # Verifies sound & clicks mute/unmute persistence
+│   ├── test_touch_gestures.ts   # Verifies single-tap play & continuous swipe-to-throw
+│   └── test_ui_portrait.ts      # Verifies mobile portrait layout & gameplay
 ├── src/
 │   ├── main.tsx                 # React DOM entry point
 │   ├── App.tsx                  # Root state router & authentication guard
 │   ├── types.ts                 # Canonical TypeScript types & WebSocket schemas
-│   ├── index.css                # Base Tailwind styles and table textures
+│   ├── index.css                # Tailwind styles, table textures & physics linear() easings
 │   ├── components/
-│   │   ├── VirtualTable.tsx     # Game arena, dynamic bottom orientation & HUD
-│   │   ├── CardView.tsx         # Playing card component with 2-color engine
+│   │   ├── VirtualTable.tsx     # Game arena, dynamic bottom orientation, suit accordion & HUD
+│   │   ├── CardView.tsx         # High-clarity playing card component with giant indices & vector suits
 │   │   ├── RoyalCourtArt.tsx    # High-detail SVG artwork for J, Q, K
+│   │   ├── ThrowableArts.tsx    # Custom multi-layered SVG artwork for Boot, Beer Bottle, Gold Medal & bursts
+│   │   ├── ThrowableDock.tsx    # Interactive throwable item selector dock with cooldown
+│   │   ├── ThrowableOverlay.tsx # 3D parabolic flight, ground shadow, wake trails & impact physics
+│   │   ├── LastTrickCross.tsx   # Top-right 4-card cross displaying the last completed trick
+│   │   ├── ContractHud.tsx      # Bottom-left winning contract & live team trick counter HUD
 │   │   ├── BiddingPanel.tsx     # Auction console with dealer privileges
 │   │   ├── SuitDeclarationModal.tsx # Trump suit selection modal
-│   │   ├── ScoreBoard.tsx       # Match standings (+11 / -11 progress bars)
+│   │   ├── MisdealModal.tsx     # 10-second unwinnable hand ("Kosh") reveal modal
+│   │   ├── ScoreBoard.tsx       # Match standings (+10 / -10 progress bars)
 │   │   ├── Lobby.tsx            # Room browser and table creation
 │   │   ├── VoiceChatBar.tsx     # WebRTC voice chat controls & indicators
 │   │   ├── OpponentHandSpread.tsx # Face-down opponent card fans
@@ -215,6 +230,7 @@ To enable Google Sign-In with real Google profiles:
 │   │   └── simulator.ts         # Headless batch match simulation runner
 │   ├── lib/
 │   │   ├── socketContext.tsx    # WebSocket client provider and state sync
+│   │   ├── throwSounds.ts       # Web Audio API procedural sound synthesis & mute persistence
 │   │   ├── useVoiceChat.ts      # WebRTC mesh voice chat hook & audio analyser
 │   │   ├── authContext.tsx      # Google authentication provider & session storage
 │   │   └── session.ts           # Per-tab unique session identifier generator
