@@ -23,10 +23,10 @@ async function runTests() {
   // Test 1: Last Trick Cross seating & card mapping logic
   console.log('\n[Test 1] Verifying Last Trick Cross Perspective Seating Mapping...');
   const mockSeats: Record<Seat, UserProfile | null> = {
-    South: { id: 'u1', name: 'Alice', avatar: '', isBot: false },
-    North: { id: 'b1', name: 'Bot Bob', avatar: '', isBot: true },
-    West: { id: 'b2', name: 'Bot Charlie', avatar: '', isBot: true },
-    East: { id: 'b3', name: 'Bot Dave', avatar: '', isBot: true },
+    South: { id: 'u1', name: 'Alice', avatar: '', email: 'alice@test.com', isBot: false },
+    North: { id: 'b1', name: 'Bot Bob', avatar: '', email: 'bot1@test.com', isBot: true },
+    West: { id: 'b2', name: 'Bot Charlie', avatar: '', email: 'bot2@test.com', isBot: true },
+    East: { id: 'b3', name: 'Bot Dave', avatar: '', email: 'bot3@test.com', isBot: true },
   };
 
   const mySeat: Seat = 'South';
@@ -99,15 +99,17 @@ async function runTests() {
   };
 
   const declarerTeam = getTeam(mockGameState.declarer!);
-  const contractGoal = 6 + mockGameState.winningBid!.level;
+  const winningBid = mockGameState.winningBid!;
+  const contractGoal = 6 + winningBid.level!;
   const teamTricksWon = mockGameState.teamTricksWon!;
 
   assert(declarerTeam === 'TeamA', 'Declarer South belongs to Team 1 (TeamA)');
   assert(contractGoal === 8, 'Level 2 bid requires 6 + 2 = 8 tricks');
   assert(teamTricksWon.TeamA === 5, 'Team 1 has won 5 tricks');
   assert(teamTricksWon.TeamB === 2, 'Team 2 has won 2 tricks');
-  assert(SUIT_SYMBOLS[mockGameState.trumpSuit!] === '♠', 'Trump symbol is ♠');
-  assert(SUIT_NAMES[mockGameState.trumpSuit!] === 'Spades', 'Trump name is Spades');
+  assert(mockGameState.trumpSuit === 'S', 'Trump suit is S');
+  assert(SUIT_SYMBOLS[mockGameState.trumpSuit as 'S'] === '♠', 'Trump symbol is ♠');
+  assert(SUIT_NAMES[mockGameState.trumpSuit as 'S'] === 'Spades', 'Trump name is Spades');
 
   // Test 4: NT contract representation
   console.log('\n[Test 4] Verifying No Trump (NT) Contract Representation...');
@@ -128,7 +130,8 @@ async function runTests() {
   };
 
   const ntDeclarerTeam = getTeam(ntGameState.declarer!);
-  const ntGoal = 6 + ntGameState.winningBid!.level;
+  const ntWinningBid = ntGameState.winningBid!;
+  const ntGoal = 6 + ntWinningBid.level!;
   assert(ntDeclarerTeam === 'TeamB', 'Declarer East belongs to Team 2 (TeamB)');
   assert(ntGoal === 9, 'Level 3 NT bid requires 6 + 3 = 9 tricks');
   assert(ntGameState.trumpSuit === 'NT', 'Trump suit is NT');

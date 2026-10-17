@@ -160,6 +160,13 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
 
   const team = getTeam(played.seat);
 
+  const naturalTilt = {
+    top: -1.5,
+    bottom: 1,
+    left: -2.5,
+    right: 2,
+  }[visualPos] || 0;
+
   return (
     <div
       data-trick-slot={visualPos}
@@ -172,10 +179,13 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
       className={`absolute ${posClass} z-10 flex flex-col items-center select-none pointer-events-none`}
     >
       <div
+        style={{
+          transform: `rotate(${naturalTilt}deg)`,
+        }}
         className={`relative transition-all duration-200 ${
           isWinningCard
-            ? 'ring-2 sm:ring-3 ring-amber-400 rounded-lg sm:rounded-xl shadow-[0_0_24px_rgba(251,191,36,0.95)] scale-105 z-20'
-            : 'shadow-md'
+            ? 'ring-2 sm:ring-3 ring-amber-400 rounded-lg sm:rounded-xl shadow-[0_0_26px_rgba(251,191,36,0.95)] scale-105 z-20'
+            : 'shadow-[0_12px_28px_-4px_rgba(0,0,0,0.65),0_4px_10px_-2px_rgba(0,0,0,0.45)]'
         }`}
       >
         <CardView card={played.card} size="sm" />
@@ -1498,8 +1508,15 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               <div className="portrait-hand-row landscape-compact-hand-row flex justify-center items-center pt-1.5 pb-0.5 overflow-visible min-h-[82px] sm:min-h-[100px] md:min-h-[118px] lg:min-h-[140px]">
                 {sortedMyHand.length === 0 ? (
                   <div className="text-xs text-slate-500 py-2">All cards played for this round.</div>
-                ) : (
-                  sortedMyHand.map((card, idx) => {
+                ) : (() => {
+                  // Determine if a specific suit must be followed and player holds cards of that suit
+                  const hasRequiredSuitInHand = Boolean(
+                    gameState.phase === 'playing' &&
+                    currentLedSuit &&
+                    sortedMyHand.some((c) => c.suit === currentLedSuit)
+                  );
+
+                  return sortedMyHand.map((card, idx) => {
                     const isLegal =
                       gameState.phase === 'playing'
                         ? isCardLegal(card, myHand, currentLedSuit)
@@ -1510,15 +1527,43 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                       gameState.phase === 'playing' && isMyTurnToPlay && !isLegal;
                     const isJustPlayed = justPlayedHandCardId === card.id || flyingCard?.card.id === card.id;
 
+                    const isRequiredSuit = hasRequiredSuitInHand && card.suit === currentLedSuit;
+                    const isCompressedSuit = hasRequiredSuitInHand && card.suit !== currentLedSuit;
+
+                    // Dynamic accordion classes:
+                    // Required suit cards auto-expand with extra spacing, while ineligible suits condense tightly
+                    const slotAccordionClass = isRequiredSuit
+                      ? 'card-slot-expanded z-20'
+                      : isCompressedSuit
+                      ? 'card-slot-compressed z-10'
+                      : 'card-slot-standard z-10';
+
+                    // Dynamic margin styles for desktop fallback
+                    let customMarginStyle: string | undefined = undefined;
+                    if (idx !== 0) {
+                      if (isRequiredSuit) {
+                        customMarginStyle = '-0.25rem';
+                      } else if (isCompressedSuit) {
+                        customMarginStyle = '-2.2rem';
+                      }
+                    }
+
                     return (
                       <div
                         key={card.id}
+                        style={{
+                          ...(customMarginStyle ? ({ '--slot-margin': customMarginStyle } as React.CSSProperties) : {}),
+                          transition: 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin 260ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+                        }}
                         className={`
-                          portrait-card-slot landscape-compact-card-slot transition-all relative shrink-0
-                          ${idx !== 0 ? '-ml-5 sm:-ml-6 md:-ml-8 lg:-ml-9' : ''}
+                          portrait-card-slot landscape-compact-card-slot relative shrink-0
+                          ${slotAccordionClass}
+                          ${idx !== 0 && !hasRequiredSuitInHand ? '-ml-5 sm:-ml-6 md:-ml-8 lg:-ml-9' : ''}
                           ${
                             isJustPlayed
                               ? 'opacity-0 scale-90 pointer-events-none'
+                              : canPlay && isRequiredSuit
+                              ? '-translate-y-2.5 sm:-translate-y-3.5 hover:-translate-y-5 hover:z-40 hover:scale-105 duration-150 ring-1 sm:ring-2 ring-amber-400/80 rounded-lg sm:rounded-xl shadow-[0_0_12px_rgba(251,191,36,0.5)]'
                               : canPlay
                               ? '-translate-y-2 sm:-translate-y-2.5 hover:-translate-y-4 hover:z-30 hover:scale-105 duration-150'
                               : ''
@@ -1543,8 +1588,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         />
                       </div>
                     );
-                  })
-                )}
+                  });
+                })()}
               </div>
             </div>
           </footer>

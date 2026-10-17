@@ -38,6 +38,14 @@ A real-time, 4-player trick-taking partnership card game built with React 19, Vi
   * 3D parabolic Bezier flight trajectories with rotational tumbling, particle trails, and cartoon impact explosions (dust & stars, foam splash, golden sparkles).
   * Recoil animations and reaction bubbles for both human and AI bot avatars.
   * Synthesized procedural sound effects via native Web Audio API.
+* **High-Clarity Card Redesign & Single Giant Center Pip**:
+  * **Oversized Bold Corner Indices**: Modern, heavy typography (`font-black`) for card ranks with the suit symbol centered directly beneath it, remaining 100% visible even when cards overlap tightly.
+  * **Single Giant Center Pip (2–10)**: Clean, high-impact center suit pip eliminating cluttered multi-pip scatter, paired with ornate Ace of Spades and classic court art for J, Q, and K.
+  * **Strict Classic 2-Color Palette**: Rich Crimson Red (`#dc2626`) for Hearts & Diamonds and Midnight Black (`#0f172a`) for Spades & Clubs against warm ivory card stock with multi-layer depth shadows.
+* **Dynamic Suit Accordion in Hand**:
+  * When a suit is led in the trick, cards of that required suit **auto-expand horizontally** with generous spacing, revealing their full card faces and giant pips, and elevate slightly with an active amber glow ring.
+  * Ineligible suits **condense tightly** into a compact shingled stack, preserving screen real estate and preventing mobile horizontal scroll.
+  * When void in the led suit or leading, cards smoothly distribute with uniform spacing.
 * **Last Trick Cross (Top-Right Playing Area)**:
   * Persistent 4-card cross in the top-right corner of the table felt displaying the cards played in the last completed trick.
   * Arranged to mirror the player's perspective: Top = Partner, Bottom = You, Left = Left Opponent, Right = Right Opponent.
@@ -91,6 +99,7 @@ Visit `http://localhost:3000` in your browser.
 | `npx tsx scripts/test_ui_portrait.ts` | Tests end-to-end UI layout, auction, and trick taking on iPhone portrait viewport |
 | `npx tsx scripts/test_sound_setting.ts` | Verifies sound & clicks mute/unmute state, persistence, reactive subscriptions, and synthesis guards |
 | `npx tsx scripts/test_new_ui_elements.ts` | Verifies Last Trick Cross orientation, winner highlighting, Big Contract display, and live team trick counts |
+| `npx tsx scripts/test_suit_accordion.ts` | Verifies dynamic suit accordion expansion, unplayable suit compression, and mobile width bounds |
 
 ---
 

@@ -131,12 +131,20 @@
   }
 
   .portrait-card-slot:not(:first-child) {
-    margin-left: -1.65rem !important; /* Overlap for 13 cards */
+    margin-left: var(--slot-margin, -1.65rem) !important; /* Overlap for 13 cards */
+  }
+
+  .portrait-card-slot.card-slot-expanded:not(:first-child) {
+    margin-left: var(--slot-margin, -0.25rem) !important; /* Auto-spaced required suit */
+  }
+
+  .portrait-card-slot.card-slot-compressed:not(:first-child) {
+    margin-left: var(--slot-margin, -2.2rem) !important; /* Shingled ineligible suits */
   }
 
   .portrait-trick-card {
-    width: 2.75rem !important;
-    height: 3.85rem !important;
+    width: 2.85rem !important;
+    height: 4rem !important;
   }
 
   .portrait-console {
@@ -220,7 +228,13 @@
     height: 4.1rem !important;
   }
   .landscape-compact-card-slot:not(:first-child) {
-    margin-left: -1rem !important;
+    margin-left: var(--slot-margin, -1rem) !important;
+  }
+  .landscape-compact-card-slot.card-slot-expanded:not(:first-child) {
+    margin-left: var(--slot-margin, 0.15rem) !important;
+  }
+  .landscape-compact-card-slot.card-slot-compressed:not(:first-child) {
+    margin-left: var(--slot-margin, -1.55rem) !important;
   }
   .landscape-compact-modal {
     padding: 0.65rem 0.9rem !important;
@@ -238,8 +252,8 @@
     height: 7.25rem !important;
   }
   .landscape-compact-trick-card {
-    width: 2.25rem !important;
-    height: 3.15rem !important;
+    width: 2.35rem !important;
+    height: 3.3rem !important;
   }
   .landscape-compact-console {
     transform: scale(0.72);
@@ -252,7 +266,13 @@
     height: 3.75rem !important;
   }
   .landscape-compact-card-slot:not(:first-child) {
-    margin-left: -0.95rem !important;
+    margin-left: var(--slot-margin, -0.95rem) !important;
+  }
+  .landscape-compact-card-slot.card-slot-expanded:not(:first-child) {
+    margin-left: var(--slot-margin, 0.1rem) !important;
+  }
+  .landscape-compact-card-slot.card-slot-compressed:not(:first-child) {
+    margin-left: var(--slot-margin, -1.45rem) !important;
   }
 }
 

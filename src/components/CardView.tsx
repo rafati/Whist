@@ -24,63 +24,6 @@ const SUIT_PATHS: Record<Suit, string> = {
   C: 'M16 2.5 C13.5 2.5 11.5 4.5 11.5 7 C11.5 8.2 12 9.2 12.8 10 C11.2 9.2 8.5 9.5 7.5 12 C6.2 14.8 8.2 18 11.5 18 C12.8 18 14 17.2 14.8 16.2 C14.2 18.2 13 22 10 25.5 L22 25.5 C19 22 17.8 18.2 17.2 16.2 C18 17.2 19.2 18 20.5 18 C23.8 18 25.8 14.8 24.5 12 C23.5 9.5 20.8 9.2 19.2 10 C20 9.2 20.5 8.2 20.5 7 C20.5 4.5 18.5 2.5 16 2.5 Z',
 };
 
-interface PipPos {
-  x: number;
-  y: number;
-  flip?: boolean;
-}
-
-const PIP_LAYOUTS: Record<Rank, PipPos[]> = {
-  A: [{ x: 50, y: 70 }],
-  '2': [{ x: 50, y: 35 }, { x: 50, y: 105, flip: true }],
-  '3': [{ x: 50, y: 35 }, { x: 50, y: 70 }, { x: 50, y: 105, flip: true }],
-  '4': [
-    { x: 30, y: 35 }, { x: 70, y: 35 },
-    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
-  ],
-  '5': [
-    { x: 30, y: 35 }, { x: 70, y: 35 },
-    { x: 50, y: 70 },
-    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
-  ],
-  '6': [
-    { x: 30, y: 35 }, { x: 70, y: 35 },
-    { x: 30, y: 70 }, { x: 70, y: 70 },
-    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
-  ],
-  '7': [
-    { x: 30, y: 35 }, { x: 70, y: 35 },
-    { x: 50, y: 52 },
-    { x: 30, y: 70 }, { x: 70, y: 70 },
-    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
-  ],
-  '8': [
-    { x: 30, y: 35 }, { x: 70, y: 35 },
-    { x: 50, y: 52 },
-    { x: 30, y: 70 }, { x: 70, y: 70 },
-    { x: 50, y: 88, flip: true },
-    { x: 30, y: 105, flip: true }, { x: 70, y: 105, flip: true }
-  ],
-  '9': [
-    { x: 30, y: 30 }, { x: 70, y: 30 },
-    { x: 30, y: 56 }, { x: 70, y: 56 },
-    { x: 50, y: 70 },
-    { x: 30, y: 84, flip: true }, { x: 70, y: 84, flip: true },
-    { x: 30, y: 110, flip: true }, { x: 70, y: 110, flip: true }
-  ],
-  '10': [
-    { x: 30, y: 28 }, { x: 70, y: 28 },
-    { x: 50, y: 44 },
-    { x: 30, y: 58 }, { x: 70, y: 58 },
-    { x: 30, y: 82, flip: true }, { x: 70, y: 82, flip: true },
-    { x: 50, y: 96, flip: true },
-    { x: 30, y: 112, flip: true }, { x: 70, y: 112, flip: true }
-  ],
-  J: [],
-  Q: [],
-  K: [],
-};
-
 export const CardView: React.FC<CardViewProps> = ({
   card,
   faceDown = false,
@@ -290,9 +233,9 @@ export const CardView: React.FC<CardViewProps> = ({
     );
   }
 
-  // Classic 2-color tournament deck: Hearts & Diamonds rich crimson (#c02626), Spades & Clubs deep midnight black (#0f172a)
+  // Strict Classic 2-Color tournament deck: Hearts & Diamonds rich crimson (#dc2626), Spades & Clubs deep midnight black (#0f172a)
   const isRed = card.suit === 'H' || card.suit === 'D';
-  const suitColorHex = isRed ? '#c02626' : '#0f172a';
+  const suitColorHex = isRed ? '#dc2626' : '#0f172a';
   const symbol = SUIT_SYMBOLS[card.suit];
 
   const isCourtCard = card.rank === 'J' || card.rank === 'Q' || card.rank === 'K';
@@ -309,12 +252,12 @@ export const CardView: React.FC<CardViewProps> = ({
       onTouchEnd={isPlayable && !isDimmed ? handleTouchEnd : undefined}
       onTouchCancel={isPlayable && !isDimmed ? handleTouchCancel : undefined}
       style={{
-        backgroundColor: '#ffffff',
+        backgroundColor: '#fdfdfc',
         boxShadow: dragOffset && dragOffset.y < -20
           ? '0 20px 40px -6px rgba(245, 158, 11, 0.7), 0 6px 18px -2px rgba(245, 158, 11, 0.5)'
           : isSelected
           ? '0 12px 28px -3px rgba(245, 158, 11, 0.65), 0 4px 10px -2px rgba(245, 158, 11, 0.5)'
-          : '0 3px 10px rgba(0, 0, 0, 0.32)',
+          : '0 4px 14px -1px rgba(0, 0, 0, 0.35), 0 2px 6px -1px rgba(0, 0, 0, 0.2)',
         transform: dragOffset
           ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) scale(1.08) rotate(${Math.min(16, Math.max(-16, dragOffset.x * 0.12))}deg)`
           : undefined,
@@ -343,31 +286,31 @@ export const CardView: React.FC<CardViewProps> = ({
         </div>
       )}
 
-      {/* Subtle Inner Card Border Frame (Bicycle standard hairline frame) */}
+      {/* Subtle Inner Card Border Frame (Classic casino hairline frame) */}
       <div className="absolute inset-0.5 sm:inset-1 border border-slate-200/90 rounded-[4px] sm:rounded-md pointer-events-none select-none z-10" />
 
-      {/* Top-Left Rank & Suit Index */}
+      {/* Top-Left Rank & Suit Index (Oversized, extra-bold high clarity) */}
       <div
-        className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 flex flex-col items-center leading-none select-none z-20"
+        className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 flex flex-col items-center leading-none select-none z-20 pointer-events-none"
         style={{ color: suitColorHex }}
       >
-        <span className="font-serif font-black text-[11px] sm:text-xs md:text-sm lg:text-base leading-none tracking-tight">
+        <span className="font-sans font-black text-xs sm:text-sm md:text-base lg:text-lg leading-none tracking-tight">
           {card.rank}
         </span>
-        <span className="text-[10px] sm:text-[11px] md:text-xs lg:text-sm leading-none mt-0.5 font-bold">
+        <span className="text-[11px] sm:text-xs md:text-sm lg:text-base leading-none mt-0.5 font-bold">
           {symbol}
         </span>
       </div>
 
       {/* Bottom-Right Mirrored Rank & Suit Index (Reversible Card Standard) */}
       <div
-        className="absolute bottom-1 right-1 sm:bottom-1.5 sm:right-1.5 flex flex-col items-center leading-none select-none z-20 rotate-180"
+        className="absolute bottom-1 right-1 sm:bottom-1.5 sm:right-1.5 flex flex-col items-center leading-none select-none z-20 rotate-180 pointer-events-none"
         style={{ color: suitColorHex }}
       >
-        <span className="font-serif font-black text-[11px] sm:text-xs md:text-sm lg:text-base leading-none tracking-tight">
+        <span className="font-sans font-black text-xs sm:text-sm md:text-base lg:text-lg leading-none tracking-tight">
           {card.rank}
         </span>
-        <span className="text-[10px] sm:text-[11px] md:text-xs lg:text-sm leading-none mt-0.5 font-bold">
+        <span className="text-[11px] sm:text-xs md:text-sm lg:text-base leading-none mt-0.5 font-bold">
           {symbol}
         </span>
       </div>
@@ -396,21 +339,13 @@ export const CardView: React.FC<CardViewProps> = ({
           </svg>
         </div>
       ) : (
-        /* Traditional Standard Geometric Pip Layout for Number Cards (2 to 10) & Aces */
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none p-1 sm:p-1.5">
-          <svg viewBox="0 0 100 140" className="w-full h-full select-none">
-            {PIP_LAYOUTS[card.rank]?.map((pip, idx) => (
-              <g
-                key={idx}
-                transform={`translate(${pip.x - 7}, ${pip.y - 7}) ${pip.flip ? 'rotate(180 7 7)' : ''}`}
-              >
-                <path
-                  d={SUIT_PATHS[card.suit]}
-                  fill={suitColorHex}
-                  transform="scale(0.48)"
-                />
-              </g>
-            ))}
+        /* High-Clarity Single Giant Center Pip for Number Cards (2 to 10) & Aces */
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none p-2 sm:p-2.5">
+          <svg viewBox="0 0 32 30" className="w-[52%] h-[52%] drop-shadow-xs select-none">
+            <path
+              d={SUIT_PATHS[card.suit]}
+              fill={suitColorHex}
+            />
           </svg>
         </div>
       )}
