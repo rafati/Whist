@@ -46,12 +46,12 @@ export const ANIMATION_CONFIG = {
   /**
    * Flight duration (in ms) for an interactive thrown object (shoe, beer, medal).
    */
-  THROW_FLIGHT_DURATION_MS: 650,
+  THROW_FLIGHT_DURATION_MS: 700,
 
   /**
    * Duration (in ms) of the hit reaction effect (shake, splash, particles).
    */
-  THROW_HIT_DURATION_MS: 1200,
+  THROW_HIT_DURATION_MS: 1450,
 
   /**
    * Cooldown period (in ms) between consecutive throws.

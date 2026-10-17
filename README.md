@@ -33,10 +33,13 @@ A real-time, 4-player trick-taking partnership card game (**تدفيع الثم�
 * **AI & Simulation Lab**:
   * **Monte Carlo Simulation Runner**: Headless statistical engine capable of simulating thousands of matches to benchmark strategy.
   * **AI Strategy Optimizer (Google Gemini API)**: Analyzes match telemetry and synthesizes optimized strategic parameters for the bot engine.
-* **Interactive Throwable Objects**:
-  * Real-time table banter: seated players can throw a **Used Shoe** (👞), **Open Beer Bottle** (🍾), or **Gold Medal** (🥇) across the table at any player or bot.
-  * 3D parabolic Bezier flight trajectories with rotational tumbling, particle trails, and cartoon impact explosions (dust & stars, foam splash, golden sparkles).
-  * Recoil animations and reaction bubbles for both human and AI bot avatars.
+* **Interactive Throwable Objects (Custom Vector Graphics & Physics Choreography)**:
+  * Real-time table banter with custom multi-layered SVG artwork (`src/components/ThrowableArts.tsx`): throw a **Worn Leather Boot**, **Foaming Emerald Beer Bottle**, or **Royal Gold Medal** across the table at any player or bot.
+  * **3D Parabolic Flight & Ground Shadow**: Projectiles launch with anticipation wind-up, a separated table-felt ground shadow that scales with height, and multi-point particle wake trails (dust puffs, fizz bubbles, or golden star glints).
+  * **Multi-Stage Physics Impact Choreography**:
+    * **Worn Boot**: Triggers a spiky comic starburst flash, stamps a muddy sole tread onto the avatar, orbits dazed golden stars, and ricochet-bounces off with gravity.
+    * **Foaming Beer**: Pops a 14-droplet gravity fountain of golden beer and white foam that splashes and drips down over the target's seat pod.
+    * **Royal Gold Medal**: Settles onto the target's avatar with a `linear()` spring bounce, rotating golden sunburst god-rays, and 16 fluttering multi-colored confetti ribbons.
   * Synthesized procedural sound effects via native Web Audio API.
 * **High-Clarity Card Redesign & Giant Rank/Suit Indices**:
   * **Giant Top-Left Rank & Vector Suit Indices**: Extra-large bold rank typography (`24px–36px font-black`) paired with a crisp inline vector SVG suit symbol (`16px–25px`) directly beneath it, remaining 100% uncovered even when cards are shingled.

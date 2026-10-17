@@ -263,15 +263,16 @@ A full-mesh peer-to-peer voice chat system integrated into the table interface (
 
 Players at the table can express banter, celebration, or frustration by throwing interactive animated objects at other players (humans or bots) in real-time.
 
-### 8.1 The Three Items
-1. 👞 **Used Shoe**: A dusty, battered boot that tumbles $720^\circ$ end-over-end across the table, impacting with a cartoon dust ring and dizzy spinning stars (`"Thump!"`).
-2. 🍾 **Open Beer Bottle**: A green glass bottle spinning in an arc with bubbling liquid trails, producing a frothy splash burst and spray droplets on impact (`"Cheers!"`).
-3. 🥇 **Gold Medal**: A gleaming gold medal with twinkling ribbon trails, generating a golden victory halo and confetti burst on impact (`"Champion!"`).
+### 8.1 Custom Vector Artwork (`src/components/ThrowableArts.tsx`) & Impact Choreography
+1. **Worn Leather Boot (`shoe`)**: Custom multi-layered SVG boot with stitched toe cap, rugged cleated sole, brass eyelets, and flapping shoelaces. Tumbles $900^\circ$ end-over-end with a separated ground shadow and dust wake trail. On impact, triggers a spiky comic starburst (`ComicImpactBurstArt`), stamps a muddy sole tread (`BootPrintArt`) onto the target's avatar, orbits dazed golden stars, and ricochet-bounces off along a secondary gravity arc.
+2. **Foaming Beer Bottle (`beer`)**: Custom emerald-green glass bottle SVG with golden liquid glow, gold neck foil, star crest label, and overflowing foam head. Spins $540^\circ$ in an arc trailing golden fizz droplets and white foam bubbles. On impact, tilts and pops a 14-particle gravity fountain of golden beer droplets and white foam blobs that splash and drip down over the target's seat pod.
+3. **Royal Gold Medal (`medal`)**: Custom 3D bevelled gold medallion SVG with crimson-and-navy V-neck ribbon and embossed star crest. Swings along a high arc leaving 4-point golden star glints. On impact, settles onto the target's avatar with a `linear()` bounce/spring drop (`.medal-award-spring`), rotating golden god-rays (`SunburstRaysArt`), and 16 fluttering multi-colored confetti ribbons.
 
-### 8.2 UI & Targeting
-* **Dock Placement**: Docked on the **right side of the player console** (in the compact header row of the bottom hand footer). Also available in the bottom-right corner when seated in the waiting lobby.
+### 8.2 UI, 3D Ground Shadow & Targeting
+* **Dock Placement**: Docked on the **right side of the player console** (in the compact header row of the bottom hand footer), showcasing the custom SVG icons with hover tilt/scale transitions.
+* **Separated Table-Felt Ground Shadow**: During flight, a soft blurred elliptical shadow travels along the linear table surface path between thrower and target, shrinking as the projectile arcs higher in Z-space and converging beneath it at impact.
 * **Direct Targeting Flow**: Tapping an item enters **Targeting Mode**, causing all eligible target player avatar pods to pulse with glowing crosshairs. Clicking any player's pod dispatches the throw.
-* **Hit Reactions**: Both bot and human avatars perform a physical spring recoil shake (`.avatar-recoiling`) with unique comic speech bubbles.
+* **Hit Reactions**: Both bot and human avatars perform a physical spring recoil shake (`.avatar-recoiling` powered by CSS `linear()` spring easing with `cubic-bezier` fallback) with unique comic speech bubbles.
 * **Audio Synthesis**: Native browser `AudioContext` synthesizer provides dynamic whoosh sounds and custom impact sound effects without external audio files.
 * **Rate-Limiting**: 1.5–2.5 second cooldown per seat enforced client-side and server-side.
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ThrowableObjectType } from '../types.ts';
 import { X } from 'lucide-react';
 import { playClickSound } from '../lib/throwSounds.ts';
+import { ThrowableItemGraphic } from './ThrowableArts.tsx';
 
 interface ThrowableDockProps {
   selectedItem: ThrowableObjectType | null;
@@ -33,33 +34,29 @@ export const ThrowableDock: React.FC<ThrowableDockProps> = ({
     type: ThrowableObjectType;
     name: string;
     description: string;
-    symbol: string;
     accentColor: string;
     borderActive: string;
   }> = [
     {
       type: 'shoe',
-      name: 'Used Shoe',
-      description: 'Hurl a dusty boot at anyone',
-      symbol: '👞',
-      accentColor: 'from-amber-900 to-amber-950',
-      borderActive: 'border-amber-400 ring-2 ring-amber-400/80 shadow-[0_0_15px_rgba(251,191,36,0.6)]',
+      name: 'Worn Boot',
+      description: 'Hurl a rugged leather boot at anyone',
+      accentColor: 'from-amber-900/90 to-amber-950/95',
+      borderActive: 'border-amber-400 ring-2 ring-amber-400/80 shadow-[0_0_16px_rgba(251,191,36,0.75)]',
     },
     {
       type: 'beer',
-      name: 'Beer Bottle',
-      description: 'Splash foaming beer over a player',
-      symbol: '🍾',
-      accentColor: 'from-emerald-900 to-green-950',
-      borderActive: 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-[0_0_15px_rgba(52,211,153,0.6)]',
+      name: 'Foaming Beer',
+      description: 'Splash frothy beer over a player',
+      accentColor: 'from-emerald-900/90 to-green-950/95',
+      borderActive: 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-[0_0_16px_rgba(52,211,153,0.75)]',
     },
     {
       type: 'medal',
-      name: 'Gold Medal',
-      description: 'Award a victory medal with glints',
-      symbol: '🥇',
-      accentColor: 'from-yellow-700 to-amber-900',
-      borderActive: 'border-yellow-300 ring-2 ring-yellow-400/80 shadow-[0_0_18px_rgba(250,204,21,0.8)]',
+      name: 'Royal Gold Medal',
+      description: 'Award a gleaming victory medal with confetti',
+      accentColor: 'from-yellow-700/90 to-amber-900/95',
+      borderActive: 'border-yellow-300 ring-2 ring-yellow-400/80 shadow-[0_0_18px_rgba(250,204,21,0.85)]',
     },
   ];
 
@@ -67,11 +64,11 @@ export const ThrowableDock: React.FC<ThrowableDockProps> = ({
     <div
       data-throw-dock
       onClick={(e) => e.stopPropagation()}
-      className="flex items-center gap-1 sm:gap-1.5 shrink-0 bg-slate-950/85 backdrop-blur-md border border-emerald-900/40 rounded-xl sm:rounded-2xl px-1.5 sm:px-2 py-1 shadow-lg relative select-none"
+      className="flex items-center gap-1 sm:gap-1.5 shrink-0 bg-slate-950/90 backdrop-blur-md border border-emerald-800/50 rounded-xl sm:rounded-2xl px-1.5 sm:px-2 py-1 shadow-xl relative select-none"
     >
       {/* Active Targeting Banner Tag */}
       {selectedItem && (
-        <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1 whitespace-nowrap animate-pulse z-30">
+        <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-[9px] sm:text-[10px] px-2.5 py-0.5 rounded-full shadow-lg flex items-center gap-1 whitespace-nowrap animate-pulse z-30 border border-white">
           <span>Tap player avatar to throw!</span>
           <button
             type="button"
@@ -109,18 +106,22 @@ export const ThrowableDock: React.FC<ThrowableDockProps> = ({
             }}
             title={`${item.name} • ${item.description}`}
             className={`
-              relative w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center text-sm sm:text-base
+              group relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center
               transition-all duration-150 cursor-pointer
               ${
                 isSelected
-                  ? `${item.borderActive} scale-110 bg-slate-900 z-10`
+                  ? `bg-gradient-to-br ${item.accentColor} ${item.borderActive} scale-112 -translate-y-0.5 z-10`
                   : isDisabled
                   ? 'opacity-40 bg-slate-900/60 border border-slate-800 cursor-not-allowed'
-                  : 'bg-slate-900/90 border border-slate-700/80 hover:border-slate-500 hover:scale-105 active:scale-95'
+                  : 'bg-slate-900/95 border border-slate-700/80 hover:border-amber-400/70 hover:scale-108 hover:-translate-y-0.5 active:scale-95'
               }
             `}
           >
-            <span className="drop-shadow filter leading-none">{item.symbol}</span>
+            <ThrowableItemGraphic
+              type={item.type}
+              size={26}
+              className="transition-transform duration-150 group-hover:rotate-[-8deg] group-hover:scale-105"
+            />
 
             {/* Cooldown Overlay */}
             {isOnCooldown && (
