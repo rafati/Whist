@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../lib/authContext.tsx';
 import { useSocket } from '../lib/socketContext.tsx';
 import {
@@ -8,6 +8,7 @@ import {
   Seat,
   ThrowableObjectType,
   ThrownObjectEvent,
+  UserProfile,
 } from '../types.ts';
 import {
   getTeam,
@@ -277,6 +278,45 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Disconnected human player 10-second countdown & bot replacement notice state
+  const [nowTick, setNowTick] = useState<number>(() => Date.now());
+  const [botReplacementNotice, setBotReplacementNotice] = useState<{ id: string; text: string } | null>(null);
+  const prevSeatsRef = useRef<Record<Seat, UserProfile | null>>(seats);
+
+  const hasDisconnectedPlayers = (Object.keys(seats) as Seat[]).some(
+    (s) => Boolean(seats[s]?.isDisconnected && seats[s]?.botReplaceAt)
+  );
+
+  useEffect(() => {
+    if (!hasDisconnectedPlayers) return;
+    setNowTick(Date.now());
+    const interval = setInterval(() => {
+      setNowTick(Date.now());
+    }, 250);
+    return () => clearInterval(interval);
+  }, [hasDisconnectedPlayers]);
+
+  useEffect(() => {
+    const prevSeats = prevSeatsRef.current;
+    for (const s of ['North', 'West', 'South', 'East'] as Seat[]) {
+      const prev = prevSeats[s];
+      const curr = seats[s];
+      if (prev && !prev.isBot && prev.isDisconnected && curr && curr.isBot) {
+        const noticeId = `bot_replace_${Date.now()}_${s}`;
+        setBotReplacementNotice({
+          id: noticeId,
+          text: `${prev.name} did not return — replaced by ${curr.name}`,
+        });
+        const timer = setTimeout(() => {
+          setBotReplacementNotice((latest) => (latest?.id === noticeId ? null : latest));
+        }, 4500);
+        prevSeatsRef.current = seats;
+        return () => clearTimeout(timer);
+      }
+    }
+    prevSeatsRef.current = seats;
+  }, [seats]);
 
   // Interactive throwable objects state
   const [selectedThrowable, setSelectedThrowable] = useState<ThrowableObjectType | null>(null);
@@ -612,6 +652,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     const isTargetable = Boolean(selectedThrowable && mySeat && mySeat !== seat && player);
     const seatBid = gameState.bids.find((b) => b.seat === seat);
     const seatVoice = getSeatVoiceState(seat);
+    const isDisconnected = Boolean(player && !player.isBot && player.isDisconnected);
+    const secondsLeft =
+      isDisconnected && player?.botReplaceAt
+        ? Math.max(1, Math.ceil((player.botReplaceAt - nowTick) / 1000))
+        : 0;
 
     return (
       <div
@@ -637,9 +682,10 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-2xl transition-all duration-200 relative
                 ${isTargetable ? 'cursor-crosshair ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900 animate-pulse scale-105 hover:scale-115 shadow-[0_0_18px_rgba(251,191,36,0.9)] z-40' : ''}
                 ${isRecoiling ? 'avatar-recoiling' : ''}
-                ${isCelebrated ? 'ring-3 ring-amber-400 bg-amber-950/90 shadow-[0_0_22px_rgba(251,191,36,0.9)] scale-110 z-30' : ''}
-                ${!isCelebrated && !isTargetable && (isCurrentBidder || isCurrentPlayer) ? 'ring-2 ring-amber-400 bg-amber-950/85 shadow-lg scale-105' : ''}
-                ${!isCelebrated && !isTargetable && !(isCurrentBidder || isCurrentPlayer) ? 'bg-slate-950/90 border border-emerald-800/50 shadow-md' : ''}
+                ${isDisconnected ? 'ring-2 ring-rose-500/90 bg-rose-950/90 border border-rose-500/80 shadow-[0_0_16px_rgba(244,63,94,0.55)]' : ''}
+                ${!isDisconnected && isCelebrated ? 'ring-3 ring-amber-400 bg-amber-950/90 shadow-[0_0_22px_rgba(251,191,36,0.9)] scale-110 z-30' : ''}
+                ${!isDisconnected && !isCelebrated && !isTargetable && (isCurrentBidder || isCurrentPlayer) ? 'ring-2 ring-amber-400 bg-amber-950/85 shadow-lg scale-105' : ''}
+                ${!isDisconnected && !isCelebrated && !isTargetable && !(isCurrentBidder || isCurrentPlayer) ? 'bg-slate-950/90 border border-emerald-800/50 shadow-md' : ''}
               `}
             >
               {/* Active Targeting Reticle Tag */}
@@ -648,8 +694,22 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   TARGET 🎯
                 </div>
               )}
-              {/* Bid Speech Bubble During Bidding & Persistent Bid / Winning Contract Post-Auction */}
+              {/* Disconnected Countdown Pill OR Bid Speech Bubble / Winning Contract Post-Auction */}
               {(() => {
+                if (isDisconnected) {
+                  return (
+                    <div
+                      data-testid={`seat-disconnected-badge-${seat}`}
+                      className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-5'} left-1/2 -translate-x-1/2 z-40 whitespace-nowrap pointer-events-none`}
+                    >
+                      <span className="bg-rose-600 border border-rose-300 text-white font-extrabold text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1 animate-pulse">
+                        <LogOut className="w-2.5 h-2.5 text-white shrink-0" />
+                        <span>Left • Bot in {secondsLeft}s</span>
+                      </span>
+                    </div>
+                  );
+                }
+
                 // Phase 1: During Active Bidding
                 if (gameState.phase === 'bidding') {
                   return (
@@ -729,7 +789,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 alt={player.name}
                 referrerPolicy="no-referrer"
                 className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border object-cover shadow bg-slate-800 transition-all ${
-                  seatVoice?.isSpeaking
+                  isDisconnected
+                    ? 'opacity-60 grayscale-[40%] border-rose-400'
+                    : seatVoice?.isSpeaking
                     ? 'ring-2 ring-emerald-400 ring-offset-1 ring-offset-slate-900 border-emerald-300 animate-pulse'
                     : team === 'TeamA'
                     ? 'border-emerald-400/80'
@@ -791,13 +853,19 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 </span>
               </div>
               <div className="flex items-center gap-1 text-[8px] sm:text-[9px] font-semibold">
-                <span className={team === 'TeamA' ? 'text-emerald-400' : 'text-blue-400'}>
-                  {isPartner ? 'Partner' : team === 'TeamA' ? 'Team 1' : 'Team 2'}
-                </span>
-                {gameState.phase === 'playing' && (
+                {isDisconnected ? (
+                  <span className="text-rose-300 font-bold truncate">Left ({secondsLeft}s)</span>
+                ) : (
                   <>
-                    <span className="text-slate-600">•</span>
-                    <span className="text-amber-300 font-mono font-bold">{tricksWon}T</span>
+                    <span className={team === 'TeamA' ? 'text-emerald-400' : 'text-blue-400'}>
+                      {isPartner ? 'Partner' : team === 'TeamA' ? 'Team 1' : 'Team 2'}
+                    </span>
+                    {gameState.phase === 'playing' && (
+                      <>
+                        <span className="text-slate-600">•</span>
+                        <span className="text-amber-300 font-mono font-bold">{tricksWon}T</span>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -1101,6 +1169,39 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
       {/* Main Table Arena */}
       <main className="portrait-table-container flex-1 min-h-0 relative flex items-center justify-center p-1 sm:p-1.5 overflow-clip">
+        {/* Disconnected Player Countdown Banner & Bot Replacement Toast */}
+        {(hasDisconnectedPlayers || botReplacementNotice) && (
+          <div className="absolute top-1.5 sm:top-2.5 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-1.5 w-max max-w-[92vw]">
+            {(['North', 'West', 'South', 'East'] as Seat[]).map((s) => {
+              const p = seats[s];
+              if (!p || p.isBot || !p.isDisconnected || !p.botReplaceAt) return null;
+              const secLeft = Math.max(1, Math.ceil((p.botReplaceAt - nowTick) / 1000));
+              return (
+                <div
+                  key={s}
+                  data-testid={`disconnect-banner-${s}`}
+                  className="bg-rose-950/95 border border-rose-500/85 text-rose-100 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full shadow-[0_6px_20px_rgba(0,0,0,0.65)] flex items-center gap-2 text-[10px] sm:text-xs font-semibold backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-rose-400 animate-pulse shrink-0" />
+                  <span className="truncate">
+                    <strong className="text-white">{p.name}</strong> left the game — replacing with Bot in{' '}
+                    <strong className="text-amber-300 font-mono">{secLeft}s</strong>
+                  </span>
+                </div>
+              );
+            })}
+            {botReplacementNotice && (
+              <div
+                data-testid="bot-replacement-toast"
+                className="bg-slate-950/95 border border-emerald-500/80 text-emerald-100 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full shadow-[0_6px_20px_rgba(0,0,0,0.65)] flex items-center gap-2 text-[10px] sm:text-xs font-semibold backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200"
+              >
+                <Bot className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="truncate">{botReplacementNotice.text}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Table Stage: Rich Hardwood Rail Borders with Casino Green Felt */}
         <div className="portrait-table-wrap landscape-compact-table-wrap relative w-full max-w-5xl h-full md:aspect-[16/10] rounded-[24px] sm:rounded-[36px] md:rounded-[52px] table-wood-rail table-brass-bevel p-1 sm:p-2.5 md:p-3.5 shadow-2xl overflow-visible flex items-center justify-center">
           {/* Inner Casino Green Felt Surface */}

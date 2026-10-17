@@ -61,7 +61,109 @@ const rooms = new Map<string, Room>();
 const clientSockets = new Map<WebSocket, { roomId?: string; user?: UserProfile }>();
 const botTimers = new Map<string, NodeJS.Timeout>();
 const misdealTimers = new Map<string, NodeJS.Timeout>();
+const disconnectTimers = new Map<string, NodeJS.Timeout>(); // key: `${roomId}:${seat}`
 const throwCooldowns = new Map<string, number>();
+
+export const BOT_REPLACE_DELAY_MS = 10000; // 10 seconds before replacing a disconnected human player with a bot
+
+const BOT_NAMES: Record<Seat, string> = {
+  North: 'Bot Polaris',
+  West: 'Bot Zephyr',
+  South: 'Bot Atlas',
+  East: 'Bot Orion',
+};
+
+const BOT_AVATARS: Record<Seat, string> = {
+  North: 'https://api.dicebear.com/7.x/bottts/svg?seed=Polaris&backgroundColor=1e293b',
+  West: 'https://api.dicebear.com/7.x/bottts/svg?seed=Zephyr&backgroundColor=1e293b',
+  South: 'https://api.dicebear.com/7.x/bottts/svg?seed=Atlas&backgroundColor=1e293b',
+  East: 'https://api.dicebear.com/7.x/bottts/svg?seed=Orion&backgroundColor=1e293b',
+};
+
+function clearDisconnectTimer(roomId: string, seat: Seat) {
+  const key = `${roomId}:${seat}`;
+  if (disconnectTimers.has(key)) {
+    clearTimeout(disconnectTimers.get(key)!);
+    disconnectTimers.delete(key);
+  }
+}
+
+function clearAllRoomDisconnectTimers(roomId: string) {
+  for (const s of SEATS) {
+    clearDisconnectTimer(roomId, s);
+  }
+}
+
+function replaceDisconnectedPlayerWithBot(roomId: string, seat: Seat) {
+  clearDisconnectTimer(roomId, seat);
+  const room = rooms.get(roomId);
+  if (!room) return;
+  const occupant = room.seats[seat];
+  if (!occupant || occupant.isBot || !occupant.isDisconnected) return;
+
+  room.seats[seat] = {
+    id: `bot_${seat.toLowerCase()}`,
+    name: BOT_NAMES[seat],
+    email: `${seat.toLowerCase()}@ai.studio`,
+    avatar: BOT_AVATARS[seat],
+    isBot: true,
+  };
+
+  broadcastRoom(room.id);
+  broadcastRoomList();
+  scheduleBotActionIfNeeded(room.id);
+}
+
+function handleHumanPlayerLeftRoom(roomId: string, userId: string) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  // Check if this user still has any other active open socket connected to this room
+  for (const [sock, info] of clientSockets.entries()) {
+    if (info.roomId === roomId && info.user?.id === userId && sock.readyState === WebSocket.OPEN) {
+      return;
+    }
+  }
+
+  // If game is in 'waiting' phase, vacate the seat immediately
+  if (room.gameState.phase === 'waiting') {
+    let vacated = false;
+    for (const s of SEATS) {
+      if (room.seats[s]?.id === userId && !room.seats[s]?.isBot) {
+        clearDisconnectTimer(roomId, s);
+        room.seats[s] = null;
+        vacated = true;
+      }
+    }
+    if (vacated) {
+      broadcastRoom(room.id);
+      broadcastRoomList();
+    }
+    return;
+  }
+
+  // Active game phase: mark player as disconnected and start 10-second bot replacement countdown
+  let updated = false;
+  const replaceAt = Date.now() + BOT_REPLACE_DELAY_MS;
+  for (const s of SEATS) {
+    const occupant = room.seats[s];
+    if (occupant && !occupant.isBot && occupant.id === userId && !occupant.isDisconnected) {
+      occupant.isDisconnected = true;
+      occupant.botReplaceAt = replaceAt;
+      clearDisconnectTimer(roomId, s);
+      const timer = setTimeout(() => {
+        replaceDisconnectedPlayerWithBot(roomId, s);
+      }, BOT_REPLACE_DELAY_MS);
+      disconnectTimers.set(`${roomId}:${s}`, timer);
+      updated = true;
+    }
+  }
+
+  if (updated) {
+    broadcastRoom(room.id);
+    broadcastRoomList();
+  }
+}
 
 // Voice Chat Peer State
 interface ServerVoicePeer {
@@ -537,7 +639,26 @@ wss.on('connection', (ws) => {
           return;
         }
         clientSockets.set(ws, { roomId: msg.roomId, user: msg.user });
-        ws.send(JSON.stringify({ type: 'room_state', room } satisfies ServerMessage));
+
+        // If this user was seated in this room and marked as disconnected (within 10s grace window), restore them
+        let restored = false;
+        if (msg.user) {
+          for (const s of SEATS) {
+            const occupant = room.seats[s];
+            if (occupant && !occupant.isBot && occupant.id === msg.user.id && occupant.isDisconnected) {
+              clearDisconnectTimer(room.id, s);
+              occupant.isDisconnected = false;
+              delete occupant.botReplaceAt;
+              restored = true;
+            }
+          }
+        }
+
+        if (restored) {
+          broadcastRoom(room.id);
+        } else {
+          ws.send(JSON.stringify({ type: 'room_state', room } satisfies ServerMessage));
+        }
         broadcastRoomList();
         return;
       }
@@ -545,20 +666,11 @@ wss.on('connection', (ws) => {
       if (msg.type === 'leave_room') {
         const info = clientSockets.get(ws);
         const roomId = msg.roomId || info?.roomId;
+        const userId = info?.user?.id;
+        if (info) {
+          info.roomId = undefined;
+        }
         if (roomId) {
-          const room = rooms.get(roomId);
-          if (room && room.gameState.phase === 'waiting' && info?.user) {
-            let vacated = false;
-            for (const s of SEATS) {
-              if (room.seats[s]?.id === info.user.id) {
-                room.seats[s] = null;
-                vacated = true;
-              }
-            }
-            if (vacated) {
-              broadcastRoom(room.id);
-            }
-          }
           const peers = roomVoicePeers.get(roomId);
           if (peers) {
             for (const [peerId, peer] of peers.entries()) {
@@ -567,9 +679,9 @@ wss.on('connection', (ws) => {
               }
             }
           }
-        }
-        if (info) {
-          info.roomId = undefined;
+          if (userId) {
+            handleHumanPlayerLeftRoom(roomId, userId);
+          }
         }
         broadcastRoomList();
         return;
@@ -589,9 +701,12 @@ wss.on('connection', (ws) => {
         // Vacate any previous seat this user was in
         for (const s of SEATS) {
           if (room.seats[s]?.id === msg.user.id) {
+            clearDisconnectTimer(room.id, s);
             room.seats[s] = null;
           }
         }
+
+        clearDisconnectTimer(room.id, msg.seat);
 
         // Claim target seat with Google profile
         room.seats[msg.seat] = {
@@ -619,10 +734,14 @@ wss.on('connection', (ws) => {
       if (msg.type === 'leave_seat') {
         const room = rooms.get(msg.roomId);
         if (!room) return;
+        const occupant = room.seats[msg.seat];
         if (room.gameState.phase === 'waiting') {
+          clearDisconnectTimer(room.id, msg.seat);
           room.seats[msg.seat] = null;
           broadcastRoom(room.id);
           broadcastRoomList();
+        } else if (occupant && !occupant.isBot) {
+          handleHumanPlayerLeftRoom(room.id, occupant.id);
         }
         return;
       }
@@ -758,6 +877,7 @@ wss.on('connection', (ws) => {
             clearTimeout(misdealTimer);
             misdealTimers.delete(roomId);
           }
+          clearAllRoomDisconnectTimers(roomId);
           rooms.delete(roomId);
           roomVoicePeers.delete(roomId);
           for (const [socket, info] of clientSockets.entries()) {
@@ -938,7 +1058,15 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    const info = clientSockets.get(ws);
+    const closedRoomId = info?.roomId;
+    const closedUserId = info?.user?.id;
     clientSockets.delete(ws);
+
+    if (closedRoomId && closedUserId) {
+      handleHumanPlayerLeftRoom(closedRoomId, closedUserId);
+    }
+
     // Remove peer from any voice room
     for (const [roomId, peers] of roomVoicePeers.entries()) {
       for (const [peerId, peer] of peers.entries()) {
@@ -1052,6 +1180,8 @@ app.delete('/api/rooms/:roomId', (req, res) => {
     clearTimeout(misdealTimer);
     misdealTimers.delete(roomId);
   }
+
+  clearAllRoomDisconnectTimers(roomId);
 
   rooms.delete(roomId);
   roomVoicePeers.delete(roomId);

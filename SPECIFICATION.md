@@ -353,6 +353,23 @@ All procedural synthesized audio (card slide/snap clicks, projectile flight whoo
 * **Uniform Spacing Fallback**: When no suit is led yet (opening lead) or the player is void in the led suit, all cards distribute with uniform standard spacing (`.card-slot-standard`).
 * **Fluid Physics Transitions**: `transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin 260ms cubic-bezier(0.2, 0.8, 0.2, 1)` ensures smooth card slide animations when turns and tricks transition.
 
+---
 
+## 12. Human Player Disconnect & 10-Second Automatic Bot Replacement (`server.ts` & `VirtualTable.tsx`)
 
+### 12.1 Server Disconnect Detection & 10-Second Grace Timer (`server.ts`)
+* **Trigger Conditions**: When a seated human player leaves an active game (`room.gameState.phase !== 'waiting'`) via `leave_room`, `leave_seat`, or WebSocket disconnection (`ws.on('close')`), `handleHumanPlayerLeftRoom(roomId, userId)` is invoked.
+* **Multi-Tab Socket Guard**: Before marking a player as disconnected, the server checks if the same `userId` still has any other active open WebSocket connected to `roomId`.
+* **Grace Window State (`BOT_REPLACE_DELAY_MS = 10000`)**:
+  * The player's `UserProfile` in `room.seats[seat]` is marked with `isDisconnected: true` and `botReplaceAt: Date.now() + 10000`.
+  * The updated `room_state` is broadcast immediately to all remaining players at the table.
+  * A 10-second timer (`disconnectTimers.set("${roomId}:${seat}", timer)`) is scheduled to invoke `replaceDisconnectedPlayerWithBot(roomId, seat)`.
+* **Seamless Return Within 10 Seconds**:
+  * If the player reconnects (`join_room` or `claim_seat`) with the same `user.id` before the 10-second timer expires, `clearDisconnectTimer(room.id, seat)` cancels the pending timer, `isDisconnected` and `botReplaceAt` are cleared, and `broadcastRoom(room.id)` restores the player seamlessly to their seat and hand.
+* **Automatic Bot Replacement After 10 Seconds**:
+  * If the player does not return within 10 seconds, `replaceDisconnectedPlayerWithBot(roomId, seat)` replaces `room.seats[seat]` with the corresponding seat AI Bot (`Bot Polaris`, `Bot Zephyr`, `Bot Atlas`, or `Bot Orion`, with `isBot: true`), broadcasts the updated room state, and immediately calls `scheduleBotActionIfNeeded(room.id)` so the bot seamlessly plays any pending bid, trump declaration, or trick turn.
 
+### 12.2 Table & Seat Pod Visual Indicators (`src/components/VirtualTable.tsx`)
+* **Seat Pod Badge**: Any seat with `player.isDisconnected === true` displays a pulsing rose alert badge (`Left • Bot in Xs`), a rose-highlighted pod border, a slightly dimmed avatar, and a live `Left (Xs)` status label updated every `250ms`.
+* **Top-Center Table Alert Banner**: A floating banner at the top-center of the table arena announces `{player.name} left the game — replacing with Bot in {secLeft}s`.
+* **Bot Replacement Toast**: When the 10-second countdown completes and the seat transitions from a disconnected human to an AI Bot, a confirmation toast (`{prev.name} did not return — replaced by {curr.name}`) is displayed for 4.5 seconds.

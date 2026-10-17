@@ -57,9 +57,10 @@ A real-time, 4-player trick-taking partnership card game built with React 19, Vi
   * Easily disable or enable all procedural game audio (card landing snap, projectile whooshes, impacts, and medal chimes) and interactive click feedback.
   * 1-click access via the **Lobby header**, **Table header**, and inside the **Table Options** menu.
   * Preference is automatically saved to `localStorage` across page refreshes and browser sessions.
-* **Multiplayer & Bot Play**:
+* **Multiplayer, Reconnection Grace Window & Automatic Bot Takeover**:
   * Real-time WebSocket room matchmaking and table synchronization.
   * "Sit & Fill Bots" button allows immediate play with AI bots across Casual and Super Bot difficulties.
+  * **10-Second Disconnect Countdown & Bot Replacement**: When a seated human player leaves an active game (or closes/disconnects their browser tab), the table immediately displays a live **`Left • Bot in 10s`** badge on their seat pod and a top-center alert banner counting down 10 seconds. If the player returns within 10 seconds, they seamlessly resume their seat and hand; otherwise, an AI Bot automatically replaces them after 10 seconds and plays their turns so the match continues without interruption.
 
 ---
 
@@ -100,6 +101,7 @@ Visit `http://localhost:3000` in your browser.
 | `npx tsx scripts/test_sound_setting.ts` | Verifies sound & clicks mute/unmute state, persistence, reactive subscriptions, and synthesis guards |
 | `npx tsx scripts/test_new_ui_elements.ts` | Verifies Last Trick Cross orientation, winner highlighting, Big Contract display, and live team trick counts |
 | `npx tsx scripts/test_suit_accordion.ts` | Verifies dynamic suit accordion expansion, unplayable suit compression, and mobile width bounds |
+| `npx tsx scripts/test_player_disconnect_bot_replace.ts` | Verifies human player leave indicator, 10-second return grace window, and automatic bot replacement after 10 seconds |
 
 ---
 

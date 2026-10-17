@@ -19,6 +19,8 @@ export interface UserProfile {
   email: string;
   avatar: string;
   isBot?: boolean;
+  isDisconnected?: boolean;
+  botReplaceAt?: number;
 }
 
 export type ContractType = 'Suit' | 'NT';
