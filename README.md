@@ -1,6 +1,6 @@
-# Remix Online Multiplayer Card Game
+# تدفيع الثمن — Online Multiplayer Card Game
 
-A real-time, 4-player trick-taking partnership card game built with React 19, Vite, Tailwind CSS v4, Node.js (Express + WebSockets `ws`), WebRTC Voice Chat, and Google Gemini AI.
+A real-time, 4-player trick-taking partnership card game (**تدفيع الثمن**) built with React 19, Vite, Tailwind CSS v4, Node.js (Express + WebSockets `ws`), WebRTC Voice Chat, and Google Gemini AI.
 
 ---
 
@@ -57,10 +57,10 @@ A real-time, 4-player trick-taking partnership card game built with React 19, Vi
   * Easily disable or enable all procedural game audio (card landing snap, projectile whooshes, impacts, and medal chimes) and interactive click feedback.
   * 1-click access via the **Lobby header**, **Table header**, and inside the **Table Options** menu.
   * Preference is automatically saved to `localStorage` across page refreshes and browser sessions.
-* **Multiplayer, Reconnection Grace Window & Automatic Bot Takeover**:
+* **Multiplayer, Named AI Bots & 10-Second Reconnection Grace Window**:
   * Real-time WebSocket room matchmaking and table synchronization.
-  * "Sit & Fill Bots" button allows immediate play with AI bots across Casual and Super Bot difficulties.
-  * **10-Second Disconnect Countdown & Bot Replacement**: When a seated human player leaves an active game (or closes/disconnects their browser tab), the table immediately displays a live **`Left • Bot in 10s`** badge on their seat pod and a top-center alert banner counting down 10 seconds. If the player returns within 10 seconds, they seamlessly resume their seat and hand; otherwise, an AI Bot automatically replaces them after 10 seconds and plays their turns so the match continues without interruption.
+  * Named AI Bots (**فاشي الاسرار**, **صف السادس**, and **ابو قرون**) across Casual and Super Bot difficulties.
+  * **10-Second Disconnect Countdown & Bot Replacement**: When a seated human player leaves an active game (or closes/disconnects their browser tab), the table immediately displays a live **`Left • Bot in 10s`** badge on their seat pod and a top-center alert banner counting down 10 seconds. If the player returns within 10 seconds, they seamlessly resume their seat and hand; otherwise, an AI Bot (**فاشي الاسرار**, **صف السادس**, or **ابو قرون**) automatically replaces them after 10 seconds and plays their turns so the match continues without interruption.
 
 ---
 

@@ -103,8 +103,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
             <span className="text-lg sm:text-xl font-serif-display text-amber-200 font-bold">♠</span>
           </div>
           <div className="min-w-0">
-            <h1 className="text-base sm:text-lg font-bold font-serif-display text-white tracking-wide truncate">
-              Royal Whist Club
+            <h1 className="text-base sm:text-lg font-bold font-serif-display text-white truncate">
+              تدفيع الثمن
             </h1>
             <div className="text-[10px] sm:text-[11px] text-emerald-400/90 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -401,7 +401,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
                 <label className="text-xs text-slate-300 font-medium block mb-1.5">Table Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Champions Table, Friday Night Whist"
+                  placeholder="e.g. Champions Table, طاولة تدفيع الثمن"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   className="w-full bg-slate-900 border border-emerald-800/60 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
@@ -513,7 +513,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-amber-400" />
                 <h3 className="text-lg font-bold font-serif-display text-white">
-                  How to Play Royal Whist
+                  How to Play تدفيع الثمن
                 </h3>
               </div>
               <button

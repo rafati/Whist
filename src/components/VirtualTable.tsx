@@ -846,7 +846,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             </div>
 
             {/* Name, Team & Tricks Won */}
-            <div className="text-left min-w-0 max-w-[82px] sm:max-w-[105px] leading-tight">
+            <div className="text-left min-w-0 max-w-[100px] sm:max-w-[130px] leading-tight">
               <div className="flex items-center gap-1">
                 <span className="text-[10px] sm:text-[11px] font-bold text-white truncate">
                   {isThisMySeat ? 'You' : player.name.replace(/^Bot\s+/i, '')}
@@ -1256,10 +1256,10 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               </div>
 
               {/* Subtle Embossed Felt Watermark (MobilityWare Style) */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none opacity-[0.06]">
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none opacity-[0.08]">
                 <div className="flex flex-col items-center">
                   <span className="text-6xl sm:text-7xl font-serif-display font-black text-emerald-200">♠</span>
-                  <span className="text-[9px] sm:text-[11px] font-serif-display font-bold tracking-[0.25em] uppercase text-emerald-100 mt-0.5">ROYAL WHIST</span>
+                  <span className="text-xs sm:text-sm font-serif-display font-bold text-emerald-100 mt-0.5">تدفيع الثمن</span>
                 </div>
               </div>
 

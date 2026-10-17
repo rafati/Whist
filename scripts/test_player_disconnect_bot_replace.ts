@@ -155,7 +155,9 @@ async function runTest() {
     `   -> West replaced by "${botReplacedRoom.seats.West?.name}" (isBot=${botReplacedRoom.seats.West?.isBot}) after ${elapsedMs}ms!`
   );
   assert(elapsedMs >= 9500 && elapsedMs <= 12500, `Expected replacement around 10000ms, took ${elapsedMs}ms`);
-  assert(botReplacedRoom.seats.West?.name === 'Bot Zephyr', 'Expected West bot name to be Bot Zephyr');
+  assert(botReplacedRoom.seats.North?.name === 'فاشي الاسرار', `Expected North bot name to be فاشي الاسرار, got ${botReplacedRoom.seats.North?.name}`);
+  assert(botReplacedRoom.seats.West?.name === 'صف السادس', `Expected West bot name to be صف السادس, got ${botReplacedRoom.seats.West?.name}`);
+  assert(botReplacedRoom.seats.East?.name === 'ابو قرون', `Expected East bot name to be ابو قرون, got ${botReplacedRoom.seats.East?.name}`);
 
   // Cleanup test room
   await fetch(`${BASE_URL}/api/rooms/${roomId}`, { method: 'DELETE' });

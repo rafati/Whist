@@ -66,11 +66,13 @@ const throwCooldowns = new Map<string, number>();
 
 export const BOT_REPLACE_DELAY_MS = 10000; // 10 seconds before replacing a disconnected human player with a bot
 
-const BOT_NAMES: Record<Seat, string> = {
-  North: 'Bot Polaris',
-  West: 'Bot Zephyr',
-  South: 'Bot Atlas',
-  East: 'Bot Orion',
+export const BOT_NAME_POOL = ['فاشي الاسرار', 'صف السادس', 'ابو قرون'] as const;
+
+export const BOT_NAMES: Record<Seat, string> = {
+  North: 'فاشي الاسرار',
+  West: 'صف السادس',
+  East: 'ابو قرون',
+  South: 'فاشي الاسرار',
 };
 
 const BOT_AVATARS: Record<Seat, string> = {
@@ -79,6 +81,22 @@ const BOT_AVATARS: Record<Seat, string> = {
   South: 'https://api.dicebear.com/7.x/bottts/svg?seed=Atlas&backgroundColor=1e293b',
   East: 'https://api.dicebear.com/7.x/bottts/svg?seed=Orion&backgroundColor=1e293b',
 };
+
+function getBotNameForSeat(currentSeats: Record<Seat, UserProfile | null>, seat: Seat): string {
+  const preferred = BOT_NAMES[seat];
+  const usedNames = new Set(
+    SEATS.filter((s) => s !== seat && currentSeats[s]?.isBot).map((s) => currentSeats[s]!.name)
+  );
+  if (!usedNames.has(preferred)) {
+    return preferred;
+  }
+  for (const candidate of BOT_NAME_POOL) {
+    if (!usedNames.has(candidate)) {
+      return candidate;
+    }
+  }
+  return preferred;
+}
 
 function clearDisconnectTimer(roomId: string, seat: Seat) {
   const key = `${roomId}:${seat}`;
@@ -103,7 +121,7 @@ function replaceDisconnectedPlayerWithBot(roomId: string, seat: Seat) {
 
   room.seats[seat] = {
     id: `bot_${seat.toLowerCase()}`,
-    name: BOT_NAMES[seat],
+    name: getBotNameForSeat(room.seats, seat),
     email: `${seat.toLowerCase()}@ai.studio`,
     avatar: BOT_AVATARS[seat],
     isBot: true,
@@ -767,26 +785,13 @@ wss.on('connection', (ws) => {
             }
           }
 
-          const botNames: Record<Seat, string> = {
-            North: 'Bot Polaris',
-            West: 'Bot Zephyr',
-            South: 'Bot Atlas',
-            East: 'Bot Orion',
-          };
-          const botAvatars: Record<Seat, string> = {
-            North: 'https://api.dicebear.com/7.x/bottts/svg?seed=Polaris&backgroundColor=1e293b',
-            West: 'https://api.dicebear.com/7.x/bottts/svg?seed=Zephyr&backgroundColor=1e293b',
-            South: 'https://api.dicebear.com/7.x/bottts/svg?seed=Atlas&backgroundColor=1e293b',
-            East: 'https://api.dicebear.com/7.x/bottts/svg?seed=Orion&backgroundColor=1e293b',
-          };
-
           for (const s of SEATS) {
             if (!room.seats[s]) {
               room.seats[s] = {
                 id: `bot_${s.toLowerCase()}`,
-                name: botNames[s],
+                name: getBotNameForSeat(room.seats, s),
                 email: `${s.toLowerCase()}@ai.studio`,
-                avatar: botAvatars[s],
+                avatar: BOT_AVATARS[s],
                 isBot: true,
               };
             }
@@ -1116,31 +1121,18 @@ app.post('/api/rooms', (req, res) => {
       }
     : null;
 
-  const botNames: Record<Seat, string> = {
-    North: 'Bot Polaris',
-    West: 'Bot Zephyr',
-    South: 'Bot Atlas',
-    East: 'Bot Orion',
-  };
-  const botAvatars: Record<Seat, string> = {
-    North: 'https://api.dicebear.com/7.x/bottts/svg?seed=Polaris&backgroundColor=1e293b',
-    West: 'https://api.dicebear.com/7.x/bottts/svg?seed=Zephyr&backgroundColor=1e293b',
-    South: 'https://api.dicebear.com/7.x/bottts/svg?seed=Atlas&backgroundColor=1e293b',
-    East: 'https://api.dicebear.com/7.x/bottts/svg?seed=Orion&backgroundColor=1e293b',
-  };
-
   const seats: Record<Seat, UserProfile | null> = {
     North: autoFillBots
-      ? { id: 'bot_north', name: botNames.North, email: 'north@ai.studio', avatar: botAvatars.North, isBot: true }
+      ? { id: 'bot_north', name: BOT_NAMES.North, email: 'north@ai.studio', avatar: BOT_AVATARS.North, isBot: true }
       : null,
     West: autoFillBots
-      ? { id: 'bot_west', name: botNames.West, email: 'west@ai.studio', avatar: botAvatars.West, isBot: true }
+      ? { id: 'bot_west', name: BOT_NAMES.West, email: 'west@ai.studio', avatar: BOT_AVATARS.West, isBot: true }
       : null,
     South: initialSouth || (autoFillBots
-      ? { id: 'bot_south', name: botNames.South, email: 'south@ai.studio', avatar: botAvatars.South, isBot: true }
+      ? { id: 'bot_south', name: BOT_NAMES.South, email: 'south@ai.studio', avatar: BOT_AVATARS.South, isBot: true }
       : null),
     East: autoFillBots
-      ? { id: 'bot_east', name: botNames.East, email: 'east@ai.studio', avatar: botAvatars.East, isBot: true }
+      ? { id: 'bot_east', name: BOT_NAMES.East, email: 'east@ai.studio', avatar: BOT_AVATARS.East, isBot: true }
       : null,
   };
 

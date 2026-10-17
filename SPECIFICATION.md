@@ -367,7 +367,7 @@ All procedural synthesized audio (card slide/snap clicks, projectile flight whoo
 * **Seamless Return Within 10 Seconds**:
   * If the player reconnects (`join_room` or `claim_seat`) with the same `user.id` before the 10-second timer expires, `clearDisconnectTimer(room.id, seat)` cancels the pending timer, `isDisconnected` and `botReplaceAt` are cleared, and `broadcastRoom(room.id)` restores the player seamlessly to their seat and hand.
 * **Automatic Bot Replacement After 10 Seconds**:
-  * If the player does not return within 10 seconds, `replaceDisconnectedPlayerWithBot(roomId, seat)` replaces `room.seats[seat]` with the corresponding seat AI Bot (`Bot Polaris`, `Bot Zephyr`, `Bot Atlas`, or `Bot Orion`, with `isBot: true`), broadcasts the updated room state, and immediately calls `scheduleBotActionIfNeeded(room.id)` so the bot seamlessly plays any pending bid, trump declaration, or trick turn.
+  * If the player does not return within 10 seconds, `replaceDisconnectedPlayerWithBot(roomId, seat)` replaces `room.seats[seat]` with the corresponding seat AI Bot from `BOT_NAME_POOL` (**`فاشي الاسرار`**, **`صف السادس`**, or **`ابو قرون`**, with `isBot: true`), broadcasts the updated room state, and immediately calls `scheduleBotActionIfNeeded(room.id)` so the bot seamlessly plays any pending bid, trump declaration, or trick turn.
 
 ### 12.2 Table & Seat Pod Visual Indicators (`src/components/VirtualTable.tsx`)
 * **Seat Pod Badge**: Any seat with `player.isDisconnected === true` displays a pulsing rose alert badge (`Left • Bot in Xs`), a rose-highlighted pod border, a slightly dimmed avatar, and a live `Left (Xs)` status label updated every `250ms`.

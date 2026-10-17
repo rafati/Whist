@@ -141,10 +141,10 @@ export const GoogleAuthScreen: React.FC = () => {
         {/* Title & Tagline */}
         <div className="text-center mb-5">
           <h1
-            className="font-serif-display font-bold text-white tracking-wide"
+            className="font-serif-display font-bold text-white"
             style={{ fontSize: 'clamp(1.35rem, 1.1rem + 1vw, 1.75rem)' }}
           >
-            Royal Whist Club
+            تدفيع الثمن
           </h1>
           <p className="text-xs sm:text-sm text-emerald-300/90 mt-1">
             4-Player Partnership Bidding & Trick-Taking Card Game
