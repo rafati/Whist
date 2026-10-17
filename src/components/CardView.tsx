@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Card, Rank, Suit } from '../types.ts';
 import { SUIT_SYMBOLS } from '../logic/gameLogic.ts';
 import { RoyalCourtArt } from './RoyalCourtArt.tsx';
+import { playClickSound } from '../lib/throwSounds.ts';
 
 export interface CardViewProps {
   card?: Card;
@@ -101,6 +102,7 @@ export const CardView: React.FC<CardViewProps> = ({
   // Common gesture start
   const handleDragStart = (clientX: number, clientY: number) => {
     if (!isPlayable || isDimmed) return;
+    playClickSound();
     dragStartRef.current = {
       x: clientX,
       y: clientY,
@@ -240,6 +242,7 @@ export const CardView: React.FC<CardViewProps> = ({
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (touchHandledRef.current) return;
     if (isPlayable && !isDimmed && onClick) {
+      playClickSound();
       const rect = cardRef.current?.getBoundingClientRect();
       onClick(e, rect);
     }

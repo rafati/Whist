@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ThrowableObjectType } from '../types.ts';
 import { X } from 'lucide-react';
+import { playClickSound } from '../lib/throwSounds.ts';
 
 interface ThrowableDockProps {
   selectedItem: ThrowableObjectType | null;
@@ -76,6 +77,7 @@ export const ThrowableDock: React.FC<ThrowableDockProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              playClickSound();
               onSelectItem(null);
             }}
             className="hover:bg-amber-500 rounded-full p-0.5 ml-0.5 cursor-pointer"
@@ -98,6 +100,7 @@ export const ThrowableDock: React.FC<ThrowableDockProps> = ({
             disabled={isDisabled}
             onClick={(e) => {
               e.stopPropagation();
+              playClickSound();
               if (isSelected) {
                 onSelectItem(null);
               } else {

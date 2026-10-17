@@ -282,3 +282,28 @@ Because Royal Whist dynamically rotates the virtual table on each player's scree
 * **Target Receiver Destination**: On every client, the projectile travels towards and impacts the target's avatar pod (`[data-throw-seat="${toSeat}"]`), landing on the bottom player footer on the recipient's own screen and on their table pod on all other spectators' screens.
 * **Rotated Fallback Matrix**: If DOM elements have not yet mounted or are between phase transitions, screen geometry calculates positions using `getSeatVisualPos(seat, mySeat)` (`bottom`, `top`, `left`, `right`) based on each client's `mySeat` perspective.
 
+---
+
+## 9. Game Audio & Sound / Click Disable Setting Architecture
+
+All procedural synthesized audio (card slide/snap clicks, projectile flight whooshes, item hit impacts, medal chimes, and interactive tactile UI clicks) is managed centrally in [src/lib/throwSounds.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/lib/throwSounds.ts).
+
+### 9.1 Unified Sound State & Storage
+* **Local Storage Persistence**: Key `royal_whist_sound_enabled` stores `'true'` or `'false'`. If unset, it defaults to enabled (`true`).
+* **Instant Reactivity**: `subscribeSoundEnabled(listener)` ensures changes are immediately dispatched across all active views without page reloads.
+* **Component Hook**: `useSoundSetting()` exports `[soundEnabled, toggleSoundSetting, setSoundEnabled]`.
+
+### 9.2 Complete Silence Guard
+* `isSoundEnabled()` guards all synthesized sound triggers:
+  * `playClickSound()` — tactile feedback for card drags, item selections, and button clicks.
+  * `playCardSnapSound()` — card slide and felt snap landing sound.
+  * `playThrowSound()` — projectile parabolic whoosh.
+  * `playHitSound(type)` — shoe thud, bottle splash, and gold medal chime.
+* When sound is disabled, all audio synthesizer functions early-return cleanly, creating zero audio nodes and zero Web Audio overhead.
+
+### 9.3 UI Access Points
+1. **Lobby Header Bar**: Quick toggle button next to *How to Play* displaying `<Volume2 />` (Sound On) or `<VolumeX />` (Muted).
+2. **Virtual Table Header Bar**: Direct 1-click mute/unmute button next to the *Standings* button.
+3. **Table Options Dropdown**: Integrated *Sound & Clicks* switch row with live On / Muted pill button.
+
+

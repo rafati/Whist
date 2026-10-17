@@ -17,7 +17,10 @@ import {
   Sparkles,
   Bot,
   Shield,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
+import { useSoundSetting, playClickSound } from '../lib/throwSounds.ts';
 
 interface LobbyProps {
   onEnterRoom: (roomId: string) => void;
@@ -33,6 +36,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
   const [showRules, setShowRules] = useState(false);
   const [showSimModal, setShowSimModal] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [soundEnabled, toggleSoundSetting] = useSoundSetting();
 
   // Developer-only flag to access AI Simulation Lab (?dev=true)
   const isDevMode =
@@ -122,6 +126,26 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
                 <span className="hidden md:inline font-semibold">Dev Sim Lab</span>
               </button>
             )}
+
+            <button
+              onClick={() => {
+                playClickSound();
+                toggleSoundSetting();
+              }}
+              title={soundEnabled ? 'Mute Game Sound & Clicks' : 'Unmute Game Sound & Clicks'}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                soundEnabled
+                  ? 'bg-slate-900/80 hover:bg-slate-800 border-slate-700/60 text-slate-300 hover:text-white'
+                  : 'bg-red-950/40 hover:bg-red-900/50 border-red-800/70 text-red-400'
+              }`}
+            >
+              {soundEnabled ? (
+                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <VolumeX className="w-3.5 h-3.5 text-red-400" />
+              )}
+              <span className="hidden sm:inline">{soundEnabled ? 'Sound On' : 'Muted'}</span>
+            </button>
 
             <button
               onClick={() => setShowRules(true)}

@@ -33,7 +33,7 @@ import { VoiceChatBar } from './VoiceChatBar.tsx';
 import { ThrowableDock } from './ThrowableDock.tsx';
 import { ThrowableOverlay } from './ThrowableOverlay.tsx';
 import { useVoiceChat } from '../lib/useVoiceChat.ts';
-import { playCardSnapSound } from '../lib/throwSounds.ts';
+import { playCardSnapSound, useSoundSetting, playClickSound } from '../lib/throwSounds.ts';
 import {
   ArrowLeft,
   Bot,
@@ -46,6 +46,7 @@ import {
   Mic,
   MicOff,
   Volume2,
+  VolumeX,
   Headphones,
   MoreVertical,
   Smartphone,
@@ -228,6 +229,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const [showSimModal, setShowSimModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showTableMenu, setShowTableMenu] = useState(false);
+  const [soundEnabled, toggleSoundSetting] = useSoundSetting();
 
   // Developer-only flag to access AI Simulation Lab (?dev=true)
   const isDevMode =
@@ -930,6 +932,22 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             <span className="hidden lg:inline">Standings</span>
           </button>
 
+          {/* Quick Sound & Clicks Toggle */}
+          <button
+            onClick={() => {
+              playClickSound();
+              toggleSoundSetting();
+            }}
+            className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+              soundEnabled
+                ? 'bg-slate-900 hover:bg-slate-800 border-slate-700/70 text-slate-300 hover:text-white'
+                : 'bg-red-950/40 hover:bg-red-900/50 border-red-800/70 text-red-400'
+            }`}
+            title={soundEnabled ? 'Mute Game Sound & Clicks' : 'Unmute Game Sound & Clicks'}
+          >
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+          </button>
+
           {/* Secondary Table Actions Menu */}
           <button
             onClick={() => setShowTableMenu((prev) => !prev)}
@@ -948,6 +966,30 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               <div className="absolute right-0 top-full mt-1.5 w-52 bg-slate-950 border border-emerald-700/60 rounded-xl shadow-2xl py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
                 <div className="px-3 py-1.5 border-b border-slate-800/80 text-[10px] text-slate-400 font-mono">
                   {room.name} • Round {gameState.roundNumber}
+                </div>
+
+                {/* Sound & Clicks Switcher inside Table Options */}
+                <div className="px-3 py-2 border-b border-slate-800/80 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-300 flex items-center gap-1.5">
+                    {soundEnabled ? (
+                      <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                    )}
+                    <span>Sound & Clicks</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playClickSound();
+                      toggleSoundSetting();
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                      soundEnabled ? 'bg-emerald-600 text-white' : 'bg-red-900/60 border border-red-700 text-red-300'
+                    }`}
+                  >
+                    {soundEnabled ? 'On' : 'Muted'}
+                  </button>
                 </div>
 
                 {/* Bot Skill Switcher inside Table Options */}

@@ -38,6 +38,10 @@ A real-time, 4-player trick-taking partnership card game built with React 19, Vi
   * 3D parabolic Bezier flight trajectories with rotational tumbling, particle trails, and cartoon impact explosions (dust & stars, foam splash, golden sparkles).
   * Recoil animations and reaction bubbles for both human and AI bot avatars.
   * Synthesized procedural sound effects via native Web Audio API.
+* **Sound & Clicks Toggle & Persistence**:
+  * Easily disable or enable all procedural game audio (card landing snap, projectile whooshes, impacts, and medal chimes) and interactive click feedback.
+  * 1-click access via the **Lobby header**, **Table header**, and inside the **Table Options** menu.
+  * Preference is automatically saved to `localStorage` across page refreshes and browser sessions.
 * **Multiplayer & Bot Play**:
   * Real-time WebSocket room matchmaking and table synchronization.
   * "Sit & Fill Bots" button allows immediate play with AI bots across Casual and Super Bot difficulties.
@@ -78,6 +82,7 @@ Visit `http://localhost:3000` in your browser.
 | `npm run ai-optimize` | Runs 2,500 simulation matches and optimizes bot policy using Gemini API |
 | `npx tsx scripts/test_touch_gestures.ts` | Tests touch emulation, single-tap play, and swipe-up throw gestures via Headless Chrome CDP |
 | `npx tsx scripts/test_ui_portrait.ts` | Tests end-to-end UI layout, auction, and trick taking on iPhone portrait viewport |
+| `npx tsx scripts/test_sound_setting.ts` | Verifies sound & clicks mute/unmute state, persistence, reactive subscriptions, and synthesis guards |
 
 ---
 
