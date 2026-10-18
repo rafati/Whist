@@ -1619,7 +1619,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
       <main className="portrait-table-container flex-1 min-h-0 relative flex items-center justify-center p-1 sm:p-1.5 overflow-clip">
         {/* Disconnected Player Countdown Banner, Bot Replacement Toast & Bot Auto-Play Notice */}
         {(hasDisconnectedPlayers || botReplacementNotice || autoPlayToast) && (
-          <div className="absolute top-1.5 sm:top-2.5 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-1.5 w-max max-w-[92vw]">
+          <div className="absolute top-14 sm:top-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-1.5 w-max max-w-[92vw]">
             {(['North', 'West', 'South', 'East'] as Seat[]).map((s) => {
               const p = seats[s];
               if (!p || p.isBot || !p.isDisconnected || !p.botReplaceAt) return null;
@@ -2288,10 +2288,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   // Guarantees every card's giant top-left Rank & Suit is 100% uncovered while giving
                   // the played suit wide, elevated space for effortless selection.
                   const isPortraitViewport = viewport.height > viewport.width && viewport.width <= 640;
+                  const isTabletPortraitViewport = viewport.height > viewport.width && viewport.width > 640;
+                  const isExtraShortLandscape = viewport.height <= 380 && viewport.width > viewport.height;
                   const isCompactLandscapeViewport = viewport.height <= 480 && viewport.width > viewport.height;
 
                   const cardWidthPx = isPortraitViewport
                     ? 62
+                    : isExtraShortLandscape
+                    ? 48
                     : isCompactLandscapeViewport
                     ? 52
                     : viewport.width >= 1024
@@ -2301,34 +2305,49 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     : 76;
 
                   const usableHandWidthPx = isPortraitViewport
-                    ? Math.min(460, Math.max(340, viewport.width - 14))
+                    ? Math.min(460, Math.max(296, viewport.width - 14))
                     : isCompactLandscapeViewport
                     ? Math.min(640, Math.max(420, viewport.width - 36))
-                    : Math.min(920, Math.max(540, viewport.width - 48));
+                    : isTabletPortraitViewport
+                    ? Math.min(920, Math.max(600, viewport.width - 28))
+                    : Math.min(980, Math.max(540, viewport.width - 36));
 
+                  // Guarantee top-left Rank & Suit index column (19px-30px + left offset) is 100% uncovered on every card
                   const minCompVis = isPortraitViewport
-                    ? 21.5
+                    ? 22.5
+                    : isExtraShortLandscape
+                    ? 18.5
                     : isCompactLandscapeViewport
-                    ? 19
-                    : Math.round(cardWidthPx * 0.35);
+                    ? 19.5
+                    : viewport.width >= 1024
+                    ? 37
+                    : viewport.width >= 768
+                    ? 34
+                    : 31;
 
                   const targetCompVis = isPortraitViewport
-                    ? 24
+                    ? 24.5
+                    : isExtraShortLandscape
+                    ? 20.5
                     : isCompactLandscapeViewport
                     ? 21.5
-                    : Math.round(cardWidthPx * 0.38);
+                    : Math.max(minCompVis + 3, Math.round(cardWidthPx * 0.42));
 
                   const targetExpVis = isPortraitViewport
                     ? 39
+                    : isExtraShortLandscape
+                    ? 31
                     : isCompactLandscapeViewport
                     ? 33
-                    : Math.round(cardWidthPx * 0.60);
+                    : Math.round(cardWidthPx * 0.62);
 
                   const targetStdVis = isPortraitViewport
                     ? 28
+                    : isExtraShortLandscape
+                    ? 23.5
                     : isCompactLandscapeViewport
                     ? 25
-                    : Math.round(cardWidthPx * 0.48);
+                    : Math.round(cardWidthPx * 0.52);
 
                   const boundaryExtraPx = isPortraitViewport ? 6 : isCompactLandscapeViewport ? 4 : 8;
 

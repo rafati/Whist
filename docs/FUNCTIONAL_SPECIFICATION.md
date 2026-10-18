@@ -114,9 +114,10 @@ The dealer on turn 4 has special strategic options ([gameLogic.ts](file:///Users
 * **Mandatory Follow Rule** ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L228-L233)):
   * If the player holds at least one card in the suit led by the trick leader, they **must** play a card of that suit.
   * If void in the led suit, the player may play any card (trump or discard).
-* **Card Interaction Mechanics**:
+* **Card Interaction Mechanics & Responsive Sizing**:
   * **Single-Tap / 1-Click Play**: On both desktop and mobile touch devices, tapping or clicking a legal playable card plays it immediately. The 2-tap confirmation has been removed.
   * **Swipe-Up "Throw" Gesture**: On touch devices, swiping or flicking an eligible card upwards towards the table felt throws the card into the trick. Visual drag tracking follows the user's finger with dynamic elevation, tilt, and an animated `Throw ↑` badge when the release threshold is reached.
+  * **Dynamic Suit Accordion & Uncovered Indices**: Cards dynamically fan across viewports with strict left-to-right stacking (`zIndex: idx + 1`). Unplayed suits compress while guaranteeing minimum index clearance (`22.5px` on mobile phones, `34px` on iPads in portrait mode, and `37px` on iPad Pro and desktop), completely uncovering the giant rank/suit index column.
   * **Clean Felt Design**: Opponent card stacks/counts have been removed from player cards to keep the felt spacious and uncluttered.
 
 ### 5.2 Trick Evaluation & Timing

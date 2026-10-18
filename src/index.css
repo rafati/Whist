@@ -78,13 +78,13 @@
 }
 
 /* ============================================================
-   Mobile Portrait Mode Optimizations (Full Native Gameplay)
+   Mobile Phone Portrait Mode Optimizations (max-width: 640px)
    ============================================================ */
 .mobile-portrait-overlay {
   display: none !important;
 }
 
-@media (orientation: portrait) {
+@media (max-width: 640px) and (orientation: portrait) {
   .portrait-table-container {
     padding: 0.25rem !important;
     min-height: 0 !important;
@@ -168,6 +168,58 @@
   .portrait-console {
     width: 95% !important;
     max-width: 340px !important;
+  }
+}
+
+/* ============================================================
+   Tablet & iPad Portrait Mode Optimizations (min-width: 641px)
+   ============================================================ */
+@media (min-width: 641px) and (orientation: portrait) {
+  .portrait-table-container {
+    padding: 0.5rem !important;
+    min-height: 0 !important;
+    flex: 1 1 0% !important;
+  }
+
+  .portrait-table-wrap {
+    width: 100% !important;
+    max-width: 920px !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    aspect-ratio: auto !important;
+    border-radius: 36px !important;
+    padding: 0.65rem !important;
+  }
+
+  .portrait-felt {
+    border-radius: 30px !important;
+  }
+
+  .portrait-center-stage {
+    width: 18.5rem !important;
+    height: 18.5rem !important;
+    max-width: 82% !important;
+  }
+
+  .portrait-seat-top {
+    top: 0.5rem !important;
+  }
+
+  .portrait-seat-left {
+    left: 0.5rem !important;
+    top: 40% !important;
+  }
+
+  .portrait-seat-right {
+    right: 0.5rem !important;
+    top: 40% !important;
+  }
+
+  .portrait-hand-footer {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    padding-bottom: 0.35rem !important;
+    max-width: 960px !important;
   }
 }
 

@@ -24,8 +24,9 @@ A real-time, 4-player trick-taking partnership card game (**تدفيع الثم�
 * **Integrated WebRTC Mesh Voice Chat**:
   * Low-latency, peer-to-peer open mic voice communication directly at the virtual table.
   * Web Audio API real-time Voice Activity Detection (VAD) with animated speaker rings, mute, and deafen controls.
-* **Zero-Scroll & Collision-Free Mobile Viewport Layout**:
+* **Zero-Scroll & Responsive Multi-Device Viewport Layout (Mobile, iPad & Desktop)**:
   * Designed to strictly fit within `100dvh` on mobile, tablet, and desktop without page scrollbars.
+  * Dedicated **Tablet / iPad Portrait tier** (`@media (min-width: 641px) and (orientation: portrait)`) uses native tablet card dimensions (`84px`–`92px`) and an expanded 920px table stage, preventing card stacking and table compression on iPads.
   * Adaptive mobile header and player hand dock badges (`shrink-0` flex groups with compact `<640px` labels for `#CODE`, match scores, team/bid pills, and turn prompts) guarantee zero text overlap on narrow mobile screens.
 * **Smooth Physics Animations**:
   * Card flight from hand/seats to table center.
@@ -49,7 +50,7 @@ A real-time, 4-player trick-taking partnership card game (**تدفيع الثم�
 * **Dynamic Suit Accordion & 100% Card Visibility**:
   * **Left-to-Right `prevCard` Overlap & Stacking (`zIndex: idx + 1`)**: Each card's negative `margin-left` is calculated from the card it overlaps (`card[idx - 1]`) with strictly increasing left-to-right `z-index`, ensuring no card on the left ever covers the rank/suit index of a card to its right.
   * **Auto-Expanding Played Suit**: Cards of the required suit expand (`~58-68%` visible) and elevate with an amber glow ring for effortless selection while keeping natural card fan overlap.
-  * **100% Visible Non-Played Suits**: Other suits condense cleanly while guaranteeing at least `22px–24px` of visible strip on mobile (`35px` on desktop) and retaining full card brightness (no dimming/graying).
+  * **100% Visible Non-Played Suits**: Other suits condense cleanly while guaranteeing at least `22.5px` of visible strip on mobile phones, `34px` on iPads in portrait mode, and `37px` on iPad Pro and desktop (exceeding the full width of the giant rank/suit index column) while retaining full card brightness (no dimming/graying).
 * **Last Trick Cross (Top-Right Playing Area)**:
   * Persistent 4-card cross in the top-right corner of the table felt displaying the cards played in the last completed trick.
   * Arranged to mirror the player's perspective: Top = Partner, Bottom = You, Left = Left Opponent, Right = Right Opponent.
