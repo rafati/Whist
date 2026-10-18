@@ -50,20 +50,24 @@ graph LR
 ## 2. Server-Side Data Structures & Schemas
 
 ### 2.1 Room Schema (`Room`)
-Represents an individual game room / virtual table instance ([src/types.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/types.ts#L109-L117)).
+Represents an individual game room / virtual table instance ([src/types.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/types.ts)).
 
 | Field | Type | Description |
 |---|---|---|
 | `id` | `string` | Unique room identifier (e.g. `room_a1b2c3` or `grand-table-1`) |
+| `code` | `string` | 6-character uppercase room invite code (e.g. `K7M4P2`) |
 | `name` | `string` | Display name of the virtual table |
 | `createdAt` | `number` | Unix timestamp (epoch ms) of creation |
 | `hostId` | `string` | User ID of the table creator |
+| `isPrivate` | `boolean` | If true, hidden from public directory and joinable via `#code` or invite link |
+| `turnTimerSeconds` | `number` | Human turn timeout in seconds (`10` default; `0` = disabled) |
+| `matchmakingAutoStartAt` | `number \| null` | Epoch ms when a Quick Play matchmaking room will auto-fill remaining seats with bots |
 | `seats` | `Record<Seat, UserProfile \| null>` | Map of 4 cardinal seats to player profiles |
 | `gameState` | `GameState` | Embedded complete game state |
 | `botDifficulty` | `'casual' \| 'super'` | Active AI bot intelligence engine for this room |
 
 ### 2.2 Game State Schema (`GameState`)
-Represents the complete authoritative state of play within a room ([src/types.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/types.ts#L67-L107)).
+Represents the complete authoritative state of play within a room ([src/types.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/types.ts)).
 
 | Property | Type | Description |
 |---|---|---|
@@ -83,7 +87,7 @@ Represents the complete authoritative state of play within a room ([src/types.ts
 | `declarer` | `Seat \| null` | Declarer seat for the round |
 | `trumpSuit` | `TrumpSuit \| null` | Active trump suit (`'S' \| 'H' \| 'D' \| 'C' \| 'NT'`) |
 | `currentTurn` | `Seat \| null` | Seat whose turn it is to play a card |
-| `currentTrick` | `PlayedCard[]` | Cards played in the active trick (0 to 4 cards) |
+| `currentTrick` | `PlayedCard[]` | Cards played in the active trick (0 to 4 cards; includes `isAutoPlayed?`) |
 | `tricksHistory` | `TrickResult[]` | Record of all completed tricks in the current round |
 | `tricksWonCount` | `Record<Seat, number>` | Individual trick count per seat |
 | `teamTricksWon` | `{ TeamA: number; TeamB: number }` | Cumulative tricks won per team this round |
@@ -91,6 +95,9 @@ Represents the complete authoritative state of play within a room ([src/types.ts
 | `roundScores` | `RoundScoreBreakdown[]` | Historical scoring breakdowns for each round |
 | `winnerTeam` | `Team \| null` | Winning team if match concluded |
 | `winnerReason` | `string \| null` | Explanation of match victory or elimination |
+| `turnDeadlineAt` | `number \| null` | Epoch ms when current human player's turn expires and bot auto-plays |
+| `turnStartedAt` | `number \| null` | Epoch ms when current human player's turn began |
+| `lastAutoPlayNotice` | `AutoPlayNotice \| null` | Metadata of most recent bot timeout auto-move (`id`, `seat`, `playerName`, `actionText`, `timestamp`) |
 
 ### 2.3 User Profile Schema (`UserProfile`)
 | Property | Type | Description |
@@ -100,6 +107,9 @@ Represents the complete authoritative state of play within a room ([src/types.ts
 | `email` | `string` | Player email address |
 | `avatar` | `string` | URL to player avatar image |
 | `isBot` | `boolean?` | Flag indicating whether the profile is driven by server AI |
+| `isDisconnected` | `boolean?` | True when a seated human player leaves/disconnects during an active game |
+| `disconnectedAt` | `number?` | Epoch ms when the human player disconnected |
+| `botReplaceAt` | `number?` | Epoch ms when the disconnected human will be replaced by an AI bot (10s grace window) |
 
 ### 2.4 Bid Schema (`Bid`)
 | Property | Type | Description |
@@ -109,6 +119,7 @@ Represents the complete authoritative state of play within a room ([src/types.ts
 | `level` | `number?` | Contract level (1 through 7) |
 | `contractType` | `ContractType?` | `'Suit' \| 'NT'` |
 | `isDealerPrivilegeMatch` | `boolean?` | True if dealer used Turn 4 match privilege |
+| `isAutoPlayed` | `boolean?` | True if the bid/pass was executed by the AI Bot after the human turn timer expired |
 
 ### 2.5 Round Score Breakdown (`RoundScoreBreakdown`)
 | Property | Type | Description |

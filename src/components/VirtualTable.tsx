@@ -52,8 +52,13 @@ import {
   VolumeX,
   Headphones,
   MoreVertical,
-  Smartphone,
   LogOut,
+  Copy,
+  Check,
+  Share2,
+  Clock,
+  Lock,
+  Globe,
 } from 'lucide-react';
 
 // Physical flight offset vectors based on visual position
@@ -196,14 +201,25 @@ const TrickCardItem: React.FC<TrickCardItemProps> = ({
         className={`relative transition-all duration-200 ${
           isWinningCard
             ? 'ring-2 sm:ring-3 ring-amber-400 rounded-lg sm:rounded-xl shadow-[0_0_26px_rgba(251,191,36,0.95)] scale-105 z-20'
+            : played.isBotAutoPlay
+            ? 'ring-2 ring-cyan-400/90 rounded-lg sm:rounded-xl shadow-[0_12px_28px_-4px_rgba(0,0,0,0.65),0_0_16px_rgba(34,211,238,0.45)]'
             : 'shadow-[0_12px_28px_-4px_rgba(0,0,0,0.65),0_4px_10px_-2px_rgba(0,0,0,0.45)]'
         }`}
       >
         <CardView card={played.card} size="sm" />
         {isWinningCard && (
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-2 py-[1px] rounded-full shadow-lg flex items-center gap-0.5 whitespace-nowrap animate-pulse border border-white">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-2 py-[1px] rounded-full shadow-lg flex items-center gap-0.5 whitespace-nowrap animate-pulse border border-white z-30">
             <Crown className="w-2.5 h-2.5 text-slate-950 fill-current" />
             <span>Winner</span>
+          </div>
+        )}
+        {played.isBotAutoPlay && (
+          <div
+            data-testid="trick-card-bot-badge"
+            className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-cyan-950/95 border border-cyan-400 text-cyan-200 font-extrabold text-[7px] sm:text-[8px] px-1.5 py-[1px] rounded-full shadow-lg flex items-center gap-0.5 whitespace-nowrap z-30"
+          >
+            <Bot className="w-2.5 h-2.5 text-cyan-300 shrink-0" />
+            <span>Bot Move</span>
           </div>
         )}
       </div>
@@ -250,7 +266,6 @@ const FlyingCardOverlay: React.FC<{
 
     const dx = flight.targetCenterX - flight.startCenterX;
     const dy = flight.targetCenterY - flight.startCenterY;
-    const dist = Math.hypot(dx, dy);
     const targetScale = flight.targetWidth / Math.max(1, flight.startWidth);
 
     const prefersReducedMotion =
@@ -260,17 +275,9 @@ const FlyingCardOverlay: React.FC<{
 
     const effectiveDuration = prefersReducedMotion ? 40 : flight.duration;
 
-    // Aerodynamic mid-flight apex: carries lateral wrist momentum and lifts slightly before settling onto felt
-    const lateralCarry = Math.max(-18, Math.min(18, flight.vx * 16));
-    const arcLift = dist > 32 ? Math.min(16, dist * 0.065) : 0;
-    const midX = dx * 0.54 + lateralCarry;
-    const midY = dy * 0.54 - arcLift;
-    const midScale =
-      flight.startScale * 0.45 + targetScale * 0.55 + (dist > 40 ? 0.035 : 0.01);
-    const midRotate = flight.startRotateDeg * 0.4 + flight.targetRotateDeg * 0.6;
-
+    // Pure 2-keyframe momentum curve: eliminates any mid-air piecewise kink while
+    // smoothly decelerating along a single exponential out-curve into the trick slot.
     const startTransform = `translate3d(0px, 0px, 0) scale(${flight.startScale}) rotate(${flight.startRotateDeg}deg)`;
-    const midTransform = `translate3d(${midX}px, ${midY}px, 0) scale(${midScale}) rotate(${midRotate}deg)`;
     const endTransform = `translate3d(${dx}px, ${dy}px, 0) scale(${targetScale}) rotate(${flight.targetRotateDeg}deg)`;
 
     let anim: Animation | null = null;
@@ -279,20 +286,16 @@ const FlyingCardOverlay: React.FC<{
         [
           {
             transform: startTransform,
-            offset: 0,
-          },
-          {
-            transform: midTransform,
-            offset: 0.48,
+            boxShadow: '0 24px 48px -8px rgba(0, 0, 0, 0.72), 0 6px 16px -2px rgba(0, 0, 0, 0.48)',
           },
           {
             transform: endTransform,
-            offset: 1,
+            boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.65), 0 4px 10px -2px rgba(0, 0, 0, 0.45)',
           },
         ],
         {
           duration: effectiveDuration,
-          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
           fill: 'forwards',
         }
       );
@@ -322,7 +325,7 @@ const FlyingCardOverlay: React.FC<{
         height: flight.startHeight,
         transformOrigin: 'center center',
         transform: `translate3d(0px, 0px, 0) scale(${flight.startScale}) rotate(${flight.startRotateDeg}deg)`,
-        boxShadow: '0 18px 36px -6px rgba(0, 0, 0, 0.68), 0 4px 12px -2px rgba(0, 0, 0, 0.45)',
+        boxShadow: '0 24px 48px -8px rgba(0, 0, 0, 0.72), 0 6px 16px -2px rgba(0, 0, 0, 0.48)',
         willChange: 'transform',
       }}
     >
@@ -342,6 +345,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     claimSeat,
     fillBots,
     setBotDifficulty,
+    setTurnTimeout,
     makeBid,
     declareTrump,
     playCard,
@@ -357,6 +361,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const [showSimModal, setShowSimModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showTableMenu, setShowTableMenu] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedInviteLink, setCopiedInviteLink] = useState(false);
   const [soundEnabled, toggleSoundSetting] = useSoundSetting();
 
   // Developer-only flag to access AI Simulation Lab (?dev=true)
@@ -396,23 +402,82 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Disconnected human player 10-second countdown & bot replacement notice state
+  // Live timer tick for:
+  // 1) Human turn countdown (10s default)
+  // 2) Matchmaking auto-start countdown
+  // 3) Disconnected human player 10-second bot replacement countdown
   const [nowTick, setNowTick] = useState<number>(() => Date.now());
   const [botReplacementNotice, setBotReplacementNotice] = useState<{ id: string; text: string } | null>(null);
+  const [autoPlayToast, setAutoPlayToast] = useState<{
+    id: string;
+    playerName: string;
+    actionText: string;
+    seat: Seat;
+  } | null>(null);
+  const lastSeenAutoPlayIdRef = useRef<string | null>(gameState.lastAutoPlayNotice?.id || null);
+  const autoPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const botReplacementTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSeatsRef = useRef<Record<Seat, UserProfile | null>>(seats);
+
+  useEffect(() => {
+    return () => {
+      if (autoPlayTimerRef.current) clearTimeout(autoPlayTimerRef.current);
+      if (botReplacementTimerRef.current) clearTimeout(botReplacementTimerRef.current);
+    };
+  }, []);
 
   const hasDisconnectedPlayers = (Object.keys(seats) as Seat[]).some(
     (s) => Boolean(seats[s]?.isDisconnected && seats[s]?.botReplaceAt)
   );
+  const hasActiveTurnDeadline = Boolean(
+    gameState.turnDeadlineAt &&
+      (gameState.phase === 'bidding' ||
+        gameState.phase === 'declaring' ||
+        gameState.phase === 'playing')
+  );
+  const hasMatchmakingCountdown = Boolean(
+    room.matchmakingAutoStartAt && gameState.phase === 'waiting'
+  );
 
   useEffect(() => {
-    if (!hasDisconnectedPlayers) return;
+    if (!hasDisconnectedPlayers && !hasActiveTurnDeadline && !hasMatchmakingCountdown) return;
     setNowTick(Date.now());
     const interval = setInterval(() => {
       setNowTick(Date.now());
-    }, 250);
+    }, 100);
     return () => clearInterval(interval);
-  }, [hasDisconnectedPlayers]);
+  }, [
+    hasDisconnectedPlayers,
+    hasActiveTurnDeadline,
+    hasMatchmakingCountdown,
+    gameState.turnDeadlineAt,
+    room.matchmakingAutoStartAt,
+  ]);
+
+  // Show prominent toast banner whenever a human player's turn expires and the Bot plays on their behalf
+  useEffect(() => {
+    const notice = gameState.lastAutoPlayNotice;
+    if (!notice || notice.id === lastSeenAutoPlayIdRef.current) return;
+    lastSeenAutoPlayIdRef.current = notice.id;
+
+    // Ignore stale notices if joining a room long after the notice occurred
+    if (Date.now() - notice.timestamp > 5000) return;
+
+    setAutoPlayToast({
+      id: notice.id,
+      playerName: notice.playerName,
+      actionText: notice.actionText,
+      seat: notice.seat,
+    });
+    if (autoPlayTimerRef.current) {
+      clearTimeout(autoPlayTimerRef.current);
+    }
+    const noticeId = notice.id;
+    autoPlayTimerRef.current = setTimeout(() => {
+      setAutoPlayToast((latest) => (latest?.id === noticeId ? null : latest));
+      autoPlayTimerRef.current = null;
+    }, 3200);
+  }, [gameState.lastAutoPlayNotice?.id]);
 
   useEffect(() => {
     const prevSeats = prevSeatsRef.current;
@@ -425,11 +490,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
           id: noticeId,
           text: `${prev.name} did not return — replaced by ${curr.name}`,
         });
-        const timer = setTimeout(() => {
+        if (botReplacementTimerRef.current) {
+          clearTimeout(botReplacementTimerRef.current);
+        }
+        botReplacementTimerRef.current = setTimeout(() => {
           setBotReplacementNotice((latest) => (latest?.id === noticeId ? null : latest));
-        }, 4500);
-        prevSeatsRef.current = seats;
-        return () => clearTimeout(timer);
+          botReplacementTimerRef.current = null;
+        }, 4000);
+        break;
       }
     }
     prevSeatsRef.current = seats;
@@ -826,6 +894,52 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const contractTricksWon = contractTeam ? gameState.teamTricksWon[contractTeam] : 0;
   const defenseTricksWon = defendingTeam ? gameState.teamTricksWon[defendingTeam] : 0;
 
+  // Active turn seat & live human turn timer calculations
+  const activeTurnSeat: Seat | null =
+    gameState.phase === 'bidding'
+      ? gameState.currentBidder
+      : gameState.phase === 'declaring'
+      ? gameState.declarer
+      : gameState.phase === 'playing'
+      ? gameState.currentTurn
+      : null;
+
+  const turnTotalMs = gameState.turnDurationMs || room.turnTimeoutMs || 10000;
+  const turnRemainingMs =
+    activeTurnSeat && gameState.turnDeadlineAt
+      ? Math.max(0, gameState.turnDeadlineAt - nowTick)
+      : null;
+  const turnSecondsLeft =
+    turnRemainingMs !== null ? Math.max(1, Math.ceil(turnRemainingMs / 1000)) : null;
+  const turnProgressPct =
+    turnRemainingMs !== null && turnTotalMs > 0
+      ? Math.max(0, Math.min(100, (turnRemainingMs / turnTotalMs) * 100))
+      : 0;
+
+  const matchmakingSecondsLeft =
+    room.matchmakingAutoStartAt && gameState.phase === 'waiting'
+      ? Math.max(1, Math.ceil((room.matchmakingAutoStartAt - nowTick) / 1000))
+      : null;
+
+  const handleCopyRoomCode = () => {
+    const codeText = room.code || room.id;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(codeText).catch(() => {});
+    }
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleCopyInviteLink = () => {
+    const codeText = room.code || room.id;
+    const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(codeText)}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+    setCopiedInviteLink(true);
+    setTimeout(() => setCopiedInviteLink(false), 2200);
+  };
+
   // Trump suit presentation badge
   const renderTrumpBadge = () => {
     if (!gameState.trumpSuit) return null;
@@ -861,6 +975,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     const isCurrentPlayer =
       gameState.phase === 'playing' && gameState.currentTurn === seat;
     const isDeclarer = gameState.declarer === seat;
+    const isActiveTurnSeat = activeTurnSeat === seat;
     const team = getTeam(seat);
     const tricksWon = gameState.tricksWonCount[seat] || 0;
 
@@ -880,6 +995,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
       isDisconnected && player?.botReplaceAt
         ? Math.max(1, Math.ceil((player.botReplaceAt - nowTick) / 1000))
         : 0;
+    const seatTurnSec = isActiveTurnSeat && turnSecondsLeft !== null ? turnSecondsLeft : null;
 
     return (
       <div
@@ -902,15 +1018,31 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 }
               }}
               className={`
-                flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-2xl transition-all duration-200 relative
+                flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-2xl transition-all duration-200 relative overflow-visible
                 ${isTargetable ? 'cursor-crosshair ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900 animate-pulse scale-105 hover:scale-115 shadow-[0_0_18px_rgba(251,191,36,0.9)] z-40' : ''}
                 ${isRecoiling ? 'avatar-recoiling' : ''}
                 ${isDisconnected ? 'ring-2 ring-rose-500/90 bg-rose-950/90 border border-rose-500/80 shadow-[0_0_16px_rgba(244,63,94,0.55)]' : ''}
                 ${!isDisconnected && isCelebrated ? 'ring-3 ring-amber-400 bg-amber-950/90 shadow-[0_0_22px_rgba(251,191,36,0.9)] scale-110 z-30' : ''}
-                ${!isDisconnected && !isCelebrated && !isTargetable && (isCurrentBidder || isCurrentPlayer) ? 'ring-2 ring-amber-400 bg-amber-950/85 shadow-lg scale-105' : ''}
-                ${!isDisconnected && !isCelebrated && !isTargetable && !(isCurrentBidder || isCurrentPlayer) ? 'bg-slate-950/90 border border-emerald-800/50 shadow-md' : ''}
+                ${!isDisconnected && !isCelebrated && !isTargetable && isActiveTurnSeat ? 'ring-2 ring-amber-400 bg-amber-950/85 shadow-lg scale-105' : ''}
+                ${!isDisconnected && !isCelebrated && !isTargetable && !isActiveTurnSeat ? 'bg-slate-950/90 border border-emerald-800/50 shadow-md' : ''}
               `}
             >
+              {/* Live Turn Timer Progress Bar along bottom edge of active seat */}
+              {seatTurnSec !== null && !isDisconnected && (
+                <div className="absolute bottom-0 left-2 right-2 h-1 bg-slate-900/90 rounded-full overflow-hidden pointer-events-none">
+                  <div
+                    style={{ width: `${turnProgressPct}%` }}
+                    className={`h-full transition-[width] duration-100 ease-linear ${
+                      seatTurnSec <= 3
+                        ? 'bg-rose-500'
+                        : seatTurnSec <= 5
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-400'
+                    }`}
+                  />
+                </div>
+              )}
+
               {/* Active Targeting Reticle Tag */}
               {isTargetable && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-2 py-0.2 rounded-full shadow-lg animate-bounce z-50 whitespace-nowrap">
@@ -938,17 +1070,32 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   return (
                     <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none`}>
                       {isCurrentBidder ? (
-                        <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow animate-pulse">
-                          Bidding...
+                        <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow animate-pulse flex items-center gap-1">
+                          <span>Bidding...</span>
+                          {seatTurnSec !== null && (
+                            <span className="font-mono bg-slate-950 text-amber-300 px-1 rounded-full text-[7px]">
+                              {seatTurnSec}s
+                            </span>
+                          )}
                         </span>
                       ) : seatBid ? (
                         seatBid.type === 'pass' ? (
-                          <span className="bg-slate-800 border border-slate-700 text-slate-300 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
-                            Passed
+                          <span className="bg-slate-800 border border-slate-700 text-slate-300 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow flex items-center gap-1">
+                            <span>Passed</span>
+                            {seatBid.isBotAutoPlay && (
+                              <span className="text-[7px] bg-cyan-950 text-cyan-300 border border-cyan-500/60 px-1 rounded-full font-bold">
+                                🤖 Auto
+                              </span>
+                            )}
                           </span>
                         ) : (
-                          <span className="bg-emerald-950 border border-emerald-500 text-emerald-300 font-bold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow">
-                            Bid {seatBid.level} {seatBid.contractType}
+                          <span className="bg-emerald-950 border border-emerald-500 text-emerald-300 font-bold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow flex items-center gap-1">
+                            <span>Bid {seatBid.level} {seatBid.contractType}</span>
+                            {seatBid.isBotAutoPlay && (
+                              <span className="text-[7px] bg-cyan-950 text-cyan-300 border border-cyan-500/60 px-1 rounded-full font-bold">
+                                🤖 Auto
+                              </span>
+                            )}
                           </span>
                         )
                       ) : null}
@@ -979,6 +1126,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                           <span className="text-[7px] bg-slate-950 text-amber-300 px-1 py-0.2 rounded-full font-bold uppercase tracking-wider">
                             Winning Bid
                           </span>
+                          {(gameState.winningBid?.isBotAutoPlay || gameState.isTrumpAutoDeclared) && (
+                            <span className="text-[7px] bg-cyan-950 text-cyan-300 border border-cyan-400 px-1 rounded-full font-bold">
+                              🤖 Auto
+                            </span>
+                          )}
                         </span>
                       </div>
                     );
@@ -989,12 +1141,22 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     return (
                       <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-20 whitespace-nowrap pointer-events-none`}>
                         {seatBid.type === 'pass' ? (
-                          <span className="bg-slate-900/90 border border-slate-700/80 text-slate-400 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow-xs">
-                            Passed
+                          <span className="bg-slate-900/90 border border-slate-700/80 text-slate-400 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow-xs flex items-center gap-1">
+                            <span>Passed</span>
+                            {seatBid.isBotAutoPlay && (
+                              <span className="text-[7px] bg-cyan-950 text-cyan-300 border border-cyan-500/60 px-1 rounded-full font-bold">
+                                🤖 Auto
+                              </span>
+                            )}
                           </span>
                         ) : (
-                          <span className="bg-slate-900/90 border border-slate-600 text-slate-300 font-bold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow-xs">
-                            Bid {seatBid.level} {seatBid.contractType}
+                          <span className="bg-slate-900/90 border border-slate-600 text-slate-300 font-bold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow-xs flex items-center gap-1">
+                            <span>Bid {seatBid.level} {seatBid.contractType}</span>
+                            {seatBid.isBotAutoPlay && (
+                              <span className="text-[7px] bg-cyan-950 text-cyan-300 border border-cyan-500/60 px-1 rounded-full font-bold">
+                                🤖 Auto
+                              </span>
+                            )}
                           </span>
                         )}
                       </div>
@@ -1074,6 +1236,18 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 <span className="text-[10px] sm:text-[11px] font-bold text-white truncate">
                   {isThisMySeat ? 'You' : player.name.replace(/^Bot\s+/i, '')}
                 </span>
+                {seatTurnSec !== null && !isDisconnected && (
+                  <span
+                    data-testid={`seat-turn-timer-${seat}`}
+                    className={`text-[8px] font-mono font-black px-1 py-0.2 rounded-full shrink-0 ${
+                      seatTurnSec <= 3
+                        ? 'bg-rose-600 text-white animate-pulse'
+                        : 'bg-amber-400 text-slate-950'
+                    }`}
+                  >
+                    {seatTurnSec}s
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1 text-[8px] sm:text-[9px] font-semibold">
                 {isDisconnected ? (
@@ -1124,7 +1298,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#07130e] table-felt-radial flex flex-col text-slate-100 overflow-clip select-none relative">
       {/* Slim, Always-Visible Top HUD Bar */}
       <header className="landscape-compact-header h-10 sm:h-11 shrink-0 border-b border-emerald-900/50 bg-[#0a2016]/95 backdrop-blur-md px-2 sm:px-4 flex items-center justify-between gap-2 shadow-md z-30">
-        {/* Left: Leave / Table Menu + Room Title */}
+        {/* Left: Leave / Table Menu + Room Title & Room Code */}
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           <button
             onClick={onLeaveRoom}
@@ -1134,6 +1308,27 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             <ArrowLeft className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Lobby</span>
           </button>
+
+          {room.code && (
+            <button
+              type="button"
+              onClick={handleCopyInviteLink}
+              title="Click to copy invite link for friends"
+              className="py-1 px-2 rounded-lg bg-slate-950/90 hover:bg-slate-900 border border-amber-500/40 text-amber-300 font-mono text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shrink-0"
+            >
+              {room.isPrivate ? (
+                <Lock className="w-2.5 h-2.5 text-amber-400" />
+              ) : (
+                <Globe className="w-2.5 h-2.5 text-emerald-400" />
+              )}
+              <span>#{room.code}</span>
+              {copiedInviteLink ? (
+                <Check className="w-2.5 h-2.5 text-emerald-400" />
+              ) : (
+                <Share2 className="w-2.5 h-2.5 text-slate-400" />
+              )}
+            </button>
+          )}
 
           <div className="min-w-0 hidden md:block">
             <h1 className="text-xs sm:text-sm font-bold font-serif-display text-white truncate max-w-[110px] lg:max-w-[180px] leading-tight">
@@ -1155,7 +1350,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
           <button
             onClick={() => setShowScoreModal(true)}
             className="flex items-center gap-1.5 bg-slate-950/90 hover:bg-slate-900 border border-emerald-800/60 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-mono transition-all cursor-pointer shrink-0"
-            title="View Full Match Standings (Target: +10)"
+            title="View Full Match Standings (Target: +11)"
           >
             <span className="text-emerald-400 font-bold">
               T1: {gameState.matchScores.TeamA >= 0 ? `+${gameState.matchScores.TeamA}` : gameState.matchScores.TeamA}
@@ -1280,9 +1475,10 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 className="fixed inset-0 z-40"
                 onClick={() => setShowTableMenu(false)}
               />
-              <div className="absolute right-0 top-full mt-1.5 w-52 bg-slate-950 border border-emerald-700/60 rounded-xl shadow-2xl py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-3 py-1.5 border-b border-slate-800/80 text-[10px] text-slate-400 font-mono">
-                  {room.name} • Round {gameState.roundNumber}
+              <div className="absolute right-0 top-full mt-1.5 w-60 bg-slate-950 border border-emerald-700/60 rounded-xl shadow-2xl py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-3 py-1.5 border-b border-slate-800/80 text-[10px] text-slate-400 font-mono flex items-center justify-between">
+                  <span className="truncate">{room.name}</span>
+                  {room.code && <span className="text-amber-300 font-bold">#{room.code}</span>}
                 </div>
 
                 {/* Sound & Clicks Switcher inside Table Options */}
@@ -1334,6 +1530,35 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     >
                       Pro
                     </button>
+                  </div>
+                </div>
+
+                {/* Turn Timer Switcher inside Table Options */}
+                <div className="px-3 py-2 border-b border-slate-800/80">
+                  <div className="text-[11px] text-slate-300 flex items-center gap-1.5 mb-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Turn Timer (Auto-Bot)</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[
+                      { label: '10s', value: 10000 },
+                      { label: '15s', value: 15000 },
+                      { label: '30s', value: 30000 },
+                      { label: 'Off', value: 0 },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setTurnTimeout(room.id, opt.value)}
+                        className={`py-1 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                          (room.turnTimeoutMs ?? 10000) === opt.value
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -1392,8 +1617,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
       {/* Main Table Arena */}
       <main className="portrait-table-container flex-1 min-h-0 relative flex items-center justify-center p-1 sm:p-1.5 overflow-clip">
-        {/* Disconnected Player Countdown Banner & Bot Replacement Toast */}
-        {(hasDisconnectedPlayers || botReplacementNotice) && (
+        {/* Disconnected Player Countdown Banner, Bot Replacement Toast & Bot Auto-Play Notice */}
+        {(hasDisconnectedPlayers || botReplacementNotice || autoPlayToast) && (
           <div className="absolute top-1.5 sm:top-2.5 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-1.5 w-max max-w-[92vw]">
             {(['North', 'West', 'South', 'East'] as Seat[]).map((s) => {
               const p = seats[s];
@@ -1416,10 +1641,27 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             {botReplacementNotice && (
               <div
                 data-testid="bot-replacement-toast"
-                className="bg-slate-950/95 border border-emerald-500/80 text-emerald-100 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full shadow-[0_6px_20px_rgba(0,0,0,0.65)] flex items-center gap-2 text-[10px] sm:text-xs font-semibold backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200"
+                onClick={() => setBotReplacementNotice(null)}
+                className="pointer-events-auto cursor-pointer bg-slate-950/95 border border-emerald-500/80 text-emerald-100 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full shadow-[0_6px_20px_rgba(0,0,0,0.65)] flex items-center gap-2 text-[10px] sm:text-xs font-semibold backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200"
               >
                 <Bot className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span className="truncate">{botReplacementNotice.text}</span>
+              </div>
+            )}
+            {autoPlayToast && (
+              <div
+                data-testid="bot-autoplay-toast"
+                onClick={() => setAutoPlayToast(null)}
+                className="pointer-events-auto cursor-pointer bg-cyan-950/95 border border-cyan-400/90 text-cyan-100 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full shadow-[0_6px_20px_rgba(0,0,0,0.65)] flex items-center gap-2 text-[10px] sm:text-xs font-semibold backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200"
+              >
+                <Bot className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                <span className="truncate">
+                  <strong className="text-cyan-300">Bot Move</strong> for{' '}
+                  <strong className="text-white">
+                    {autoPlayToast.seat === mySeat ? 'You' : autoPlayToast.playerName}
+                  </strong>{' '}
+                  (Time expired): <strong className="text-amber-300">{autoPlayToast.actionText}</strong>
+                </span>
               </div>
             )}
           </div>
@@ -1486,16 +1728,72 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 </div>
               </div>
 
-              {/* Waiting Phase: Pre-Game Seating & Bot Setup Card */}
+              {/* Waiting Phase: Pre-Game Seating, Room Code / Invite Link & Bot Setup Card */}
               {gameState.phase === 'waiting' && (
-                <div className="landscape-compact-console text-center z-20 p-2.5 sm:p-3.5 bg-slate-950/95 border border-emerald-600/60 rounded-2xl w-[250px] sm:w-[260px] shrink-0 shadow-2xl">
-                  <div className="text-xs font-bold text-amber-300 mb-1 flex items-center justify-center gap-1.5">
+                <div className="landscape-compact-console text-center z-20 p-2.5 sm:p-3.5 bg-slate-950/95 border border-emerald-600/60 rounded-2xl w-[265px] sm:w-[285px] shrink-0 shadow-2xl">
+                  <div className="text-xs font-bold text-amber-300 mb-1.5 flex items-center justify-center gap-1.5">
                     <Users className="w-3.5 h-3.5" />
-                    <span>Table Seating Setup</span>
+                    <span>{room.isPrivate ? 'Private Friends Table' : 'Table Seating & Invite'}</span>
                   </div>
 
-                  {/* Pre-Game Bot Skill Selector */}
-                  <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl px-2.5 py-1 mb-2">
+                  {/* Room Code & Copy Shareable Invite Link Bar */}
+                  {room.code && (
+                    <div className="bg-slate-900/95 border border-emerald-700/50 rounded-xl p-1.5 mb-2 flex items-center justify-between gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleCopyRoomCode}
+                        data-testid="room-code-pill"
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-amber-400/60 transition-all cursor-pointer"
+                        title="Click to copy Room Code"
+                      >
+                        <span className="text-[9px] text-slate-400 uppercase font-semibold">Code:</span>
+                        <span className="text-xs font-mono font-black tracking-wider text-amber-300">
+                          {room.code}
+                        </span>
+                        {copiedCode ? (
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3 text-slate-400" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyInviteLink}
+                        data-testid="copy-invite-link-btn"
+                        className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-800/80 hover:bg-emerald-700 text-emerald-100 font-bold text-[10px] flex items-center justify-center gap-1 border border-emerald-600/50 transition-all cursor-pointer"
+                      >
+                        {copiedInviteLink ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-300" />
+                            <span>Link Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Share2 className="w-3 h-3" />
+                            <span>Invite Link</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Matchmaking Auto-Start Countdown Banner */}
+                  {matchmakingSecondsLeft !== null && (
+                    <div
+                      data-testid="matchmaking-countdown-banner"
+                      className="bg-emerald-950/90 border border-emerald-500/60 rounded-xl px-2.5 py-1.5 mb-2 text-[10px] text-emerald-200 flex items-center justify-center gap-1.5 animate-pulse"
+                    >
+                      <Globe className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span>
+                        Matching players... Auto-filling bots in{' '}
+                        <strong className="text-amber-300 font-mono">{matchmakingSecondsLeft}s</strong>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Pre-Game Bot Skill & Turn Timer Selectors */}
+                  <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl px-2 py-1 mb-1.5">
                     <span className="text-[10px] text-slate-300 font-medium flex items-center gap-1">
                       <Bot className="w-3 h-3 text-emerald-400" />
                       <span>AI Skill:</span>
@@ -1524,6 +1822,34 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         <Crown className="w-2.5 h-2.5" />
                         <span>Pro</span>
                       </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl px-2 py-1 mb-2">
+                    <span className="text-[10px] text-slate-300 font-medium flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-emerald-400" />
+                      <span>Turn Timer:</span>
+                    </span>
+                    <div className="inline-flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 gap-0.5">
+                      {[
+                        { label: '10s', value: 10000 },
+                        { label: '15s', value: 15000 },
+                        { label: '30s', value: 30000 },
+                        { label: 'Off', value: 0 },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setTurnTimeout(room.id, opt.value)}
+                          className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-all cursor-pointer ${
+                            (room.turnTimeoutMs ?? 10000) === opt.value
+                              ? 'bg-emerald-600 text-white'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -1579,7 +1905,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         >
                           {getTeam(mySeat) === 'TeamA' ? 'Team 1' : 'Team 2'}
                         </strong>
-                        . Ready to fill empty seats and deal?
+                        . Share the code with friends or deal with AI bots!
                       </p>
                       <button
                         onClick={() => fillBots(room.id)}
@@ -1631,22 +1957,39 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               {/* Playing Phase: Current Trick Center Arena */}
               {gameState.phase === 'playing' && (
                 <div data-trick-arena className="relative w-full h-full flex items-center justify-center">
-                  {/* Permanent invisible slot anchors for pixel-exact flight targeting */}
-                  {(['top', 'bottom', 'left', 'right'] as const).map((pos) => (
-                    <div
-                      key={`trick-anchor-${pos}`}
-                      data-trick-anchor={pos}
-                      aria-hidden="true"
-                      className={`absolute ${
-                        {
-                          top: 'top-3.5 sm:top-4 left-1/2 -translate-x-1/2',
-                          bottom: 'bottom-3.5 sm:bottom-4 left-1/2 -translate-x-1/2',
-                          left: 'left-3.5 sm:left-4 top-1/2 -translate-y-1/2',
-                          right: 'right-3.5 sm:right-4 top-1/2 -translate-y-1/2',
-                        }[pos]
-                      } portrait-trick-card landscape-compact-trick-card w-15 h-21 sm:w-18 sm:h-25 md:w-20 md:h-28 opacity-0 pointer-events-none select-none`}
-                    />
-                  ))}
+                  {/* Permanent slot anchors for pixel-exact flight targeting; bottom anchor glows as drop-zone while swiping */}
+                  {(['top', 'bottom', 'left', 'right'] as const).map((pos) => {
+                    const isBottomDropZoneActive =
+                      pos === 'bottom' &&
+                      Boolean(draggingCardId) &&
+                      isMyTurnToPlay &&
+                      !displayTrick.some((p) => getSeatVisualPos(p.seat) === 'bottom');
+                    return (
+                      <div
+                        key={`trick-anchor-${pos}`}
+                        data-trick-anchor={pos}
+                        aria-hidden="true"
+                        className={`absolute ${
+                          {
+                            top: 'top-3.5 sm:top-4 left-1/2 -translate-x-1/2',
+                            bottom: 'bottom-3.5 sm:bottom-4 left-1/2 -translate-x-1/2',
+                            left: 'left-3.5 sm:left-4 top-1/2 -translate-y-1/2',
+                            right: 'right-3.5 sm:right-4 top-1/2 -translate-y-1/2',
+                          }[pos]
+                        } portrait-trick-card landscape-compact-trick-card w-15 h-21 sm:w-18 sm:h-25 md:w-20 md:h-28 rounded-lg sm:rounded-xl pointer-events-none select-none transition-all duration-150 ${
+                          isBottomDropZoneActive
+                            ? 'opacity-100 border-2 border-dashed border-emerald-400/90 bg-emerald-400/15 shadow-[0_0_24px_rgba(52,211,153,0.45)] flex items-center justify-center'
+                            : 'opacity-0'
+                        }`}
+                      >
+                        {isBottomDropZoneActive && (
+                          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-emerald-200 drop-shadow">
+                            Drop
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   {/* 4 Cards Placement in Trick with Smooth Play & Collect Animations */}
                   {displayTrick.map((played, idx) => {
@@ -1721,7 +2064,26 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
         gameState.phase === 'playing') &&
         mySeat && (
           <footer className="portrait-hand-footer landscape-compact-hand-footer shrink-0 w-full max-w-5xl mx-auto px-1.5 sm:px-3 pb-1 sm:pb-1.5 z-20">
-            <div className="portrait-hand-box landscape-compact-hand-box bg-slate-950/92 backdrop-blur-md border border-emerald-800/40 rounded-xl sm:rounded-2xl px-1.5 sm:px-2 py-1 sm:p-2 shadow-2xl">
+            <div className="portrait-hand-box landscape-compact-hand-box bg-slate-950/92 backdrop-blur-md border border-emerald-800/40 rounded-xl sm:rounded-2xl px-1.5 sm:px-2 py-1 sm:p-2 shadow-2xl relative overflow-visible">
+              {/* Live Turn Timer Progress Bar along top edge of player hand dock when it is your turn */}
+              {activeTurnSeat === mySeat && turnSecondsLeft !== null && (
+                <div
+                  data-testid="my-turn-progress-bar"
+                  className="absolute top-0 left-3 right-3 h-1 bg-slate-900 rounded-full overflow-hidden pointer-events-none"
+                >
+                  <div
+                    style={{ width: `${turnProgressPct}%` }}
+                    className={`h-full transition-[width] duration-100 ease-linear ${
+                      turnSecondsLeft <= 3
+                        ? 'bg-rose-500'
+                        : turnSecondsLeft <= 5
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-400'
+                    }`}
+                  />
+                </div>
+              )}
+
               {/* Compact Hand Status Header Row */}
               <div className="flex items-center justify-between text-xs px-1 mb-0.5">
                 <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
@@ -1783,13 +2145,23 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         <span className="bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-black text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow border border-white flex items-center gap-1 shrink-0">
                           <Crown className="w-2.5 h-2.5 fill-current shrink-0" />
                           <span>Winning Bid: {myContractDisplay}</span>
+                          {(gameState.winningBid?.isBotAutoPlay || gameState.isTrumpAutoDeclared) && (
+                            <span className="text-[8px] bg-cyan-950 text-cyan-300 border border-cyan-400 px-1 rounded-full font-bold">
+                              🤖 Auto
+                            </span>
+                          )}
                         </span>
                       );
                     }
                     if (myBid && (gameState.phase === 'playing' || gameState.phase === 'bidding' || gameState.phase === 'declaring')) {
                       return (
-                        <span className="bg-slate-900 border border-slate-700 text-slate-300 font-bold text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-xs shrink-0">
-                          {myBid.type === 'pass' ? 'Passed' : `Bid ${myBid.level} ${myBid.contractType}`}
+                        <span className="bg-slate-900 border border-slate-700 text-slate-300 font-bold text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-xs shrink-0 flex items-center gap-1">
+                          <span>{myBid.type === 'pass' ? 'Passed' : `Bid ${myBid.level} ${myBid.contractType}`}</span>
+                          {myBid.isBotAutoPlay && (
+                            <span className="text-[7px] bg-cyan-950 text-cyan-300 border border-cyan-500/60 px-1 rounded-full font-bold">
+                              🤖 Auto
+                            </span>
+                          )}
                         </span>
                       );
                     }
@@ -1813,8 +2185,26 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   </div>
                 </div>
 
-                {/* Right Header Section: Live Turn Prompt & Throwable Items Dock */}
+                {/* Right Header Section: Live Turn Countdown + Prompt & Throwable Items Dock */}
                 <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                  {/* Live Turn Countdown Pill for Local Human Player */}
+                  {activeTurnSeat === mySeat && turnSecondsLeft !== null && (
+                    <span
+                      data-testid="my-turn-timer-badge"
+                      className={`px-2 py-0.5 rounded-full font-mono font-black text-[9px] sm:text-[10px] flex items-center gap-1 border shadow ${
+                        turnSecondsLeft <= 3
+                          ? 'bg-rose-600 border-rose-300 text-white animate-pulse'
+                          : turnSecondsLeft <= 5
+                          ? 'bg-amber-500 border-amber-200 text-slate-950'
+                          : 'bg-emerald-950 border-emerald-400 text-emerald-300'
+                      }`}
+                      title="Time remaining before AI Bot automatically plays your move"
+                    >
+                      <Clock className="w-2.5 h-2.5 shrink-0" />
+                      <span>{turnSecondsLeft}s</span>
+                    </span>
+                  )}
+
                   {/* Live Turn Prompt */}
                   <div>
                     {gameState.phase === 'playing' ? (

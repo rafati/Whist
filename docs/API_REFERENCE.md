@@ -26,15 +26,18 @@ Base URL: `http://localhost:3000` (or `APP_URL` / `VITE_API_URL` environment var
 
 ### 1.2 Room Directory
 * **Endpoint:** `GET /api/rooms`
-* **Description:** Retrieves the list of all currently active public virtual tables.
+* **Description:** Retrieves the list of all currently active public (`!isPrivate`) virtual tables.
 * **Success Response (200 OK):**
 ```json
 [
   {
     "id": "grand-table-1",
+    "code": "GRAND1",
     "name": "Grand Table 1 (Public)",
     "playersCount": 0,
-    "status": "waiting"
+    "status": "waiting",
+    "isPrivate": false,
+    "turnTimerSeconds": 10
   }
 ]
 ```
@@ -49,6 +52,8 @@ Base URL: `http://localhost:3000` (or `APP_URL` / `VITE_API_URL` environment var
 {
   "name": "High Stakes Table",
   "hostId": "user_sub123_sess456",
+  "isPrivate": true,
+  "turnTimerSeconds": 10,
   "user": {
     "id": "user_sub123_sess456",
     "name": "Alex",
@@ -57,8 +62,36 @@ Base URL: `http://localhost:3000` (or `APP_URL` / `VITE_API_URL` environment var
   }
 }
 ```
-* **Success Response (200 OK):** Returns the full `Room` object. Automatically seats the creator in the `South` seat.
+* **Success Response (200 OK):** Returns the full `Room` object with an auto-generated 6-character alphanumeric `code` (e.g., `K7M4P2`). Automatically seats the creator in the `South` seat.
 * **Side Effect:** Automatically broadcasts `room_list` to all connected lobby clients.
+
+---
+
+### 1.3b Lookup Table by Room Code
+* **Endpoint:** `GET /api/rooms/by-code/:code`
+* **Parameters:** `code` (6-character room code, case-insensitive)
+* **Description:** Resolves a public or private room by its 6-character invite code.
+* **Success Response (200 OK):** Returns the full `Room` object.
+* **Error Response (404 Not Found):** `{ "error": "No table found with that room code" }`
+
+---
+
+### 1.3c Quick Play Matchmaking
+* **Endpoint:** `POST /api/matchmaking`
+* **Headers:** `Content-Type: application/json`
+* **Request Body:**
+```json
+{
+  "user": {
+    "id": "user_sub123_sess456",
+    "name": "Alex",
+    "email": "alex@example.com",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=Alex"
+  }
+}
+```
+* **Description:** Finds the best open public waiting table with the highest number of seated humans (1–3) and an available seat, or creates a new public matchmaking table if none are available. Automatically claims the first open seat for the requesting user and schedules a 15-second auto-fill timer (`matchmakingAutoStartAt`) to fill remaining seats with AI bots if 4 humans haven't joined yet.
+* **Success Response (200 OK):** Returns `{ "room": Room, "seat": Seat }`.
 
 ---
 
@@ -78,7 +111,7 @@ Base URL: `http://localhost:3000` (or `APP_URL` / `VITE_API_URL` environment var
   "error": "Room not found"
 }
 ```
-* **Side Effects:** Cancels active bot timers, disbands voice chat peers, broadcasts `room_deleted` to players inside the table, and broadcasts `room_list` to lobby clients.
+* **Side Effects:** Cancels active bot, turn, and matchmaking timers, disbands voice chat peers, broadcasts `room_deleted` to players inside the table, and broadcasts `room_list` to lobby clients.
 
 ---
 
@@ -229,6 +262,16 @@ Toggles AI bot difficulty between casual and tournament super bot.
   "type": "set_bot_difficulty",
   "roomId": "room_123",
   "difficulty": "super"
+}
+```
+
+#### `set_turn_timer`
+Configures the per-turn human countdown timer (in seconds; `0` disables the timer, or `5`, `10`, `15`, `30`) before an AI Bot automatically executes the turn on the player's behalf.
+```json
+{
+  "type": "set_turn_timer",
+  "roomId": "room_123",
+  "seconds": 10
 }
 ```
 

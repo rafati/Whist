@@ -60,10 +60,15 @@ A real-time, 4-player trick-taking partnership card game (**تدفيع الثم�
   * Easily disable or enable all procedural game audio (card landing snap, projectile whooshes, impacts, and medal chimes) and interactive click feedback.
   * 1-click access via the **Lobby header**, **Table header**, and inside the **Table Options** menu.
   * Preference is automatically saved to `localStorage` across page refreshes and browser sessions.
-* **Multiplayer, Named AI Bots & 10-Second Reconnection Grace Window**:
-  * Real-time WebSocket room matchmaking and table synchronization.
-  * Named AI Bots (**فاشي الاسرار**, **صف السادس**, and **ابو قرون**) across Casual and Super Bot difficulties.
+* **Multiplayer, Friend Room Codes, Quick Play Matchmaking & AI Bots**:
+  * **Play with Friends (`#CODE` & Shareable Invite Links)**: Create **Public** or **Private** tables with a unique 6-character room code (e.g., `#K7M4P2`). Friends can join instantly by entering the code in the Lobby or clicking a 1-click `?room=CODE` invite link, which automatically seats them at the first open slot.
+  * **Quick Play Online Matchmaking (`POST /api/matchmaking`)**: Matchmakes solo players into open public tables (or spins up a new public matchmaking table) with an automatic 15-second bot-fill countdown so players never wait indefinitely.
+  * **Configurable Human Turn Timer (`10s` Default) & Bot Auto-Play**: Every human turn during Bidding, Trump Declaration, and Trick Play has a configurable countdown timer (`5s`, `10s` default, `15s`, `30s`, or `Off`) displayed as a live progress bar on the active seat pod. If time expires, the AI Bot immediately plays a legal move on the player's behalf, clearly badged with **`🤖 Bot Move`** on the played card (`🤖 Auto` on bids) and an auto-dismissing top-center notification banner.
+  * **Named AI Bots**: **فاشي الاسرار**, **صف السادس**, and **ابو قرون** across Casual and Super Bot difficulties.
   * **10-Second Disconnect Countdown & Bot Replacement**: When a seated human player leaves an active game (or closes/disconnects their browser tab), the table immediately displays a live **`Left • Bot in 10s`** badge on their seat pod and a top-center alert banner counting down 10 seconds. If the player returns within 10 seconds, they seamlessly resume their seat and hand; otherwise, an AI Bot (**فاشي الاسرار**, **صف السادس**, or **ابو قرون**) automatically replaces them after 10 seconds and plays their turns so the match continues without interruption.
+* **120Hz Direct-DOM Card Swipe & Seamless Momentum Flight**:
+  * Dragging a card bypasses React re-renders during pointer movement by writing `translate3d(...) rotate(...) scale(...)` directly to the card DOM node at 120Hz.
+  * Velocity-aware release threshold (`dy < -32px` or upward flick velocity `vy < -0.35 px/ms`) with a single continuous 2-keyframe `cubic-bezier(0.16, 1, 0.3, 1)` deceleration curve from the exact finger release coordinates into the center trick slot.
 
 ---
 
@@ -157,7 +162,9 @@ export const ANIMATION_CONFIG = {
   WINNER_CELEBRATION_DURATION_MS: 1000,// Celebration badge highlight duration
   THROW_FLIGHT_DURATION_MS: 700,       // Parabolic flight time for thrown objects
   THROW_HIT_DURATION_MS: 1450,         // Post-impact physics choreography duration
-  THROW_COOLDOWN_MS: 2500              // Cooldown between consecutive throws
+  THROW_COOLDOWN_MS: 2500,             // Cooldown between consecutive throws
+  DEFAULT_TURN_TIMER_SECONDS: 10,      // Default turn timer before bot auto-plays
+  MATCHMAKING_AUTO_FILL_BOTS_MS: 15000 // Auto-fill matchmaking tables after 15s
 };
 ```
 

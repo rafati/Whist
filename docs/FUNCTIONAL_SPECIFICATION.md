@@ -6,21 +6,30 @@
 
 ---
 
-## 1. Feature: Room Management & Player Seating
+## 1. Feature: Room Management, Friend Codes, Matchmaking & Turn Timer
 
 ### 1.1 Purpose & Expected Users
-Enables human players and AI bots to assemble at virtual tables in 2-versus-2 partnerships. Accessible to authenticated Google users and guest players.
+Enables human players and AI bots to assemble at virtual tables in 2-versus-2 partnerships via private friend room codes, shareable invite links, or automatic public matchmaking. Accessible to authenticated Google users and guest players.
 
 ### 1.2 Access & Workflow
 1. Users view the list of active public tables in [Lobby.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/Lobby.tsx).
-2. Users can create a table by submitting a table name via `POST /api/rooms`. The host is automatically seated at `South` (Team 1).
-3. Alternatively, an unseated user can join an existing room and select an open seat (`Team 1 • Sit Here` or `Team 2 • Sit Here`).
-4. **Sit & Fill Bots**: A user can click "Sit & Fill Bots" in [VirtualTable.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/VirtualTable.tsx). If unseated, the user is seated in the first available slot, and all remaining empty seats are populated with bot profiles (`Bot Polaris`, `Bot Zephyr`, `Bot Atlas`, `Bot Orion`).
+2. **Create Table (Public or Private)**: Users can create a table via `POST /api/rooms` with configurable visibility (`Public` or `Private`) and Turn Timer (`5s`, `10s` default, `15s`, `30s`, or `Off`). Every room receives a unique 6-character code (e.g., `#K7M4P2`). The host is automatically seated at `South` (Team 1).
+3. **Play with Friends (`#CODE` & Shareable Invite Links)**:
+   * Players can enter a 6-character room code in the Lobby (`GET /api/rooms/by-code/:code`) or open a shareable link (`?room=CODE`), which automatically joins the room and claims the first open seat.
+   * Inside [VirtualTable.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/VirtualTable.tsx), players can copy the room code or shareable invite URL with a single click.
+4. **Quick Play Online Matchmaking (`POST /api/matchmaking`)**:
+   * Places the player into the fullest open public table in `'waiting'` state (or creates a new public matchmaking table) and claims an open seat.
+   * Starts a 15-second auto-fill countdown (`matchmakingAutoStartAt`) that automatically populates any remaining empty seats with AI bots (`فاشي الاسرار`, `صف السادس`, `ابو قرون`) so the match begins promptly.
+5. **Sit & Fill Bots**: A user can click "Sit & Fill Bots" in [VirtualTable.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/VirtualTable.tsx) at any time during `'waiting'` to immediately fill all remaining empty seats with AI bots.
+6. **Configurable Human Turn Timer & Bot Auto-Play**:
+   * Whenever a seated human player is on the clock during `bidding`, `declaring`, or `playing` and `room.turnTimerSeconds > 0` (default `10s`), the server sets `turnDeadlineAt` and starts a countdown timer.
+   * If the human player does not act before `turnDeadlineAt`, the server's AI Bot engine (`super` or `casual`) immediately computes and executes a legal move on their behalf without converting the human seat into a permanent bot.
+   * Auto-played moves are flagged with `isAutoPlayed: true`, badged on the table felt with **`🤖 Bot Move`** (or `🤖 Auto` on bids), and announced via an auto-dismissing top-center notification banner (`lastAutoPlayNotice`).
 
 ### 1.3 Validation & Rules
-* A seat cannot be claimed if occupied by another human player ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L488)).
+* A seat cannot be claimed if occupied by another human player.
 * If a human user is already seated in seat $S_1$ and claims seat $S_2$, $S_1$ is vacated automatically.
-* Automatic Start Trigger: Once all 4 seats are occupied, the room automatically transitions from `'waiting'` to `'bidding'`, and Phase 1 begins ([server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts#L509-L515)).
+* Automatic Start Trigger: Once all 4 seats are occupied, the room automatically transitions from `'waiting'` to `'bidding'`, and Phase 1 begins.
 
 ---
 

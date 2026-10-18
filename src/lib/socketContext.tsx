@@ -1,16 +1,19 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { ClientMessage, Room, ServerMessage, UserProfile, Seat, ThrowableObjectType } from '../types.ts';
+import { ClientMessage, Room, RoomSummary, ServerMessage, UserProfile, Seat, ThrowableObjectType } from '../types.ts';
 
 interface SocketContextType {
   isConnected: boolean;
-  roomsList: Array<{ id: string; name: string; playersCount: number; status: string }>;
+  roomsList: RoomSummary[];
   currentRoom: Room | null;
   joinRoom: (roomId: string, user: UserProfile) => void;
+  joinRoomByCode: (code: string, user: UserProfile) => Promise<Room | null>;
+  findOnlineMatch: (user: UserProfile, botDifficulty?: 'casual' | 'super', turnTimeoutMs?: number) => Promise<Room | null>;
   leaveRoom: (roomId: string, user: UserProfile) => void;
   claimSeat: (roomId: string, seat: any, user: UserProfile) => void;
   leaveSeat: (roomId: string, seat: any) => void;
   fillBots: (roomId: string) => void;
   setBotDifficulty: (roomId: string, difficulty: 'casual' | 'super') => void;
+  setTurnTimeout: (roomId: string, turnTimeoutMs: number) => void;
   makeBid: (roomId: string, bid: any) => void;
   declareTrump: (roomId: string, suit: any) => void;
   playCard: (roomId: string, seat: any, card: any) => void;
@@ -30,7 +33,7 @@ const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
-  const [roomsList, setRoomsList] = useState<Array<{ id: string; name: string; playersCount: number; status: string }>>([]);
+  const [roomsList, setRoomsList] = useState<RoomSummary[]>([]);
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -136,6 +139,56 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     send({ type: 'join_room', roomId, user });
   }, [send]);
 
+  const joinRoomByCode = useCallback(async (code: string, user: UserProfile): Promise<Room | null> => {
+    const apiBase = (import.meta.env.VITE_API_URL as string) || '';
+    try {
+      const res = await fetch(`${apiBase}/api/rooms/join-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, user }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMessage(data.error || 'Could not join table with that code.');
+        return null;
+      }
+      setCurrentRoom(data);
+      joinRoom(data.id, user);
+      return data;
+    } catch (err) {
+      console.error('Error joining room by code:', err);
+      setErrorMessage('Network error joining table by code.');
+      return null;
+    }
+  }, [joinRoom]);
+
+  const findOnlineMatch = useCallback(async (
+    user: UserProfile,
+    botDifficulty: 'casual' | 'super' = 'super',
+    turnTimeoutMs: number = 10000
+  ): Promise<Room | null> => {
+    const apiBase = (import.meta.env.VITE_API_URL as string) || '';
+    try {
+      const res = await fetch(`${apiBase}/api/matchmaking`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user, botDifficulty, turnTimeoutMs }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMessage(data.error || 'Could not start online matchmaking.');
+        return null;
+      }
+      setCurrentRoom(data);
+      joinRoom(data.id, user);
+      return data;
+    } catch (err) {
+      console.error('Error finding online match:', err);
+      setErrorMessage('Network error during matchmaking.');
+      return null;
+    }
+  }, [joinRoom]);
+
   const leaveRoom = useCallback((roomId: string, user: UserProfile) => {
     activeRoomIdRef.current = null;
     setCurrentRoom(null);
@@ -156,6 +209,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const setBotDifficulty = useCallback((roomId: string, difficulty: 'casual' | 'super') => {
     send({ type: 'set_bot_difficulty', roomId, difficulty });
+  }, [send]);
+
+  const setTurnTimeout = useCallback((roomId: string, turnTimeoutMs: number) => {
+    send({ type: 'set_turn_timeout', roomId, turnTimeoutMs });
   }, [send]);
 
   const makeBid = useCallback((roomId: string, bid: any) => {
@@ -216,11 +273,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         roomsList,
         currentRoom,
         joinRoom,
+        joinRoomByCode,
+        findOnlineMatch,
         leaveRoom,
         claimSeat,
         leaveSeat,
         fillBots,
         setBotDifficulty,
+        setTurnTimeout,
         makeBid,
         declareTrump,
         playCard,

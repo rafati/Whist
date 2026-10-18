@@ -57,6 +57,19 @@ export const ANIMATION_CONFIG = {
    * Cooldown period (in ms) between consecutive throws.
    */
   THROW_COOLDOWN_MS: 2500,
+
+  /**
+   * Default turn timeout (in ms) for a human player to act (bid, declare trump, or play a card)
+   * before the AI bot automatically plays the move on their behalf.
+   * Default: 10000ms (10 seconds). Can be customized globally or per-room.
+   */
+  DEFAULT_TURN_TIMEOUT_MS: 10000,
+
+  /**
+   * Matchmaking queue wait duration (in ms) for additional online players to join
+   * before remaining open seats are filled with AI bots.
+   */
+  MATCHMAKING_AUTO_START_MS: 8000,
 } as const;
 
 /**

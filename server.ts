@@ -34,8 +34,13 @@ import {
   isLegalBid,
   SEATS,
   startDealRound,
+  SUIT_NAMES,
+  SUIT_SYMBOLS,
 } from './src/logic/gameLogic.ts';
-import { SERVER_TRICK_RESOLVE_DELAY_MS } from './src/logic/animationConfig.ts';
+import {
+  ANIMATION_CONFIG,
+  SERVER_TRICK_RESOLVE_DELAY_MS,
+} from './src/logic/animationConfig.ts';
 import { getBotBid, getBotCardPlay, getBotDeclaredSuit } from './src/logic/botAi.ts';
 import {
   getSuperBotBid,
@@ -48,6 +53,7 @@ import {
   trainPolicyFromSimulation,
   resetBotPolicy,
 } from './src/data/botPolicy.ts';
+import { RoomSummary } from './src/types.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 const app = express();
@@ -60,11 +66,34 @@ app.use(express.json());
 const rooms = new Map<string, Room>();
 const clientSockets = new Map<WebSocket, { roomId?: string; user?: UserProfile }>();
 const botTimers = new Map<string, NodeJS.Timeout>();
+const turnTimeoutTimers = new Map<string, NodeJS.Timeout>();
+const matchmakingTimers = new Map<string, NodeJS.Timeout>();
 const misdealTimers = new Map<string, NodeJS.Timeout>();
 const disconnectTimers = new Map<string, NodeJS.Timeout>(); // key: `${roomId}:${seat}`
 const throwCooldowns = new Map<string, number>();
 
 export const BOT_REPLACE_DELAY_MS = 10000; // 10 seconds before replacing a disconnected human player with a bot
+export const DEFAULT_TURN_TIMEOUT_MS = ANIMATION_CONFIG.DEFAULT_TURN_TIMEOUT_MS; // 10 seconds default turn timeout
+
+const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+export function generateRoomCode(): string {
+  const existingCodes = new Set(
+    Array.from(rooms.values())
+      .map((r) => r.code?.toUpperCase())
+      .filter(Boolean)
+  );
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let code = '';
+    for (let i = 0; i < 4; i++) {
+      code += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
+    }
+    if (!existingCodes.has(code)) {
+      return code;
+    }
+  }
+  return Math.random().toString(36).substring(2, 6).toUpperCase();
+}
 
 export const BOT_NAME_POOL = ['فاشي الاسرار', 'صف السادس', 'ابو قرون'] as const;
 
@@ -98,6 +127,20 @@ function getBotNameForSeat(currentSeats: Record<Seat, UserProfile | null>, seat:
   return preferred;
 }
 
+function clearTurnTimeoutTimer(roomId: string) {
+  if (turnTimeoutTimers.has(roomId)) {
+    clearTimeout(turnTimeoutTimers.get(roomId)!);
+    turnTimeoutTimers.delete(roomId);
+  }
+}
+
+function clearMatchmakingTimer(roomId: string) {
+  if (matchmakingTimers.has(roomId)) {
+    clearTimeout(matchmakingTimers.get(roomId)!);
+    matchmakingTimers.delete(roomId);
+  }
+}
+
 function clearDisconnectTimer(roomId: string, seat: Seat) {
   const key = `${roomId}:${seat}`;
   if (disconnectTimers.has(key)) {
@@ -127,9 +170,9 @@ function replaceDisconnectedPlayerWithBot(roomId: string, seat: Seat) {
     isBot: true,
   };
 
+  scheduleBotActionIfNeeded(room.id);
   broadcastRoom(room.id);
   broadcastRoomList();
-  scheduleBotActionIfNeeded(room.id);
 }
 
 function handleHumanPlayerLeftRoom(roomId: string, userId: string) {
@@ -244,14 +287,28 @@ function broadcastRoom(roomId: string) {
   }
 }
 
+export function buildPublicRoomsSummary(): RoomSummary[] {
+  return Array.from(rooms.values())
+    .filter((r) => !r.isPrivate)
+    .map((r) => {
+      const occupants = Object.values(r.seats).filter(Boolean) as UserProfile[];
+      return {
+        id: r.id,
+        code: r.code,
+        name: r.name,
+        playersCount: occupants.length,
+        humansCount: occupants.filter((p) => !p.isBot).length,
+        status: r.gameState.phase,
+        isPrivate: Boolean(r.isPrivate),
+        isMatchmaking: Boolean(r.isMatchmaking),
+        turnTimeoutMs: r.turnTimeoutMs ?? DEFAULT_TURN_TIMEOUT_MS,
+      };
+    });
+}
+
 // Broadcast room list to all lobby clients
 function broadcastRoomList() {
-  const list = Array.from(rooms.values()).map((r) => ({
-    id: r.id,
-    name: r.name,
-    playersCount: Object.values(r.seats).filter(Boolean).length,
-    status: r.gameState.phase,
-  }));
+  const list = buildPublicRoomsSummary();
 
   const payload: ServerMessage = {
     type: 'room_list',
@@ -266,57 +323,96 @@ function broadcastRoomList() {
   }
 }
 
-// Check and trigger bot actions if it's a bot's turn
+// Check and trigger bot actions if it's a bot's turn, or start the human turn timeout countdown
 function scheduleBotActionIfNeeded(roomId: string) {
   const room = rooms.get(roomId);
   if (!room) return;
 
-  // Clear existing timer if any
+  // Clear existing bot or turn timeout timers if any
   if (botTimers.has(roomId)) {
     clearTimeout(botTimers.get(roomId)!);
     botTimers.delete(roomId);
   }
+  clearTurnTimeoutTimer(roomId);
 
   const { gameState, seats } = room;
+  const turnTimeoutMs =
+    typeof room.turnTimeoutMs === 'number' ? room.turnTimeoutMs : DEFAULT_TURN_TIMEOUT_MS;
 
-  // 1. Bot Bidding Turn
+  // 1. Bidding Turn
   if (gameState.phase === 'bidding' && gameState.currentBidder) {
-    const bidderProfile = seats[gameState.currentBidder];
+    const activeSeat = gameState.currentBidder;
+    const bidderProfile = seats[activeSeat];
     if (bidderProfile?.isBot) {
+      gameState.turnDeadlineAt = null;
+      gameState.turnDurationMs = null;
       const timer = setTimeout(() => {
-        handleBotBid(roomId, gameState.currentBidder!);
+        handleBotBid(roomId, activeSeat, false);
       }, 900);
       botTimers.set(roomId, timer);
       return;
+    } else if (turnTimeoutMs > 0) {
+      gameState.turnDeadlineAt = Date.now() + turnTimeoutMs;
+      gameState.turnDurationMs = turnTimeoutMs;
+      const timer = setTimeout(() => {
+        handleBotBid(roomId, activeSeat, true);
+      }, turnTimeoutMs);
+      turnTimeoutTimers.set(roomId, timer);
+      return;
     }
   }
 
-  // 2. Bot Declaring Trump Suit
+  // 2. Declaring Trump Suit Turn
   if (gameState.phase === 'declaring' && gameState.declarer) {
-    const declarerProfile = seats[gameState.declarer];
+    const activeSeat = gameState.declarer;
+    const declarerProfile = seats[activeSeat];
     if (declarerProfile?.isBot) {
+      gameState.turnDeadlineAt = null;
+      gameState.turnDurationMs = null;
       const timer = setTimeout(() => {
-        handleBotDeclareTrump(roomId, gameState.declarer!);
+        handleBotDeclareTrump(roomId, activeSeat, false);
       }, 1000);
       botTimers.set(roomId, timer);
       return;
-    }
-  }
-
-  // 3. Bot Playing Card
-  if (gameState.phase === 'playing' && gameState.currentTurn) {
-    const turnProfile = seats[gameState.currentTurn];
-    if (turnProfile?.isBot) {
+    } else if (turnTimeoutMs > 0) {
+      gameState.turnDeadlineAt = Date.now() + turnTimeoutMs;
+      gameState.turnDurationMs = turnTimeoutMs;
       const timer = setTimeout(() => {
-        handleBotPlayCard(roomId, gameState.currentTurn!);
-      }, 950);
-      botTimers.set(roomId, timer);
+        handleBotDeclareTrump(roomId, activeSeat, true);
+      }, turnTimeoutMs);
+      turnTimeoutTimers.set(roomId, timer);
       return;
     }
   }
+
+  // 3. Playing Card Turn
+  if (gameState.phase === 'playing' && gameState.currentTurn) {
+    const activeSeat = gameState.currentTurn;
+    const turnProfile = seats[activeSeat];
+    if (turnProfile?.isBot) {
+      gameState.turnDeadlineAt = null;
+      gameState.turnDurationMs = null;
+      const timer = setTimeout(() => {
+        handleBotPlayCard(roomId, activeSeat, false);
+      }, 950);
+      botTimers.set(roomId, timer);
+      return;
+    } else if (turnTimeoutMs > 0) {
+      gameState.turnDeadlineAt = Date.now() + turnTimeoutMs;
+      gameState.turnDurationMs = turnTimeoutMs;
+      const timer = setTimeout(() => {
+        handleBotPlayCard(roomId, activeSeat, true);
+      }, turnTimeoutMs);
+      turnTimeoutTimers.set(roomId, timer);
+      return;
+    }
+  }
+
+  gameState.turnDeadlineAt = null;
+  gameState.turnDurationMs = null;
 }
 
-function handleBotBid(roomId: string, seat: Seat) {
+function handleBotBid(roomId: string, seat: Seat, isHumanTimeoutAutoPlay = false) {
   const room = rooms.get(roomId);
   if (!room || room.gameState.phase !== 'bidding' || room.gameState.currentBidder !== seat) return;
 
@@ -324,10 +420,27 @@ function handleBotBid(roomId: string, seat: Seat) {
   const bid = isSuper
     ? getSuperBotBid(room.gameState, seat)
     : getBotBid(room.gameState, seat);
-  processBid(room, bid);
+
+  if (isHumanTimeoutAutoPlay) {
+    const playerName = room.seats[seat]?.name || seat;
+    const actionText =
+      bid.type === 'pass'
+        ? 'Passed'
+        : `Bid ${bid.level} ${bid.contractType === 'NT' ? 'No Trump' : 'Suit'}`;
+    room.gameState.lastAutoPlayNotice = {
+      id: `auto_${Date.now()}_${seat}`,
+      seat,
+      playerName,
+      actionText,
+      phase: 'bidding',
+      timestamp: Date.now(),
+    };
+  }
+
+  processBid(room, { ...bid, isBotAutoPlay: isHumanTimeoutAutoPlay });
 }
 
-function handleBotDeclareTrump(roomId: string, seat: Seat) {
+function handleBotDeclareTrump(roomId: string, seat: Seat, isHumanTimeoutAutoPlay = false) {
   const room = rooms.get(roomId);
   if (!room || room.gameState.phase !== 'declaring' || room.gameState.declarer !== seat) return;
 
@@ -336,10 +449,23 @@ function handleBotDeclareTrump(roomId: string, seat: Seat) {
   const suit = isSuper
     ? getSuperBotDeclaredSuit(hand, room.gameState, seat)
     : getBotDeclaredSuit(hand);
-  processDeclareTrump(room, suit);
+
+  if (isHumanTimeoutAutoPlay) {
+    const playerName = room.seats[seat]?.name || seat;
+    room.gameState.lastAutoPlayNotice = {
+      id: `auto_${Date.now()}_${seat}`,
+      seat,
+      playerName,
+      actionText: `Declared ${SUIT_SYMBOLS[suit]} ${SUIT_NAMES[suit]}`,
+      phase: 'declaring',
+      timestamp: Date.now(),
+    };
+  }
+
+  processDeclareTrump(room, suit, isHumanTimeoutAutoPlay);
 }
 
-function handleBotPlayCard(roomId: string, seat: Seat) {
+function handleBotPlayCard(roomId: string, seat: Seat, isHumanTimeoutAutoPlay = false) {
   const room = rooms.get(roomId);
   if (!room || room.gameState.phase !== 'playing' || room.gameState.currentTurn !== seat) return;
 
@@ -350,7 +476,20 @@ function handleBotPlayCard(roomId: string, seat: Seat) {
   const card = isSuper
     ? getSuperBotCardPlay(room.gameState, seat, trump)
     : getBotCardPlay(room.gameState, seat, trump);
-  processPlayCard(room, seat, card);
+
+  if (isHumanTimeoutAutoPlay) {
+    const playerName = room.seats[seat]?.name || seat;
+    room.gameState.lastAutoPlayNotice = {
+      id: `auto_${Date.now()}_${seat}`,
+      seat,
+      playerName,
+      actionText: `Played ${card.rank}${SUIT_SYMBOLS[card.suit]}`,
+      phase: 'playing',
+      timestamp: Date.now(),
+    };
+  }
+
+  processPlayCard(room, seat, card, isHumanTimeoutAutoPlay);
 }
 
 // Bidding Engine
@@ -359,11 +498,17 @@ function processBid(room: Room, bid: Bid) {
   const currentSeat = state.currentBidder;
   if (!currentSeat || bid.seat !== currentSeat) return;
 
+  clearTurnTimeoutTimer(room.id);
+
   const isDealer = state.dealer === currentSeat;
   const isFinalTurn = state.auctionTurnsCount === 3; // 4th turn
 
   if (bid.type === 'pass') {
-    state.bids.push({ seat: currentSeat, type: 'pass' });
+    state.bids.push({
+      seat: currentSeat,
+      type: 'pass',
+      isBotAutoPlay: Boolean(bid.isBotAutoPlay),
+    });
   } else {
     if (!bid.level || !bid.contractType) return;
 
@@ -385,6 +530,7 @@ function processBid(room: Room, bid: Bid) {
     const recordedBid: Bid = {
       ...bid,
       isDealerPrivilegeMatch: isMatch,
+      isBotAutoPlay: Boolean(bid.isBotAutoPlay),
     };
     state.bids.push(recordedBid);
     state.highestBid = recordedBid;
@@ -396,8 +542,8 @@ function processBid(room: Room, bid: Bid) {
   if (state.auctionTurnsCount < 4) {
     // Move counter-clockwise to next bidder
     state.currentBidder = getNextSeat(currentSeat);
-    broadcastRoom(room.id);
     scheduleBotActionIfNeeded(room.id);
+    broadcastRoom(room.id);
     return;
   }
 
@@ -418,37 +564,41 @@ function processBid(room: Room, bid: Bid) {
   if (state.winningBid.contractType === 'Suit') {
     // Phase 3: Contract Declaration
     state.phase = 'declaring';
-    broadcastRoom(room.id);
     scheduleBotActionIfNeeded(room.id);
+    broadcastRoom(room.id);
   } else {
     // No Trump: Contract declaration skipped, play begins immediately
     state.phase = 'playing';
     state.trumpSuit = 'NT';
+    state.isTrumpAutoDeclared = false;
     // NT Game: The Declarer leads first
     state.currentTurn = state.declarer;
-    broadcastRoom(room.id);
     scheduleBotActionIfNeeded(room.id);
+    broadcastRoom(room.id);
   }
 }
 
 // Contract Declaration Engine
-function processDeclareTrump(room: Room, suit: Suit) {
+function processDeclareTrump(room: Room, suit: Suit, isBotAutoPlay = false) {
   const state = room.gameState;
   if (state.phase !== 'declaring' || !state.declarer) return;
 
+  clearTurnTimeoutTimer(room.id);
+
   state.trumpSuit = suit;
+  state.isTrumpAutoDeclared = isBotAutoPlay;
   state.phase = 'playing';
 
   // Suit Game: Player to the Right of the Declarer leads first
   // Right of Declarer = getNextSeat(declarer) in counter-clockwise order
   state.currentTurn = getNextSeat(state.declarer);
 
-  broadcastRoom(room.id);
   scheduleBotActionIfNeeded(room.id);
+  broadcastRoom(room.id);
 }
 
 // Card Play Engine
-function processPlayCard(room: Room, seat: Seat, card: Card) {
+function processPlayCard(room: Room, seat: Seat, card: Card, isBotAutoPlay = false) {
   const state = room.gameState;
   if (state.phase !== 'playing' || state.currentTurn !== seat) return;
 
@@ -463,22 +613,26 @@ function processPlayCard(room: Room, seat: Seat, card: Card) {
     return;
   }
 
+  clearTurnTimeoutTimer(room.id);
+
   // Remove card from hand
   const [playedCard] = hand.splice(cardIndex, 1);
   state.cardsCount[seat] = hand.length;
 
-  state.currentTrick.push({ seat, card: playedCard });
+  state.currentTrick.push({ seat, card: playedCard, isBotAutoPlay });
 
   if (state.currentTrick.length < 4) {
     // Next player counter-clockwise
     state.currentTurn = getNextSeat(seat);
-    broadcastRoom(room.id);
     scheduleBotActionIfNeeded(room.id);
+    broadcastRoom(room.id);
     return;
   }
 
   // Trick is complete! (4 cards played)
   state.currentTurn = null; // Pause turn input while resolving trick
+  state.turnDeadlineAt = null;
+  state.turnDurationMs = null;
   broadcastRoom(room.id);
 
   // Evaluate trick winner after short visual delay
@@ -507,15 +661,18 @@ function processPlayCard(room: Room, seat: Seat, card: Card) {
     } else {
       // Winner of the trick leads the next trick
       state.currentTurn = winnerSeat;
-      broadcastRoom(room.id);
       scheduleBotActionIfNeeded(room.id);
+      broadcastRoom(room.id);
     }
   }, SERVER_TRICK_RESOLVE_DELAY_MS);
 }
 
 // Round End & Scoring Engine
 function resolveRoundEnd(room: Room) {
+  clearTurnTimeoutTimer(room.id);
   const state = room.gameState;
+  state.turnDeadlineAt = null;
+  state.turnDurationMs = null;
   const winningBid = state.winningBid!;
   const declarer = state.declarer!;
   const trump = state.trumpSuit!;
@@ -536,7 +693,7 @@ function resolveRoundEnd(room: Room) {
   state.matchScores.TeamB +=
     roundScore.contractTeam === 'TeamB' ? roundScore.scoreDeltaBidTeam : roundScore.scoreDeltaDefTeam;
 
-  // Check 2.7 Win/Loss Conditions (+10 victory, -10 elimination, +10 priority)
+  // Check 2.7 Win/Loss Conditions (+11 victory, -11 elimination)
   const matchEnd = checkMatchEnd(state.matchScores);
 
   if (matchEnd.isOver) {
@@ -550,9 +707,53 @@ function resolveRoundEnd(room: Room) {
   broadcastRoom(room.id);
 }
 
+// Helper to fill remaining empty seats with bots and start the deal round
+function fillBotsAndStartRoom(room: Room, callerUser?: UserProfile) {
+  if (room.gameState.phase !== 'waiting') return;
+
+  clearMatchmakingTimer(room.id);
+  room.matchmakingAutoStartAt = null;
+
+  if (callerUser) {
+    const isAlreadySeated = SEATS.some((s) => room.seats[s]?.id === callerUser.id);
+    if (!isAlreadySeated) {
+      const firstAvailable = SEATS.find((s) => !room.seats[s]);
+      if (firstAvailable) {
+        room.seats[firstAvailable] = {
+          id: callerUser.id,
+          name: callerUser.name,
+          email: callerUser.email,
+          avatar: callerUser.avatar,
+        };
+      }
+    }
+  }
+
+  for (const s of SEATS) {
+    if (!room.seats[s]) {
+      room.seats[s] = {
+        id: `bot_${s.toLowerCase()}`,
+        name: getBotNameForSeat(room.seats, s),
+        email: `${s.toLowerCase()}@ai.studio`,
+        avatar: BOT_AVATARS[s],
+        isBot: true,
+      };
+    }
+  }
+
+  const allOccupied = SEATS.every((s) => room.seats[s] !== null);
+  if (allOccupied) {
+    const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
+    executeDealRound(room, randomDealer, 1);
+  } else {
+    broadcastRoom(room.id);
+    broadcastRoomList();
+  }
+}
+
 // Execute a deal round with unwinnable hand (misdeal) detection and auto re-deal
 function executeDealRound(room: Room, dealerSeat: Seat, roundNumber?: number) {
-  // Clear any existing misdeal timer or bot timer for this room
+  // Clear any existing misdeal timer, bot timer, turn timer, or matchmaking timer for this room
   if (misdealTimers.has(room.id)) {
     clearTimeout(misdealTimers.get(room.id)!);
     misdealTimers.delete(room.id);
@@ -561,6 +762,9 @@ function executeDealRound(room: Room, dealerSeat: Seat, roundNumber?: number) {
     clearTimeout(botTimers.get(room.id)!);
     botTimers.delete(room.id);
   }
+  clearTurnTimeoutTimer(room.id);
+  clearMatchmakingTimer(room.id);
+  room.matchmakingAutoStartAt = null;
 
   // Deal hands and check if any player has 0 winning cards
   const hands = dealHands();
@@ -587,6 +791,8 @@ function executeDealRound(room: Room, dealerSeat: Seat, roundNumber?: number) {
       openingBidder: null,
       currentTurn: null,
       currentTrick: [],
+      turnDeadlineAt: null,
+      turnDurationMs: null,
     };
     if (typeof roundNumber === 'number') {
       room.gameState.roundNumber = roundNumber;
@@ -611,9 +817,9 @@ function executeDealRound(room: Room, dealerSeat: Seat, roundNumber?: number) {
     room.gameState.roundNumber = roundNumber;
   }
 
+  scheduleBotActionIfNeeded(room.id);
   broadcastRoom(room.id);
   broadcastRoomList();
-  scheduleBotActionIfNeeded(room.id);
 }
 
 // Start Next Round
@@ -637,13 +843,8 @@ function resetMatch(room: Room) {
 wss.on('connection', (ws) => {
   clientSockets.set(ws, {});
 
-  // Send initial room list
-  const list = Array.from(rooms.values()).map((r) => ({
-    id: r.id,
-    name: r.name,
-    playersCount: Object.values(r.seats).filter(Boolean).length,
-    status: r.gameState.phase,
-  }));
+  // Send initial public room list
+  const list = buildPublicRoomsSummary();
   ws.send(JSON.stringify({ type: 'room_list', rooms: list } satisfies ServerMessage));
 
   ws.on('message', (data) => {
@@ -769,43 +970,8 @@ wss.on('connection', (ws) => {
         if (!room) return;
 
         if (room.gameState.phase === 'waiting') {
-          // If the calling human client is in this room and not seated yet, place them in first available seat
           const clientInfo = clientSockets.get(ws);
-          const currentUser = clientInfo?.user;
-          const isAlreadySeated = Boolean(currentUser && SEATS.some((s) => room.seats[s]?.id === currentUser.id));
-          if (currentUser && !isAlreadySeated) {
-            const firstAvailable = SEATS.find((s) => !room.seats[s]);
-            if (firstAvailable) {
-              room.seats[firstAvailable] = {
-                id: currentUser.id,
-                name: currentUser.name,
-                email: currentUser.email,
-                avatar: currentUser.avatar,
-              };
-            }
-          }
-
-          for (const s of SEATS) {
-            if (!room.seats[s]) {
-              room.seats[s] = {
-                id: `bot_${s.toLowerCase()}`,
-                name: getBotNameForSeat(room.seats, s),
-                email: `${s.toLowerCase()}@ai.studio`,
-                avatar: BOT_AVATARS[s],
-                isBot: true,
-              };
-            }
-          }
-
-          // Check all occupied
-          const allOccupied = SEATS.every((s) => room.seats[s] !== null);
-          if (allOccupied) {
-            const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
-            executeDealRound(room, randomDealer, 1);
-          } else {
-            broadcastRoom(room.id);
-            broadcastRoomList();
-          }
+          fillBotsAndStartRoom(room, clientInfo?.user);
         }
         return;
       }
@@ -815,6 +981,16 @@ wss.on('connection', (ws) => {
         if (!room) return;
         room.botDifficulty = msg.difficulty;
         broadcastRoom(room.id);
+        return;
+      }
+
+      if (msg.type === 'set_turn_timeout') {
+        const room = rooms.get(msg.roomId);
+        if (!room) return;
+        room.turnTimeoutMs = Math.max(0, Number(msg.turnTimeoutMs) || 0);
+        scheduleBotActionIfNeeded(room.id);
+        broadcastRoom(room.id);
+        broadcastRoomList();
         return;
       }
 
@@ -882,6 +1058,8 @@ wss.on('connection', (ws) => {
             clearTimeout(misdealTimer);
             misdealTimers.delete(roomId);
           }
+          clearTurnTimeoutTimer(roomId);
+          clearMatchmakingTimer(roomId);
           clearAllRoomDisconnectTimers(roomId);
           rooms.delete(roomId);
           roomVoicePeers.delete(roomId);
@@ -1096,20 +1274,23 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// Get or Create public rooms
+// Get public rooms
 app.get('/api/rooms', (req, res) => {
-  const list = Array.from(rooms.values()).map((r) => ({
-    id: r.id,
-    name: r.name,
-    playersCount: Object.values(r.seats).filter(Boolean).length,
-    status: r.gameState.phase,
-  }));
-  res.json(list);
+  res.json(buildPublicRoomsSummary());
 });
 
 app.post('/api/rooms', (req, res) => {
-  const { name, hostId, user, botDifficulty = 'super', autoFillBots = false } = req.body;
+  const {
+    name,
+    hostId,
+    user,
+    botDifficulty = 'super',
+    autoFillBots = false,
+    isPrivate = false,
+    turnTimeoutMs = ANIMATION_CONFIG.DEFAULT_TURN_TIMEOUT_MS,
+  } = req.body;
   const roomId = 'room_' + Math.random().toString(36).substring(2, 8);
+  const code = generateRoomCode();
   const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
 
   const initialSouth = user
@@ -1128,9 +1309,11 @@ app.post('/api/rooms', (req, res) => {
     West: autoFillBots
       ? { id: 'bot_west', name: BOT_NAMES.West, email: 'west@ai.studio', avatar: BOT_AVATARS.West, isBot: true }
       : null,
-    South: initialSouth || (autoFillBots
-      ? { id: 'bot_south', name: BOT_NAMES.South, email: 'south@ai.studio', avatar: BOT_AVATARS.South, isBot: true }
-      : null),
+    South:
+      initialSouth ||
+      (autoFillBots
+        ? { id: 'bot_south', name: BOT_NAMES.South, email: 'south@ai.studio', avatar: BOT_AVATARS.South, isBot: true }
+        : null),
     East: autoFillBots
       ? { id: 'bot_east', name: BOT_NAMES.East, email: 'east@ai.studio', avatar: BOT_AVATARS.East, isBot: true }
       : null,
@@ -1138,9 +1321,15 @@ app.post('/api/rooms', (req, res) => {
 
   const newRoom: Room = {
     id: roomId,
-    name: name || `Table #${roomId.slice(-4).toUpperCase()}`,
+    code,
+    name: name || `${isPrivate ? 'Private' : 'Table'} #${code}`,
     createdAt: Date.now(),
-    hostId: hostId || 'host',
+    hostId: hostId || user?.id || 'host',
+    isPrivate: Boolean(isPrivate),
+    turnTimeoutMs:
+      typeof turnTimeoutMs === 'number' && !Number.isNaN(turnTimeoutMs)
+        ? Math.max(0, turnTimeoutMs)
+        : ANIMATION_CONFIG.DEFAULT_TURN_TIMEOUT_MS,
     seats,
     gameState: createInitialGameState(randomDealer),
     botDifficulty: botDifficulty === 'casual' ? 'casual' : 'super',
@@ -1152,6 +1341,159 @@ app.post('/api/rooms', (req, res) => {
   } else {
     broadcastRoomList();
   }
+  res.json(newRoom);
+});
+
+// Join a room by 4-character room code (or room ID)
+app.post('/api/rooms/join-code', (req, res) => {
+  const { code, user } = req.body;
+  const rawCode = String(code || '').trim();
+  if (!rawCode) {
+    return res.status(400).json({ error: 'Please enter a room code.' });
+  }
+  const normalizedCode = rawCode.toUpperCase();
+
+  const room = Array.from(rooms.values()).find(
+    (r) => r.code?.toUpperCase() === normalizedCode || r.id.toLowerCase() === rawCode.toLowerCase()
+  );
+
+  if (!room) {
+    return res.status(404).json({ error: `No table found with code "${normalizedCode}".` });
+  }
+
+  // If user is provided and the game is still waiting for players, automatically seat them in the first available seat
+  if (user && room.gameState.phase === 'waiting') {
+    const alreadySeated = SEATS.some((s) => room.seats[s]?.id === user.id);
+    if (!alreadySeated) {
+      const preferredOrder: Seat[] = ['South', 'North', 'East', 'West'];
+      const emptySeat = preferredOrder.find((s) => !room.seats[s]);
+      if (emptySeat) {
+        room.seats[emptySeat] = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+        };
+      }
+    }
+
+    const allOccupied = SEATS.every((s) => room.seats[s] !== null);
+    if (allOccupied) {
+      const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
+      executeDealRound(room, randomDealer, 1);
+    } else {
+      broadcastRoom(room.id);
+      broadcastRoomList();
+    }
+  }
+
+  res.json(room);
+});
+
+// Online Matchmaking Queue: Pair online players or auto-fill remaining seats with AI bots after countdown
+app.post('/api/matchmaking', (req, res) => {
+  const {
+    user,
+    botDifficulty = 'super',
+    turnTimeoutMs = ANIMATION_CONFIG.DEFAULT_TURN_TIMEOUT_MS,
+  } = req.body;
+
+  if (!user || !user.id) {
+    return res.status(400).json({ error: 'User profile is required for matchmaking.' });
+  }
+
+  // Look for an open matchmaking table waiting for players
+  let targetRoom = Array.from(rooms.values()).find(
+    (r) =>
+      r.isMatchmaking &&
+      !r.isPrivate &&
+      r.gameState.phase === 'waiting' &&
+      (SEATS.some((s) => r.seats[s]?.id === user.id) || SEATS.some((s) => !r.seats[s]))
+  );
+
+  if (targetRoom) {
+    const alreadySeated = SEATS.some((s) => targetRoom!.seats[s]?.id === user.id);
+    if (!alreadySeated) {
+      const preferredOrder: Seat[] = ['South', 'North', 'East', 'West'];
+      const emptySeat = preferredOrder.find((s) => !targetRoom!.seats[s]);
+      if (emptySeat) {
+        targetRoom.seats[emptySeat] = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+        };
+      }
+    }
+
+    const allOccupied = SEATS.every((s) => targetRoom!.seats[s] !== null);
+    if (allOccupied) {
+      const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
+      executeDealRound(targetRoom, randomDealer, 1);
+    } else {
+      broadcastRoom(targetRoom.id);
+      broadcastRoomList();
+    }
+
+    return res.json(targetRoom);
+  }
+
+  // Otherwise create a new public matchmaking table with an auto-start countdown
+  const roomId = 'mm_' + Math.random().toString(36).substring(2, 8);
+  const code = generateRoomCode();
+  const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
+  const autoStartDelay = ANIMATION_CONFIG.MATCHMAKING_AUTO_START_MS;
+  const autoStartAt = Date.now() + autoStartDelay;
+
+  const newRoom: Room = {
+    id: roomId,
+    code,
+    name: `Online Match #${code}`,
+    createdAt: Date.now(),
+    hostId: user.id,
+    isPrivate: false,
+    isMatchmaking: true,
+    matchmakingAutoStartAt: autoStartAt,
+    turnTimeoutMs:
+      typeof turnTimeoutMs === 'number' && !Number.isNaN(turnTimeoutMs)
+        ? Math.max(0, turnTimeoutMs)
+        : ANIMATION_CONFIG.DEFAULT_TURN_TIMEOUT_MS,
+    seats: {
+      North: null,
+      West: null,
+      South: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+      },
+      East: null,
+    },
+    gameState: createInitialGameState(randomDealer),
+    botDifficulty: botDifficulty === 'casual' ? 'casual' : 'super',
+  };
+
+  rooms.set(roomId, newRoom);
+
+  const mmTimer = setTimeout(() => {
+    matchmakingTimers.delete(roomId);
+    const currentRoom = rooms.get(roomId);
+    if (!currentRoom || currentRoom.gameState.phase !== 'waiting') return;
+    const hasHuman = SEATS.some((s) => {
+      const p = currentRoom.seats[s];
+      return p !== null && !p.isBot;
+    });
+    if (hasHuman) {
+      fillBotsAndStartRoom(currentRoom);
+    } else {
+      currentRoom.matchmakingAutoStartAt = null;
+      broadcastRoom(roomId);
+      broadcastRoomList();
+    }
+  }, autoStartDelay);
+
+  matchmakingTimers.set(roomId, mmTimer);
+  broadcastRoomList();
   res.json(newRoom);
 });
 
@@ -1173,6 +1515,8 @@ app.delete('/api/rooms/:roomId', (req, res) => {
     misdealTimers.delete(roomId);
   }
 
+  clearTurnTimeoutTimer(roomId);
+  clearMatchmakingTimer(roomId);
   clearAllRoomDisconnectTimers(roomId);
 
   rooms.delete(roomId);
@@ -1338,9 +1682,12 @@ if (rooms.size === 0) {
   const initialId = 'grand-table-1';
   rooms.set(initialId, {
     id: initialId,
+    code: 'PLAY',
     name: 'Grand Table 1 (Public)',
     createdAt: Date.now(),
     hostId: 'system',
+    isPrivate: false,
+    turnTimeoutMs: ANIMATION_CONFIG.DEFAULT_TURN_TIMEOUT_MS,
     seats: {
       North: null,
       West: null,

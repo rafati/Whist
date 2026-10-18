@@ -19,6 +19,11 @@ import {
   Shield,
   Volume2,
   VolumeX,
+  Globe,
+  Lock,
+  Clock,
+  Hash,
+  ArrowRight,
 } from 'lucide-react';
 import { useSoundSetting, playClickSound } from '../lib/throwSounds.ts';
 
@@ -28,10 +33,15 @@ interface LobbyProps {
 
 export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
   const { user, logout } = useAuth();
-  const { roomsList, refreshRoomList, deleteRoom } = useSocket();
+  const { roomsList, refreshRoomList, deleteRoom, joinRoomByCode, findOnlineMatch } = useSocket();
   const [isCreating, setIsCreating] = useState(false);
   const [isQuickStarting, setIsQuickStarting] = useState(false);
+  const [isMatchmaking, setIsMatchmaking] = useState(false);
+  const [isJoiningByCode, setIsJoiningByCode] = useState(false);
+  const [roomCodeInput, setRoomCodeInput] = useState('');
   const [newRoomName, setNewRoomName] = useState('');
+  const [isPrivateRoom, setIsPrivateRoom] = useState(false);
+  const [turnTimeoutMs, setTurnTimeoutMs] = useState<number>(10000);
   const [botSkill, setBotSkill] = useState<'super' | 'casual'>('super');
   const [showRules, setShowRules] = useState(false);
   const [showSimModal, setShowSimModal] = useState(false);
@@ -57,6 +67,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
           user,
           botDifficulty: botSkill,
           autoFillBots: true,
+          turnTimeoutMs: 10000,
         }),
       });
       const room = await res.json();
@@ -65,6 +76,30 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
       console.error('Failed to start quick play:', err);
     } finally {
       setIsQuickStarting(false);
+    }
+  };
+
+  const handleFindOnlineMatch = async () => {
+    if (!user || isMatchmaking) return;
+    setIsMatchmaking(true);
+    try {
+      await findOnlineMatch(user, botSkill, 10000);
+    } finally {
+      setIsMatchmaking(false);
+    }
+  };
+
+  const handleJoinByCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !roomCodeInput.trim() || isJoiningByCode) return;
+    setIsJoiningByCode(true);
+    try {
+      const joined = await joinRoomByCode(roomCodeInput.trim(), user);
+      if (joined) {
+        setRoomCodeInput('');
+      }
+    } finally {
+      setIsJoiningByCode(false);
     }
   };
 
@@ -78,11 +113,13 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newRoomName.trim() || `Table #${Math.floor(1000 + Math.random() * 9000)}`,
+          name: newRoomName.trim() || undefined,
           hostId: user.id,
           user,
           botDifficulty: botSkill,
           autoFillBots: false,
+          isPrivate: isPrivateRoom,
+          turnTimeoutMs,
         }),
       });
       const room = await res.json();
@@ -181,9 +218,9 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
 
       {/* Main Content */}
       <main className="flex-1 min-h-0 scrollable-panel max-w-5xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-6">
-        {/* Hero Launchpad: 1-Click Quick Play vs. Create Multiplayer Table */}
+        {/* Hero Launchpad: Online Matchmaking / Instant Play vs. Friends Table & Room Code */}
         <section className="grid grid-cols-1 md:grid-cols-12 gap-4 shrink-0">
-          {/* Quick Play with Bots Card (7 cols) */}
+          {/* Online Matchmaking & Instant AI Play Card (7 cols) */}
           <div className="md:col-span-7 bg-gradient-to-br from-emerald-950/95 via-[#0c261b] to-teal-950/90 border border-emerald-500/50 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between relative overflow-hidden">
             <div className="absolute -right-4 -bottom-6 text-8xl text-emerald-400/5 font-serif-display pointer-events-none select-none">
               ♠
@@ -192,13 +229,13 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
             <div>
               <div className="inline-flex items-center gap-1.5 bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-2">
                 <Zap className="w-3 h-3 fill-current" />
-                <span>Instant Match • 1-Click Deal</span>
+                <span>Online Matchmaking &amp; Instant Play</span>
               </div>
               <h2 className="text-lg sm:text-xl font-bold font-serif-display text-white">
-                Quick Play with AI Partners
+                Find Online Match or Play Instant AI
               </h2>
-              <p className="text-xs text-emerald-200/80 mt-1 max-w-md leading-relaxed">
-                Jump straight into a 2v2 match on <strong className="text-emerald-300">Team 1</strong>. Your partner and both opponents are filled automatically and Round 1 deals immediately.
+              <p className="text-xs text-emerald-200/80 mt-1 max-w-lg leading-relaxed">
+                Queue into <strong className="text-emerald-300">Online Matchmaking</strong> to pair with live players (auto-filling remaining seats with AI after 8s), or deal immediately with AI partners.
               </p>
             </div>
 
@@ -236,40 +273,77 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
                 </div>
               </div>
 
-              <button
-                onClick={handleQuickPlay}
-                disabled={isQuickStarting}
-                className="py-2.5 px-5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-950/40 transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-60"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                <span>{isQuickStarting ? 'Dealing Cards...' : 'Play Instant Match'}</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  id="find-online-match-btn"
+                  onClick={handleFindOnlineMatch}
+                  disabled={isMatchmaking || isQuickStarting}
+                  className="py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-emerald-950/50 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-60"
+                >
+                  <Globe className="w-4 h-4" />
+                  <span>{isMatchmaking ? 'Matching...' : 'Find Online Match'}</span>
+                </button>
+
+                <button
+                  onClick={handleQuickPlay}
+                  disabled={isQuickStarting || isMatchmaking}
+                  className="py-2.5 px-4 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-950/40 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-60"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>{isQuickStarting ? 'Dealing...' : 'Play Instant AI'}</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Create Multiplayer Table Card (5 cols) */}
-          <div className="md:col-span-5 bg-slate-950/75 border border-emerald-800/50 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between">
+          {/* Friends & Multiplayer Table Card (5 cols) */}
+          <div className="md:col-span-5 bg-slate-950/75 border border-emerald-800/50 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between gap-3">
             <div>
               <div className="inline-flex items-center gap-1.5 bg-emerald-950 border border-emerald-700/50 text-emerald-300 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-2">
                 <Users className="w-3 h-3" />
-                <span>Multiplayer Lobby</span>
+                <span>Play with Friends</span>
               </div>
               <h2 className="text-base sm:text-lg font-bold font-serif-display text-white">
-                Host a Public Table
+                Private or Public Friends Table
               </h2>
-              <p className="text-xs text-slate-300/80 mt-1 leading-relaxed">
-                Open a custom 4-seat table for friends to join on Team 1 or Team 2, with built-in voice chat and optional AI seat fill.
+              <p className="text-xs text-slate-300/80 mt-0.5 leading-relaxed">
+                Enter a 4-character Room Code from a friend, or host a custom table with a shareable invite link.
               </p>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-end">
+            {/* Join by Room Code Form */}
+            <form onSubmit={handleJoinByCode} className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Hash className="w-3.5 h-3.5 text-emerald-400/80 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  id="join-room-code-input"
+                  type="text"
+                  maxLength={12}
+                  placeholder="Room Code (e.g. PLAY)"
+                  value={roomCodeInput}
+                  onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
+                  className="w-full bg-slate-900/90 border border-emerald-800/60 focus:border-emerald-400 rounded-xl pl-8 pr-3 py-2 text-xs font-mono font-bold tracking-wider text-white uppercase placeholder:normal-case placeholder:font-sans placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-500 focus:outline-none"
+                />
+              </div>
+              <button
+                id="join-room-code-btn"
+                type="submit"
+                disabled={!roomCodeInput.trim() || isJoiningByCode}
+                className="py-2 px-3.5 bg-emerald-800/90 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 font-bold text-xs rounded-xl border border-emerald-600/50 transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <span>{isJoiningByCode ? 'Joining...' : 'Join Code'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </form>
+
+            <div className="pt-2 border-t border-slate-800/80 flex items-center justify-end">
               <button
                 id="create-room-btn"
                 onClick={() => setIsCreating(true)}
                 className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <Plus className="w-4 h-4" />
-                <span>Create Multiplayer Table</span>
+                <span>Create Friends / Public Table</span>
               </button>
             </div>
           </div>
@@ -286,7 +360,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Join an open seat with other players or spectate an active table.
+                Join an open seat with other players, or enter a private room code above.
               </p>
             </div>
 
@@ -306,7 +380,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
                 <Users className="w-10 h-10 text-emerald-500/50 mx-auto mb-2.5" />
                 <h3 className="text-sm sm:text-base font-bold text-white mb-1">No Open Public Tables</h3>
                 <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
-                  Use <strong className="text-amber-300">Quick Play</strong> above for an instant game with bots, or open a new public table for friends.
+                  Use <strong className="text-amber-300">Find Online Match</strong> above or open a new table for friends.
                 </p>
                 <button
                   onClick={() => setIsCreating(true)}
@@ -318,25 +392,37 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
             ) : (
               roomsList.map((room) => {
                 const isFull = room.playersCount >= 4;
+                const turnSec = room.turnTimeoutMs ? Math.round(room.turnTimeoutMs / 1000) : 0;
                 return (
                   <div
                     key={room.id}
                     className="bg-slate-950/75 border border-emerald-800/40 hover:border-emerald-500/60 rounded-2xl p-4 shadow-lg flex flex-col justify-between transition-all group"
                   >
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span
-                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                            room.status === 'waiting'
-                              ? 'bg-amber-950/80 text-amber-300 border border-amber-700/50'
-                              : 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/50'
-                          }`}
-                        >
-                          {room.status === 'waiting' ? 'Open Seating' : 'Match in Progress'}
-                        </span>
+                      <div className="flex items-center justify-between mb-2 gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                              room.status === 'waiting'
+                                ? 'bg-amber-950/80 text-amber-300 border border-amber-700/50'
+                                : 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/50'
+                            }`}
+                          >
+                            {room.status === 'waiting' ? 'Open Seating' : 'Match in Progress'}
+                          </span>
+                          {room.code && (
+                            <span className="text-[10px] font-mono font-bold bg-slate-900 border border-slate-700 text-amber-300 px-2 py-0.5 rounded-full">
+                              #{room.code}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-mono bg-slate-900/80 border border-slate-800 text-slate-300 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5 text-emerald-400" />
+                            <span>{turnSec > 0 ? `${turnSec}s` : '∞'}</span>
+                          </span>
+                        </div>
 
                         {/* 4 Seat Occupancy Dots */}
-                        <div className="flex items-center gap-1" title={`${room.playersCount} of 4 seats occupied`}>
+                        <div className="flex items-center gap-1 shrink-0" title={`${room.playersCount} of 4 seats occupied`}>
                           {[0, 1, 2, 3].map((idx) => (
                             <span
                               key={idx}
@@ -393,7 +479,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
               Create Multiplayer Table
             </h3>
             <p className="text-xs text-slate-300 mb-4">
-              Open a 4-seat partnership table. Friends can claim any seat on Team 1 or Team 2, or you can fill remaining seats with AI bots.
+              Open a 4-seat table with a 4-character Room Code and shareable invite link for friends.
             </p>
 
             <form onSubmit={handleCreateRoom} className="space-y-4">
@@ -401,7 +487,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
                 <label className="text-xs text-slate-300 font-medium block mb-1.5">Table Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Champions Table, طاولة تدفيع الثمن"
+                  placeholder="e.g. Friends Night, طاولة الأصدقاء"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   className="w-full bg-slate-900 border border-emerald-800/60 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
@@ -409,9 +495,79 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
                 />
               </div>
 
+              {/* Table Visibility: Public vs Private (Friends Only) */}
               <div>
                 <label className="text-xs text-slate-300 font-medium block mb-1.5">
-                  Default AI Bot Skill (if filling empty seats)
+                  Table Visibility
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPrivateRoom(false)}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      !isPrivateRoom
+                        ? 'bg-emerald-950/90 border-emerald-500 text-white'
+                        : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center gap-1.5 text-emerald-300">
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Public Table</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Listed in Live Club Lobby</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPrivateRoom(true)}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      isPrivateRoom
+                        ? 'bg-amber-950/70 border-amber-400 text-white'
+                        : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center gap-1.5 text-amber-300">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Private (Friends)</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Join via Room Code / Link</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Human Turn Timer Selector */}
+              <div>
+                <label className="text-xs text-slate-300 font-medium flex items-center justify-between mb-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Turn Timer (Bot Auto-Move on Timeout)</span>
+                  </span>
+                </label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { label: '10s (Default)', value: 10000 },
+                    { label: '15s', value: 15000 },
+                    { label: '30s', value: 30000 },
+                    { label: 'Unlimited', value: 0 },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setTurnTimeoutMs(opt.value)}
+                      className={`py-2 px-2 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
+                        turnTimeoutMs === opt.value
+                          ? 'bg-emerald-600 border-emerald-400 text-white shadow'
+                          : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-300 font-medium block mb-1.5">
+                  AI Bot Skill (for Bot Auto-Moves &amp; Empty Seats)
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -456,7 +612,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
                   type="submit"
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow cursor-pointer"
                 >
-                  Create & Enter Table
+                  Create &amp; Enter Table
                 </button>
               </div>
             </form>

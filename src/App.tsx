@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './lib/authContext.tsx';
 import { SocketProvider, useSocket } from './lib/socketContext.tsx';
 import { GoogleAuthScreen } from './components/GoogleAuthScreen.tsx';
@@ -8,7 +8,23 @@ import { AlertCircle, X } from 'lucide-react';
 
 function GameRoot() {
   const { user, isAuthenticated } = useAuth();
-  const { currentRoom, joinRoom, leaveRoom, errorMessage, clearError } = useSocket();
+  const { currentRoom, joinRoom, joinRoomByCode, leaveRoom, errorMessage, clearError } = useSocket();
+  const autoJoinedInviteRef = useRef(false);
+
+  // Automatically join a room if opened via a shareable invite link (?room=CODE)
+  useEffect(() => {
+    if (!isAuthenticated || !user || currentRoom || autoJoinedInviteRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const inviteCode = params.get('room');
+    if (inviteCode && inviteCode.trim()) {
+      autoJoinedInviteRef.current = true;
+      // Clean URL query param so leaving the table later returns cleanly to the Lobby
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', url.pathname + url.search);
+      joinRoomByCode(inviteCode.trim(), user);
+    }
+  }, [isAuthenticated, user, currentRoom, joinRoomByCode]);
 
   // If not authenticated via Google Identity Services, show Google Auth Screen
   if (!isAuthenticated || !user) {
