@@ -128,6 +128,49 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState, className = '
           </div>
         </div>
       </div>
+
+      {gameState.roundScores && gameState.roundScores.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-800">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+            Round History
+          </div>
+          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+            {gameState.roundScores.map((rd, i) => (
+              <div
+                key={i}
+                className={`text-xs p-2 rounded-lg flex items-center justify-between border ${
+                  rd.isSalpand
+                    ? 'bg-amber-950/40 border-amber-500/60 text-amber-200'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-slate-400">R{rd.roundNumber}:</span>
+                  <span>{rd.bidLevel} {rd.contractType}</span>
+                  {rd.isSalpand && (
+                    <span className="bg-amber-500/20 text-amber-300 font-extrabold px-1.5 py-0.5 rounded text-[10px] border border-amber-400/40">
+                      🔥 Salpand
+                    </span>
+                  )}
+                </div>
+                <div className="font-mono text-xs font-bold">
+                  <span className="text-emerald-400">
+                    T1: {rd.contractTeam === 'TeamA'
+                      ? (rd.scoreDeltaBidTeam >= 0 ? `+${rd.scoreDeltaBidTeam}` : rd.scoreDeltaBidTeam)
+                      : (rd.scoreDeltaDefTeam >= 0 ? `+${rd.scoreDeltaDefTeam}` : rd.scoreDeltaDefTeam)}
+                  </span>
+                  <span className="text-slate-500 mx-1.5">|</span>
+                  <span className="text-blue-400">
+                    T2: {rd.contractTeam === 'TeamB'
+                      ? (rd.scoreDeltaBidTeam >= 0 ? `+${rd.scoreDeltaBidTeam}` : rd.scoreDeltaBidTeam)
+                      : (rd.scoreDeltaDefTeam >= 0 ? `+${rd.scoreDeltaDefTeam}` : rd.scoreDeltaDefTeam)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

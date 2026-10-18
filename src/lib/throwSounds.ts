@@ -313,3 +313,100 @@ export function playCardSnapSound(): void {
   }
 }
 
+/**
+ * Procedural Royal Salpand Fanfare Sound
+ * Grand, triumphant brass fanfare + shimmering harmonic bell chime for capturing all 13 tricks!
+ */
+export function playSalpandFanfareSound(): void {
+  if (!isSoundEnabled()) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    // 1. Ascending Brass Fanfare flourish (G3, C4, E4, G4, C5)
+    const notes = [
+      { freq: 196.0, start: 0.0, dur: 0.14 },    // G3
+      { freq: 261.63, start: 0.14, dur: 0.14 },  // C4
+      { freq: 329.63, start: 0.28, dur: 0.14 },  // E4
+      { freq: 392.0, start: 0.42, dur: 0.18 },   // G4
+      { freq: 523.25, start: 0.60, dur: 1.2 },   // C5 (held)
+    ];
+
+    notes.forEach(({ freq, start, dur }) => {
+      const t = now + start;
+      const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      // Brass-like sawtooth + triangle blend
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, t);
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(freq * 1.002, t); // subtle warm chorus detune
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1400, t);
+      filter.frequency.exponentialRampToValueAtTime(700, t + dur);
+
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.18, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+      osc.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(t);
+      osc2.start(t);
+      osc.stop(t + dur + 0.05);
+      osc2.stop(t + dur + 0.05);
+    });
+
+    // 2. Harmonic chord support on the peak (C4 + E4 + G4 + C5)
+    const chordFreqs = [261.63, 329.63, 392.0, 523.25];
+    chordFreqs.forEach((freq) => {
+      const t = now + 0.60;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.12, t + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(t);
+      osc.stop(t + 1.45);
+    });
+
+    // 3. Shimmering bell chimes (C6, E6, G6, C7)
+    const bellFreqs = [1046.5, 1318.51, 1567.98, 2093.0];
+    bellFreqs.forEach((freq, idx) => {
+      const t = now + 0.7 + idx * 0.08;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+
+      gain.gain.setValueAtTime(0.09, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.95);
+    });
+  } catch (e) {
+    console.debug('Salpand fanfare sound suppressed:', e);
+  }
+}
+

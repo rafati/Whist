@@ -28,6 +28,7 @@ import {
   getDealerPrivileges,
   getNextSeat,
   getTeam,
+  getTeamName,
   isBidHigher,
   isCardLegal,
   isDealerPrivilegeMatch,
@@ -686,6 +687,8 @@ function resolveRoundEnd(room: Room) {
   );
 
   state.roundScores.push(roundScore);
+  state.isSalpand = Boolean(roundScore.isSalpand);
+  state.salpandTeam = roundScore.salpandTeam;
 
   // Update Match Scores
   state.matchScores.TeamA +=
@@ -693,13 +696,15 @@ function resolveRoundEnd(room: Room) {
   state.matchScores.TeamB +=
     roundScore.contractTeam === 'TeamB' ? roundScore.scoreDeltaBidTeam : roundScore.scoreDeltaDefTeam;
 
-  // Check 2.7 Win/Loss Conditions (+11 victory, -11 elimination)
+  // Check 2.7 Win/Loss Conditions (+10 victory, -10 elimination)
   const matchEnd = checkMatchEnd(state.matchScores);
 
   if (matchEnd.isOver) {
     state.phase = 'game_over';
     state.winnerTeam = matchEnd.winnerTeam;
-    state.winnerReason = matchEnd.reason;
+    state.winnerReason = roundScore.isSalpand && roundScore.salpandTeam
+      ? `🔥 SALPAND VICTORY! ${getTeamName(roundScore.salpandTeam)} captured all 13 tricks (+11 pts)!`
+      : matchEnd.reason;
   } else {
     state.phase = 'round_over';
   }

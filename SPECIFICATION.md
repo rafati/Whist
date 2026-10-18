@@ -111,6 +111,17 @@ Scoring is calculated per round based on tricks won above the base threshold of 
   * Declarer Team: Penalty of $-(L \times 2)$ points.
   * Defending Team: Points for tricks over 6: first $L$ tricks are worth 2 points each; further tricks are worth 1 point each.
 
+#### C. Salpand (صلبند) — 13-Trick Grand Slam
+When a partnership captures all **13 tricks** in a single round, it is called a **Salpand** (صلبند / Salpand / Slpand):
+* **Salpand Award**: Capturing all 13 tricks is counted at **+11 points** for the capturing partnership.
+* **Suit Contracts**: In Suit contracts, winning 13 tricks normally awards $13 - 6 = 7$ points; under the Salpand rule, the team is awarded **+11 points**.
+* **No Trump (NT) Contracts**:
+  * If the capturing team achieves 13 tricks in No Trump, they are awarded **+11 points**.
+  * **Capping Rule**: If the standard No Trump formula $((L \times 2) + \text{overtricks})$ exceeds 11 points (e.g. 5 NT: $10 + 2 = 12$ pts; 6 NT: $12 + 1 = 13$ pts; 7 NT: $14 + 0 = 14$ pts), it is strictly **counted as 11 points as well**.
+* **Defensive Salpand**: If the defending partnership captures all 13 tricks (holding declarer to 0 tricks), the defenders achieve a **Defensive Salpand** and receive **+11 points**, while the declaring partnership receives their standard contract set penalty ($-L$ in Suit, $-(L \times 2)$ in NT).
+* **Match Victory Impact**: Because match victory requires reaching $\ge +10$ points (`checkMatchEnd()`), an 11-point Salpand instantly wins the match for any partnership with $\ge 0$ points prior to the round.
+* **Visual & Audio Celebration**: Triggering a Salpand launches a full-screen celebration modal ([`SalpandCelebrationModal.tsx`](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/SalpandCelebrationModal.tsx)) with rotating golden sunburst rays, pulsating crown badge, dual-corner canvas-confetti bursts, and a procedural Web Audio royal brass & chime fanfare (`playSalpandFanfareSound()`).
+
 ### 2.6 Victory and Elimination Conditions
 Evaluated by `checkMatchEnd()` ([gameLogic.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/gameLogic.ts#L400-L449)):
 * **Victory Condition**: First team to achieve **+10 Match Points**.

@@ -73,6 +73,8 @@ export interface RoundScoreBreakdown {
   scoreDeltaBidTeam: number;
   scoreDeltaDefTeam: number;
   explanation: string[];
+  isSalpand?: boolean;
+  salpandTeam?: Team;
 }
 
 export interface MisdealInfo {
@@ -90,6 +92,8 @@ export interface GameState {
   roundNumber: number;
   dealer: Seat;
   misdealInfo?: MisdealInfo | null;
+  isSalpand?: boolean;
+  salpandTeam?: Team;
 
   // Turn Timer & Bot Auto-Play Feedback
   turnDeadlineAt?: number | null;

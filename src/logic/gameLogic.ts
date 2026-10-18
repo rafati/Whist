@@ -405,63 +405,117 @@ export function calculateRoundScores(
     `Result: ${getTeamName(contractTeam)} won ${tricksWonBidTeam} tricks. ${getTeamName(defendingTeam)} won ${tricksWonDefTeam} tricks.`
   );
 
+  const isSalpand = tricksWonBidTeam === 13 || tricksWonDefTeam === 13;
+  const salpandTeam: Team | undefined =
+    tricksWonBidTeam === 13 ? contractTeam : tricksWonDefTeam === 13 ? defendingTeam : undefined;
+
   if (contractType === 'Suit') {
     // 2.6 A. Suit Contracts
     if (bidSuccess) {
-      // Bidding Team: +1 point per trick over 6
-      const overSix = tricksWonBidTeam - 6;
-      scoreDeltaBidTeam = overSix;
-      scoreDeltaDefTeam = 0;
-      explanation.push(
-        `Bid Made: ${getTeamName(contractTeam)} won ${tricksWonBidTeam} tricks (${overSix} tricks over base 6). +${scoreDeltaBidTeam} pts.`
-      );
-      explanation.push(`Defending team gets 0 pts.`);
+      if (tricksWonBidTeam === 13) {
+        // Salpand! Capturing all 13 tricks is counted as 11 points
+        scoreDeltaBidTeam = 11;
+        scoreDeltaDefTeam = 0;
+        explanation.push(
+          `🔥 SALPAND! ${getTeamName(contractTeam)} captured all 13 tricks! Awarded +11 points (Salpand rule).`
+        );
+        explanation.push(`Defending team gets 0 pts.`);
+      } else {
+        // Bidding Team: +1 point per trick over 6
+        const overSix = tricksWonBidTeam - 6;
+        scoreDeltaBidTeam = overSix;
+        scoreDeltaDefTeam = 0;
+        explanation.push(
+          `Bid Made: ${getTeamName(contractTeam)} won ${tricksWonBidTeam} tricks (${overSix} tricks over base 6). +${scoreDeltaBidTeam} pts.`
+        );
+        explanation.push(`Defending team gets 0 pts.`);
+      }
     } else {
       // Bidding Team: -L points (negative penalty equal to bid level)
-      // Defending Team: +1 point per trick they won over 6
       scoreDeltaBidTeam = -bidLevel;
-      const defOverSix = Math.max(0, tricksWonDefTeam - 6);
-      scoreDeltaDefTeam = defOverSix;
-      explanation.push(
-        `Bid Set (Failed): ${getTeamName(contractTeam)} fell short of ${tricksNeeded} tricks. Penalty: -${bidLevel} pts.`
-      );
-      explanation.push(
-        `Defending ${getTeamName(defendingTeam)} won ${tricksWonDefTeam} tricks (${defOverSix} over base 6): +${scoreDeltaDefTeam} pts.`
-      );
+      if (tricksWonDefTeam === 13) {
+        // Defensive Salpand! Defending team captured all 13 tricks
+        scoreDeltaDefTeam = 11;
+        explanation.push(
+          `🔥 DEFENSIVE SALPAND! Defending ${getTeamName(defendingTeam)} captured all 13 tricks! Awarded +11 points.`
+        );
+        explanation.push(
+          `Bid Set (Failed): ${getTeamName(contractTeam)} fell short of ${tricksNeeded} tricks. Penalty: -${bidLevel} pts.`
+        );
+      } else {
+        // Defending Team: +1 point per trick they won over 6
+        const defOverSix = Math.max(0, tricksWonDefTeam - 6);
+        scoreDeltaDefTeam = defOverSix;
+        explanation.push(
+          `Bid Set (Failed): ${getTeamName(contractTeam)} fell short of ${tricksNeeded} tricks. Penalty: -${bidLevel} pts.`
+        );
+        explanation.push(
+          `Defending ${getTeamName(defendingTeam)} won ${tricksWonDefTeam} tricks (${defOverSix} over base 6): +${scoreDeltaDefTeam} pts.`
+        );
+      }
     }
   } else {
     // 2.6 B. No Trump Contracts (Doubled)
     if (bidSuccess) {
-      // Bidding Team: (L × 2) + 1 point for each additional overtrick
-      // (Example: Bid 2 NT, Win 9 Tricks = 4 pts for contract + 1 pt for extra trick = 5 pts)
-      const baseContractPoints = bidLevel * 2;
-      const extraOvertricks = Math.max(0, tricksWonBidTeam - tricksNeeded);
-      scoreDeltaBidTeam = baseContractPoints + extraOvertricks;
-      scoreDeltaDefTeam = 0;
-      explanation.push(
-        `Bid Made (NT): Contract base (${bidLevel} × 2) = ${baseContractPoints} pts + ${extraOvertricks} overtrick(s) = +${scoreDeltaBidTeam} pts.`
-      );
-      explanation.push(`Defending team gets 0 pts.`);
+      if (tricksWonBidTeam === 13) {
+        // Salpand! In "no trump" if team gets 13 tricks and points exceed 11 points, it is counted as 11 points as well.
+        // Capturing all 13 tricks is always counted as exactly 11 points.
+        const baseContractPoints = bidLevel * 2;
+        const extraOvertricks = Math.max(0, tricksWonBidTeam - tricksNeeded);
+        const rawPoints = baseContractPoints + extraOvertricks;
+        scoreDeltaBidTeam = 11;
+        scoreDeltaDefTeam = 0;
+        if (rawPoints > 11) {
+          explanation.push(
+            `🔥 SALPAND! ${getTeamName(contractTeam)} captured all 13 tricks in No Trump! Awarded +11 points (NT formula was ${rawPoints} pts, capped at 11 pts per Salpand rule).`
+          );
+        } else {
+          explanation.push(
+            `🔥 SALPAND! ${getTeamName(contractTeam)} captured all 13 tricks in No Trump! Awarded +11 points (Salpand rule).`
+          );
+        }
+        explanation.push(`Defending team gets 0 pts.`);
+      } else {
+        // Bidding Team: (L × 2) + 1 point for each additional overtrick
+        const baseContractPoints = bidLevel * 2;
+        const extraOvertricks = Math.max(0, tricksWonBidTeam - tricksNeeded);
+        scoreDeltaBidTeam = baseContractPoints + extraOvertricks;
+        scoreDeltaDefTeam = 0;
+        explanation.push(
+          `Bid Made (NT): Contract base (${bidLevel} × 2) = ${baseContractPoints} pts + ${extraOvertricks} overtrick(s) = +${scoreDeltaBidTeam} pts.`
+        );
+        explanation.push(`Defending team gets 0 pts.`);
+      }
     } else {
       // Failure (Set):
       // Bidding Team: -(L × 2) points
-      // Defending Team: Points calculated using NT rules for their tricks over 6.
-      // (First L tricks over 6 are worth 2 pts each; any further tricks are worth 1 pt).
       scoreDeltaBidTeam = -(bidLevel * 2);
-      const defOverSix = Math.max(0, tricksWonDefTeam - 6);
-      let defPoints = 0;
-      if (defOverSix > 0) {
-        const doubleTricks = Math.min(defOverSix, bidLevel);
-        const singleTricks = Math.max(0, defOverSix - bidLevel);
-        defPoints = doubleTricks * 2 + singleTricks * 1;
+      if (tricksWonDefTeam === 13) {
+        // Defensive Salpand in No Trump!
+        scoreDeltaDefTeam = 11;
+        explanation.push(
+          `🔥 DEFENSIVE SALPAND! Defending ${getTeamName(defendingTeam)} captured all 13 tricks in No Trump! Awarded +11 points.`
+        );
+        explanation.push(
+          `Bid Set (NT Failed): Penalty for ${getTeamName(contractTeam)} is -(${bidLevel} × 2) = ${scoreDeltaBidTeam} pts.`
+        );
+      } else {
+        // Defending Team: Points calculated using NT rules for their tricks over 6.
+        const defOverSix = Math.max(0, tricksWonDefTeam - 6);
+        let defPoints = 0;
+        if (defOverSix > 0) {
+          const doubleTricks = Math.min(defOverSix, bidLevel);
+          const singleTricks = Math.max(0, defOverSix - bidLevel);
+          defPoints = doubleTricks * 2 + singleTricks * 1;
+        }
+        scoreDeltaDefTeam = defPoints;
+        explanation.push(
+          `Bid Set (NT Failed): Penalty for ${getTeamName(contractTeam)} is -(${bidLevel} × 2) = ${scoreDeltaBidTeam} pts.`
+        );
+        explanation.push(
+          `Defending ${getTeamName(defendingTeam)} won ${tricksWonDefTeam} tricks (${defOverSix} over 6). NT scoring: +${scoreDeltaDefTeam} pts.`
+        );
       }
-      scoreDeltaDefTeam = defPoints;
-      explanation.push(
-        `Bid Set (NT Failed): Penalty for ${getTeamName(contractTeam)} is -(${bidLevel} × 2) = ${scoreDeltaBidTeam} pts.`
-      );
-      explanation.push(
-        `Defending ${getTeamName(defendingTeam)} won ${tricksWonDefTeam} tricks (${defOverSix} over 6). NT scoring: +${scoreDeltaDefTeam} pts.`
-      );
     }
   }
 
@@ -479,6 +533,8 @@ export function calculateRoundScores(
     scoreDeltaBidTeam,
     scoreDeltaDefTeam,
     explanation,
+    isSalpand,
+    salpandTeam,
   };
 }
 
@@ -584,6 +640,8 @@ export function createInitialGameState(initialDealer: Seat = 'North'): GameState
     roundScores: [],
     winnerTeam: null,
     winnerReason: null,
+    isSalpand: false,
+    salpandTeam: undefined,
   };
 }
 
@@ -674,5 +732,7 @@ export function startDealRound(
       TeamA: 0,
       TeamB: 0,
     },
+    isSalpand: false,
+    salpandTeam: undefined,
   };
 }

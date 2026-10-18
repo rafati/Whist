@@ -30,10 +30,16 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   }, []);
 
   const winnerTeamName = gameState.winnerTeam ? getTeamName(gameState.winnerTeam) : 'Match Over';
+  const latestRound = gameState.roundScores?.[gameState.roundScores.length - 1];
+  const isSalpandVictory = Boolean(gameState.isSalpand || latestRound?.isSalpand);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 animate-in fade-in zoom-in-95 duration-200">
-      <div className="landscape-compact-modal bg-slate-950 border-2 border-amber-500/60 rounded-2xl sm:rounded-3xl p-4 sm:p-6 max-w-md w-full max-h-[95dvh] overflow-y-auto shadow-2xl text-center flex flex-col gap-3">
+      <div
+        className={`landscape-compact-modal bg-slate-950 border-2 rounded-2xl sm:rounded-3xl p-4 sm:p-6 max-w-md w-full max-h-[95dvh] overflow-y-auto shadow-2xl text-center flex flex-col gap-3 ${
+          isSalpandVictory ? 'border-amber-400 shadow-[0_0_35px_rgba(245,158,11,0.35)]' : 'border-amber-500/60'
+        }`}
+      >
         {/* Header Row */}
         <div className="flex items-center justify-center gap-3">
           <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-amber-600 to-yellow-400 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0">
@@ -41,7 +47,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </div>
           <div className="text-left">
             <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold">
-              Match Complete
+              {isSalpandVictory ? '🔥 Salpand Grand Slam' : 'Match Complete'}
             </div>
             <h2 className="text-xl sm:text-2xl font-extrabold font-serif-display text-white leading-tight">
               {winnerTeamName} Wins!
@@ -51,6 +57,15 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Salpand Honor Banner */}
+        {isSalpandVictory && (
+          <div className="bg-gradient-to-r from-amber-950/80 via-yellow-950/70 to-amber-950/80 border border-amber-500/60 rounded-xl px-3 py-1.5 text-xs text-amber-200 font-bold flex items-center justify-center gap-2 shadow-inner">
+            <span>🔥</span>
+            <span>صلبند • SALPAND (13 Tricks Captured)</span>
+            <span>+11 PTS</span>
+          </div>
+        )}
 
         {/* Final Scores */}
         <div className="grid grid-cols-2 gap-3 bg-slate-900/80 p-2.5 sm:p-3 rounded-2xl border border-slate-800">

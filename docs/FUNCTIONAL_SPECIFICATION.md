@@ -158,6 +158,14 @@ Let $L = \text{Bid Level}$, Required Tricks $= 6 + L$:
   $$\text{Defending Over 6} = \max(0, \text{DefendingTricksWon} - 6)$$
   $$\text{Defending Team Delta} = \min(\text{Defending Over 6}, L) \times 2 + \max(0, \text{Defending Over 6} - L) \times 1$$
 
+### 6.3 Salpand (صلبند) — 13-Trick Grand Slam Rule
+When any team captures all 13 tricks in a round:
+* **Point Value**: The team capturing all 13 tricks is awarded **+11 points**.
+* **Suit Contracts**: Replaces normal $+(\text{TricksWon} - 6)$ with **+11 points**.
+* **No Trump Contracts**: Counted as **+11 points** (if the NT formula points exceed 11 points, it is strictly capped at 11 points).
+* **Defensive Salpand**: If the defending team captures all 13 tricks, the defending team is awarded **+11 points**, while the declaring team receives their standard set penalty ($-L$ in Suit, $-(L \times 2)$ in NT).
+* **Celebration Animation**: Triggers full-screen `SalpandCelebrationModal` with rotating sunburst rays, glowing fire crown, canvas-confetti, and Web Audio brass & bell fanfare (`playSalpandFanfareSound()`).
+
 ---
 
 ## 7. Feature: Victory and Elimination Conditions

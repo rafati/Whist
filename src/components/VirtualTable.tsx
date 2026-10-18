@@ -27,6 +27,7 @@ import { BiddingPanel } from './BiddingPanel.tsx';
 import { SuitDeclarationModal } from './SuitDeclarationModal.tsx';
 import { RoundSummaryModal } from './RoundSummaryModal.tsx';
 import { GameOverModal } from './GameOverModal.tsx';
+import { SalpandCelebrationModal } from './SalpandCelebrationModal.tsx';
 import { MisdealModal } from './MisdealModal.tsx';
 import { ScoreBoard } from './ScoreBoard.tsx';
 import { SimulationModal } from './SimulationModal.tsx';
@@ -2528,6 +2529,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
       />
 
       {/* End-of-Round & End-of-Match Modals */}
+      <SalpandCelebrationModal gameState={gameState} />
+
       <RoundSummaryModal
         gameState={gameState}
         onNextRound={() => nextRound(room.id)}

@@ -138,9 +138,14 @@ Visit `http://localhost:3000` in your browser.
    * **Single-Tap / 1-Click Play**: A single tap on mobile or single click on desktop instantly plays an eligible card, launching it smoothly from its hand slot directly onto the center felt.
    * **Continuous Swipe-to-Throw & Mouse Drag**: Players can drag or swipe a card upwards all the way into the table playing area. The card tracks the pointer smoothly in real time. Releasing the card keeps it flying smoothly with momentum from its exact release point until it lands in the center trick, accompanied by a procedural felt snap sound. If the player changes their mind and drags the card back down towards their hand before releasing, the throw is cancelled and the card springs back into place. Both mobile touch swiping and desktop mouse dragging are supported.
    * **Clean Center Felt**: Redundant opponent card stacks and counters have been removed so the felt remains clean and focused on gameplay.
-5. **Scoring**:
+5. **Scoring & Salpand Grand Slam**:
    * Base threshold is 6 tricks. A contract of level $L$ requires $6 + L$ tricks.
-   * Target: **+10 points** to win the match.
+   * **Salpand (صلبند)**: When a partnership captures all 13 tricks in a single round:
+     * Awarded **+11 points** directly (in Suit contracts, replaces standard $+7$ pts with $+11$ pts).
+     * In **No Trump (NT)**, if the calculated points exceed 11 points (e.g. 5NT, 6NT, 7NT), it is counted as **11 points as well**.
+     * **Defensive Salpand**: If defenders take all 13 tricks, they earn **+11 points** (declarer receives the failed contract penalty).
+     * **Celebratory Animation**: Plays a full-table animated celebration with rotating golden sunburst rays, glowing crown badge, confetti cannon bursts, and a procedural Web Audio royal brass fanfare.
+   * Target: **+10 points** to win the match. (A Salpand from $\ge 0$ score instantly wins the match!).
    * Danger: **-10 points** eliminates a team.
 6. **Interactive Throwable Objects & Banter**:
    * Players can throw custom multi-layered SVG items ([`src/components/ThrowableArts.tsx`](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/ThrowableArts.tsx)) across the table at any player or bot:

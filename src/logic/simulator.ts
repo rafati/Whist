@@ -17,6 +17,7 @@ import {
   getDealerPrivileges,
   getNextSeat,
   getTeam,
+  getTeamName,
   isBidHigher,
   isCardLegal,
   SEATS,
@@ -202,6 +203,8 @@ export function simulateSingleRound(
 
         if (!curState.roundScores) curState.roundScores = [];
         curState.roundScores.push(breakdown);
+        curState.isSalpand = Boolean(breakdown.isSalpand);
+        curState.salpandTeam = breakdown.salpandTeam;
         curState.matchScores.TeamA += breakdown.scoreDeltaBidTeam * (breakdown.contractTeam === 'TeamA' ? 1 : 0) + breakdown.scoreDeltaDefTeam * (breakdown.defendingTeam === 'TeamA' ? 1 : 0);
         curState.matchScores.TeamB += breakdown.scoreDeltaBidTeam * (breakdown.contractTeam === 'TeamB' ? 1 : 0) + breakdown.scoreDeltaDefTeam * (breakdown.defendingTeam === 'TeamB' ? 1 : 0);
 
@@ -209,7 +212,9 @@ export function simulateSingleRound(
         if (matchResult.isOver) {
           curState.phase = 'game_over';
           curState.winnerTeam = matchResult.winnerTeam;
-          curState.winnerReason = matchResult.reason;
+          curState.winnerReason = breakdown.isSalpand && breakdown.salpandTeam
+            ? `🔥 SALPAND VICTORY! ${getTeamName(breakdown.salpandTeam)} captured all 13 tricks (+11 pts)!`
+            : matchResult.reason;
         } else {
           curState.phase = 'round_over';
         }

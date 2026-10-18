@@ -1,7 +1,7 @@
 import React from 'react';
 import { GameState } from '../types.ts';
 import { getTeamName, SUIT_NAMES, SUIT_SYMBOLS } from '../logic/gameLogic.ts';
-import { ArrowRight, ShieldAlert, Award, Crown } from 'lucide-react';
+import { ArrowRight, ShieldAlert, Award, Crown, Flame, Sparkles } from 'lucide-react';
 
 interface RoundSummaryModalProps {
   gameState: GameState;
@@ -29,6 +29,8 @@ export const RoundSummaryModal: React.FC<RoundSummaryModalProps> = ({
     bidSuccess,
     scoreDeltaBidTeam,
     scoreDeltaDefTeam,
+    isSalpand,
+    salpandTeam,
   } = currentRoundScore;
 
   const isRedTrump = trumpSuit === 'H' || trumpSuit === 'D';
@@ -37,25 +39,43 @@ export const RoundSummaryModal: React.FC<RoundSummaryModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="landscape-compact-modal bg-slate-950 border border-emerald-600/50 rounded-2xl sm:rounded-3xl p-3 sm:p-5 max-w-lg w-full max-h-[95dvh] overflow-y-auto shadow-2xl flex flex-col gap-2 sm:gap-2.5">
+      <div
+        className={`landscape-compact-modal bg-slate-950 rounded-2xl sm:rounded-3xl p-3 sm:p-5 max-w-lg w-full max-h-[95dvh] overflow-y-auto shadow-2xl flex flex-col gap-2 sm:gap-2.5 border ${
+          isSalpand
+            ? 'border-amber-400/80 shadow-[0_0_30px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/40'
+            : 'border-emerald-600/50'
+        }`}
+      >
         {/* Compact Header */}
         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div
               className={`p-1.5 sm:p-2 rounded-xl ${
-                bidSuccess
+                isSalpand
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-400/50'
+                  : bidSuccess
                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                   : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
               }`}
             >
-              {bidSuccess ? <Award className="w-4 h-4 sm:w-5 sm:h-5" /> : <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5" />}
+              {isSalpand ? (
+                <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 fill-amber-400" />
+              ) : bidSuccess ? (
+                <Award className="w-4 h-4 sm:w-5 sm:h-5" />
+              ) : (
+                <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5" />
+              )}
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wider text-emerald-400 font-bold">
                 Round {roundNumber} Summary
               </div>
               <h3 className="text-base sm:text-lg font-bold font-serif-display text-white leading-tight">
-                {bidSuccess ? 'Contract Fulfilled!' : 'Contract Defeated!'}
+                {isSalpand
+                  ? '🔥 SALPAND! (صلبند)'
+                  : bidSuccess
+                  ? 'Contract Fulfilled!'
+                  : 'Contract Defeated!'}
               </h3>
             </div>
           </div>
@@ -78,12 +98,36 @@ export const RoundSummaryModal: React.FC<RoundSummaryModalProps> = ({
           </div>
         </div>
 
+        {/* Salpand Callout Banner when applicable */}
+        {isSalpand && (
+          <div className="bg-gradient-to-r from-amber-950/80 via-yellow-950/70 to-amber-950/80 border border-amber-500/60 rounded-xl px-3 py-2 flex items-center justify-between shadow-inner">
+            <div className="flex items-center gap-2">
+              <div className="p-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+              </div>
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-300 font-mono flex items-center gap-1">
+                  <span>صلبند • SALPAND (13 TRICKS CAPTURED)</span>
+                </div>
+                <div className="text-xs text-amber-100 font-semibold">
+                  {salpandTeam ? getTeamName(salpandTeam) : 'Winner'} captured all 13 tricks!
+                </div>
+              </div>
+            </div>
+            <span className="text-sm font-black font-mono text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-lg shadow-sm">
+              +11 PTS
+            </span>
+          </div>
+        )}
+
         {/* Tricks & Points Side-by-Side Comparison */}
         <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
           {/* Declaring Team Card */}
           <div
             className={`p-2.5 sm:p-3 rounded-xl border flex flex-col justify-between ${
-              contractTeam === 'TeamA'
+              tricksWonBidTeam === 13
+                ? 'bg-amber-950/40 border-amber-500/70 ring-1 ring-amber-400/40'
+                : contractTeam === 'TeamA'
                 ? 'bg-emerald-950/35 border-emerald-700/50'
                 : 'bg-blue-950/35 border-blue-700/50'
             }`}
@@ -111,10 +155,14 @@ export const RoundSummaryModal: React.FC<RoundSummaryModalProps> = ({
               </div>
               <span
                 className={`text-[10px] font-bold ${
-                  bidSuccess ? 'text-emerald-400' : 'text-rose-400'
+                  tricksWonBidTeam === 13
+                    ? 'text-amber-300 font-extrabold'
+                    : bidSuccess
+                    ? 'text-emerald-400'
+                    : 'text-rose-400'
                 }`}
               >
-                {bidSuccess ? 'Made' : 'Short'}
+                {tricksWonBidTeam === 13 ? '🔥 SALPAND' : bidSuccess ? 'Made' : 'Short'}
               </span>
             </div>
           </div>
@@ -122,7 +170,9 @@ export const RoundSummaryModal: React.FC<RoundSummaryModalProps> = ({
           {/* Defending Team Card */}
           <div
             className={`p-2.5 sm:p-3 rounded-xl border flex flex-col justify-between ${
-              defendingTeam === 'TeamA'
+              tricksWonDefTeam === 13
+                ? 'bg-amber-950/40 border-amber-500/70 ring-1 ring-amber-400/40'
+                : defendingTeam === 'TeamA'
                 ? 'bg-emerald-950/35 border-emerald-700/50'
                 : 'bg-blue-950/35 border-blue-700/50'
             }`}
@@ -141,8 +191,12 @@ export const RoundSummaryModal: React.FC<RoundSummaryModalProps> = ({
                 {tricksWonDefTeam}
                 <span className="text-xs font-normal text-slate-400"> / 13 tricks</span>
               </div>
-              <span className="text-[10px] text-slate-400">
-                {tricksWonDefTeam > 6 ? `+${tricksWonDefTeam - 6} over book` : 'Book defense'}
+              <span className={`text-[10px] ${tricksWonDefTeam === 13 ? 'text-amber-300 font-extrabold' : 'text-slate-400'}`}>
+                {tricksWonDefTeam === 13
+                  ? '🔥 DEF SALPAND'
+                  : tricksWonDefTeam > 6
+                  ? `+${tricksWonDefTeam - 6} over book`
+                  : 'Book defense'}
               </span>
             </div>
           </div>
