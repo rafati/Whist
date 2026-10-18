@@ -111,8 +111,8 @@ Scoring is calculated per round based on tricks won above the base threshold of 
   * Declarer Team: Penalty of $-(L \times 2)$ points.
   * Defending Team: Points for tricks over 6: first $L$ tricks are worth 2 points each; further tricks are worth 1 point each.
 
-#### C. Salpand (صلبند) — 13-Trick Grand Slam
-When a partnership captures all **13 tricks** in a single round, it is called a **Salpand** (صلبند / Salpand / Slpand):
+#### C. Salpand (سالابند) — 13-Trick Grand Slam
+When a partnership captures all **13 tricks** in a single round, it is called a **Salpand** (سالابند / Salpand / Slpand):
 * **Salpand Award**: Capturing all 13 tricks is counted at **+11 points** for the capturing partnership.
 * **Suit Contracts**: In Suit contracts, winning 13 tricks normally awards $13 - 6 = 7$ points; under the Salpand rule, the team is awarded **+11 points**.
 * **No Trump (NT) Contracts**:

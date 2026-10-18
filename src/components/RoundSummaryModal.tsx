@@ -72,7 +72,7 @@ export const RoundSummaryModal: React.FC<RoundSummaryModalProps> = ({
               </div>
               <h3 className="text-base sm:text-lg font-bold font-serif-display text-white leading-tight">
                 {isSalpand
-                  ? '🔥 SALPAND! (صلبند)'
+                  ? '🔥 SALPAND! (سالابند)'
                   : bidSuccess
                   ? 'Contract Fulfilled!'
                   : 'Contract Defeated!'}
@@ -107,7 +107,7 @@ export const RoundSummaryModal: React.FC<RoundSummaryModalProps> = ({
               </div>
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-300 font-mono flex items-center gap-1">
-                  <span>صلبند • SALPAND (13 TRICKS CAPTURED)</span>
+                  <span>سالابند • SALPAND (13 TRICKS CAPTURED)</span>
                 </div>
                 <div className="text-xs text-amber-100 font-semibold">
                   {salpandTeam ? getTeamName(salpandTeam) : 'Winner'} captured all 13 tricks!

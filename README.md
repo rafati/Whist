@@ -140,7 +140,7 @@ Visit `http://localhost:3000` in your browser.
    * **Clean Center Felt**: Redundant opponent card stacks and counters have been removed so the felt remains clean and focused on gameplay.
 5. **Scoring & Salpand Grand Slam**:
    * Base threshold is 6 tricks. A contract of level $L$ requires $6 + L$ tricks.
-   * **Salpand (صلبند)**: When a partnership captures all 13 tricks in a single round:
+   * **Salpand (سالابند)**: When a partnership captures all 13 tricks in a single round:
      * Awarded **+11 points** directly (in Suit contracts, replaces standard $+7$ pts with $+11$ pts).
      * In **No Trump (NT)**, if the calculated points exceed 11 points (e.g. 5NT, 6NT, 7NT), it is counted as **11 points as well**.
      * **Defensive Salpand**: If defenders take all 13 tricks, they earn **+11 points** (declarer receives the failed contract penalty).

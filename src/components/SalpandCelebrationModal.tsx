@@ -168,12 +168,12 @@ export const SalpandCelebrationModal: React.FC<SalpandCelebrationModalProps> = (
           </div>
         </div>
 
-        {/* Badge Header: Salpand / صلبند */}
+        {/* Badge Header: Salpand / سالابند */}
         <div className="flex flex-col items-center gap-1">
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 border border-amber-400/60 px-3.5 py-1 rounded-full shadow-inner">
             <Flame className="w-4 h-4 text-amber-400 fill-amber-400" />
             <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300 font-mono">
-              صلبند • SALPAND
+              سالابند • SALPAND
             </span>
             <Flame className="w-4 h-4 text-amber-400 fill-amber-400" />
           </div>
@@ -214,7 +214,7 @@ export const SalpandCelebrationModal: React.FC<SalpandCelebrationModalProps> = (
 
         {/* Arabic Cultural Badge */}
         <div className="text-[11px] sm:text-xs text-slate-300 bg-slate-950/70 border border-slate-800 px-3 py-1.5 rounded-xl">
-          <span className="text-amber-400 font-bold">صلبند:</span> الحصول على الـ 13 أكلة كاملة يُحتسب بـ 11 نقطة مباشرة
+          <span className="text-amber-400 font-bold">سالابند:</span> الفوز بجميع اللمات الـ 13 يُحتسب بـ 11 نقطة مباشرة
         </div>
 
         {/* Action Button */}

@@ -158,7 +158,7 @@ Let $L = \text{Bid Level}$, Required Tricks $= 6 + L$:
   $$\text{Defending Over 6} = \max(0, \text{DefendingTricksWon} - 6)$$
   $$\text{Defending Team Delta} = \min(\text{Defending Over 6}, L) \times 2 + \max(0, \text{Defending Over 6} - L) \times 1$$
 
-### 6.3 Salpand (صلبند) — 13-Trick Grand Slam Rule
+### 6.3 Salpand (سالابند) — 13-Trick Grand Slam Rule
 When any team captures all 13 tricks in a round:
 * **Point Value**: The team capturing all 13 tricks is awarded **+11 points**.
 * **Suit Contracts**: Replaces normal $+(\text{TricksWon} - 6)$ with **+11 points**.

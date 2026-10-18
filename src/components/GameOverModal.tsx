@@ -62,7 +62,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         {isSalpandVictory && (
           <div className="bg-gradient-to-r from-amber-950/80 via-yellow-950/70 to-amber-950/80 border border-amber-500/60 rounded-xl px-3 py-1.5 text-xs text-amber-200 font-bold flex items-center justify-center gap-2 shadow-inner">
             <span>🔥</span>
-            <span>صلبند • SALPAND (13 Tricks Captured)</span>
+            <span>سالابند • SALPAND (13 Tricks Captured)</span>
             <span>+11 PTS</span>
           </div>
         )}
