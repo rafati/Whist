@@ -368,10 +368,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const [copiedInviteLink, setCopiedInviteLink] = useState(false);
   const [soundEnabled, toggleSoundSetting] = useSoundSetting();
 
-  // Developer-only flag to access AI Simulation Lab (?dev=true)
+  // Developer-only flag to access AI Simulation Lab and test utilities (?dev=true or whist_dev_mode in localStorage)
   const isDevMode =
     typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('dev') === 'true';
+    (new URLSearchParams(window.location.search).get('dev') === 'true' ||
+      localStorage.getItem('whist_dev_mode') === 'true');
 
   const isProBot = room.botDifficulty !== 'casual';
   const gameState = room.gameState;
@@ -1440,11 +1441,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
           <button
             onClick={() => setShowScoreModal(true)}
-            className="hidden sm:flex px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-emerald-800/50 rounded-lg text-[11px] sm:text-xs text-emerald-300 items-center gap-1 transition-all cursor-pointer"
+            className="flex px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-emerald-800/50 rounded-lg text-[11px] sm:text-xs text-emerald-300 items-center gap-1 transition-all cursor-pointer"
             title="Match Standings"
           >
             <Trophy className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">Standings</span>
+            <span className="hidden sm:inline">Standings</span>
           </button>
 
           {/* Quick Sound & Clicks Toggle */}
@@ -1463,14 +1464,16 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
           </button>
 
-          {/* Secondary Table Actions Menu */}
-          <button
-            onClick={() => setShowTableMenu((prev) => !prev)}
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/70 rounded-lg text-slate-300 hover:text-white transition-all cursor-pointer"
-            title="Table Options"
-          >
-            <MoreVertical className="w-3.5 h-3.5" />
-          </button>
+          {/* Secondary Table Actions Menu (Preserved for testing & dev verification via ?dev=true or whist_dev_mode) */}
+          {isDevMode && (
+            <>
+              <button
+                onClick={() => setShowTableMenu((prev) => !prev)}
+                className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/70 rounded-lg text-slate-300 hover:text-white transition-all cursor-pointer"
+                title="Table Options"
+              >
+                <MoreVertical className="w-3.5 h-3.5" />
+              </button>
 
           {showTableMenu && (
             <>
@@ -1625,6 +1628,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   <span>Delete Table</span>
                 </button>
               </div>
+            </>
+          )}
             </>
           )}
         </div>

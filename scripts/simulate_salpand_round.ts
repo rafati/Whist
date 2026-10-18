@@ -212,7 +212,7 @@ async function simulateSalapand() {
       `,
     });
 
-    await cdp.send('Page.navigate', { url: `http://localhost:${TEST_SERVER_PORT}` });
+    await cdp.send('Page.navigate', { url: `http://localhost:${TEST_SERVER_PORT}?dev=true` });
     await wait(2500);
 
     let pageText = await cdp.evaluate('document.body.innerText');
