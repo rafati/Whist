@@ -1068,7 +1068,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 // Phase 1: During Active Bidding
                 if (gameState.phase === 'bidding') {
                   return (
-                    <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none`}>
+                    <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-5'} left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none`}>
                       {isCurrentBidder ? (
                         <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow animate-pulse flex items-center gap-1">
                           <span>Bidding...</span>
@@ -1109,7 +1109,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   if (isDeclarer) {
                     let contractText = '';
                     if (gameState.trumpSuit === 'NT') {
-                      contractText = `${gameState.winningBid?.level || 1} NT (No Trump)`;
+                      contractText = `${gameState.winningBid?.level || 1} NT`;
                     } else if (gameState.trumpSuit) {
                       const sym = SUIT_SYMBOLS[gameState.trumpSuit];
                       const sName = SUIT_NAMES[gameState.trumpSuit];
@@ -1123,7 +1123,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         <span className="bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950 font-black text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.7)] border border-white flex items-center gap-1">
                           <Crown className="w-2.5 h-2.5 fill-current text-slate-950 shrink-0" />
                           <span>{contractText}</span>
-                          <span className="text-[7px] bg-slate-950 text-amber-300 px-1 py-0.2 rounded-full font-bold uppercase tracking-wider">
+                          <span className="hidden sm:inline text-[7px] bg-slate-950 text-amber-300 px-1 py-0.2 rounded-full font-bold uppercase tracking-wider">
                             Winning Bid
                           </span>
                           {(gameState.winningBid?.isBotAutoPlay || gameState.isTrumpAutoDeclared) && (
@@ -1139,7 +1139,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   // Non-Declarer Players: Persistent clear bid or pass pill
                   if (seatBid) {
                     return (
-                      <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-4'} left-1/2 -translate-x-1/2 z-20 whitespace-nowrap pointer-events-none`}>
+                      <div className={`absolute ${isTopSeat ? 'top-full mt-1.5' : '-top-5'} left-1/2 -translate-x-1/2 z-20 whitespace-nowrap pointer-events-none`}>
                         {seatBid.type === 'pass' ? (
                           <span className="bg-slate-900/90 border border-slate-700/80 text-slate-400 font-semibold text-[8px] sm:text-[9px] px-1.5 py-[1px] rounded-full shadow-xs flex items-center gap-1">
                             <span>Passed</span>
@@ -1297,12 +1297,12 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   return (
     <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#07130e] table-felt-radial flex flex-col text-slate-100 overflow-clip select-none relative">
       {/* Slim, Always-Visible Top HUD Bar */}
-      <header className="landscape-compact-header h-10 sm:h-11 shrink-0 border-b border-emerald-900/50 bg-[#0a2016]/95 backdrop-blur-md px-2 sm:px-4 flex items-center justify-between gap-2 shadow-md z-30">
+      <header className="landscape-compact-header h-10 sm:h-11 shrink-0 border-b border-emerald-900/50 bg-[#0a2016]/95 backdrop-blur-md px-1.5 sm:px-4 flex items-center justify-between gap-1 sm:gap-2 shadow-md z-30">
         {/* Left: Leave / Table Menu + Room Title & Room Code */}
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <button
             onClick={onLeaveRoom}
-            className="py-1 px-2 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-emerald-800/50 text-emerald-300 transition-all cursor-pointer flex items-center gap-1 text-[11px] sm:text-xs font-semibold shrink-0"
+            className="py-1 px-1.5 sm:px-2 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-emerald-800/50 text-emerald-300 transition-all cursor-pointer flex items-center gap-1 text-[11px] sm:text-xs font-semibold shrink-0"
             title="Leave table and return to lobby"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -1314,18 +1314,18 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               type="button"
               onClick={handleCopyInviteLink}
               title="Click to copy invite link for friends"
-              className="py-1 px-2 rounded-lg bg-slate-950/90 hover:bg-slate-900 border border-amber-500/40 text-amber-300 font-mono text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shrink-0"
+              className="py-1 px-1.5 sm:px-2 rounded-lg bg-slate-950/90 hover:bg-slate-900 border border-amber-500/40 text-amber-300 font-mono text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shrink-0"
             >
               {room.isPrivate ? (
-                <Lock className="w-2.5 h-2.5 text-amber-400" />
+                <Lock className="w-2.5 h-2.5 text-amber-400 shrink-0" />
               ) : (
-                <Globe className="w-2.5 h-2.5 text-emerald-400" />
+                <Globe className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
               )}
               <span>#{room.code}</span>
               {copiedInviteLink ? (
-                <Check className="w-2.5 h-2.5 text-emerald-400" />
+                <Check className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
               ) : (
-                <Share2 className="w-2.5 h-2.5 text-slate-400" />
+                <Share2 className="w-2.5 h-2.5 text-slate-400 shrink-0" />
               )}
             </button>
           )}
@@ -1344,13 +1344,13 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
           </div>
         </div>
 
-        {/* Center: Always-Visible Match Score + Live Contract & Trick Progress */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+        {/* Center: Always-Visible Match Score + Live Contract & Trick Progress (Desktop/Tablet) */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Team Match Scores Pill (Always visible on mobile & desktop) */}
           <button
             onClick={() => setShowScoreModal(true)}
-            className="flex items-center gap-1.5 bg-slate-950/90 hover:bg-slate-900 border border-emerald-800/60 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-mono transition-all cursor-pointer shrink-0"
-            title="View Full Match Standings (Target: +11)"
+            className="flex items-center gap-1 sm:gap-1.5 bg-slate-950/90 hover:bg-slate-900 border border-emerald-800/60 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-mono transition-all cursor-pointer shrink-0"
+            title="View Full Match Standings (Target: +10)"
           >
             <span className="text-emerald-400 font-bold">
               T1: {gameState.matchScores.TeamA >= 0 ? `+${gameState.matchScores.TeamA}` : gameState.matchScores.TeamA}
@@ -1361,16 +1361,16 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             </span>
           </button>
 
-          {/* Phase-Specific Live Contract / Auction Progress Pill */}
+          {/* Phase-Specific Live Contract / Auction Progress Pill (Hidden on <640px where ContractHud & LastTrickCross are already on the felt) */}
           {gameState.phase === 'playing' && contractTeam && (
-            <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-950/90 border border-amber-500/40 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-lg shadow-xs text-[10px] sm:text-[11px] shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/40 px-2.5 py-1 rounded-lg shadow-xs text-[11px] shrink-0">
               {renderTrumpBadge()}
               <span className="text-slate-600">•</span>
               <span className="font-mono font-bold text-amber-300" title="Declaring team tricks won vs. contract target">
                 {contractTeam === 'TeamA' ? 'T1' : 'T2'}({gameState.winningBid?.level}
                 {gameState.winningBid?.contractType === 'NT' ? 'NT' : 'S'}): {contractTricksWon}/{contractGoalTricks}
               </span>
-              <span className="hidden sm:inline">
+              <span className="hidden md:inline">
                 <span className="text-slate-600"> | </span>
                 <span className="font-mono text-slate-300" title="Defending team tricks won vs. tricks needed to set contract">
                   Def: {defenseTricksWon}/{defenseSetGoalTricks}
@@ -1402,7 +1402,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
           )}
 
           {gameState.phase === 'bidding' && (
-            <div className="flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/40 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/40 px-2.5 py-1 rounded-lg text-[11px] shrink-0">
               <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
               <span className="text-amber-300 font-mono font-bold">
                 Auction {gameState.auctionTurnsCount + 1}/4
@@ -1411,7 +1411,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
           )}
 
           {gameState.phase === 'declaring' && (
-            <div className="flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/40 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/40 px-2.5 py-1 rounded-lg text-[11px] shrink-0">
               <Crown className="w-3 h-3 text-amber-400 shrink-0" />
               <span className="text-amber-300 font-bold">Naming Trump</span>
             </div>
@@ -1437,7 +1437,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
           <button
             onClick={() => setShowScoreModal(true)}
-            className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-emerald-800/50 rounded-lg text-[11px] sm:text-xs text-emerald-300 flex items-center gap-1 transition-all cursor-pointer"
+            className="hidden sm:flex px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-emerald-800/50 rounded-lg text-[11px] sm:text-xs text-emerald-300 items-center gap-1 transition-all cursor-pointer"
             title="Match Standings"
           >
             <Trophy className="w-3.5 h-3.5" />
@@ -2085,10 +2085,10 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               )}
 
               {/* Compact Hand Status Header Row */}
-              <div className="flex items-center justify-between text-xs px-1 mb-0.5">
-                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <div className="flex items-center justify-between gap-1 text-xs px-1 mb-0.5">
+                <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                   {/* Player Profile & Identity Pill */}
-                  <div data-throw-seat={mySeat} className="flex items-center gap-1.5 shrink-0">
+                  <div data-throw-seat={mySeat} className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                     <div className="relative shrink-0">
                       <img
                         src={user?.avatar || seats[mySeat]?.avatar || 'https://api.dicebear.com/7.x/initials/svg?seed=You'}
@@ -2110,13 +2110,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                       )}
                     </div>
                     <span
-                      className={`text-[9px] sm:text-[10px] font-bold px-2 py-[1px] rounded-full border flex items-center gap-1 ${
+                      className={`text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-[1px] rounded-full border flex items-center gap-1 shrink-0 ${
                         getTeam(mySeat) === 'TeamA'
                           ? 'text-emerald-300 bg-emerald-950/80 border-emerald-700/50'
                           : 'text-blue-300 bg-blue-950/80 border-blue-700/50'
                       }`}
                     >
-                      <span>{getTeam(mySeat) === 'TeamA' ? 'Team 1' : 'Team 2'}</span>
+                      <span className="sm:hidden">{getTeam(mySeat) === 'TeamA' ? 'T1' : 'T2'}</span>
+                      <span className="hidden sm:inline">{getTeam(mySeat) === 'TeamA' ? 'Team 1' : 'Team 2'}</span>
                       {gameState.phase === 'playing' && (
                         <>
                           <span className="text-slate-500">•</span>
@@ -2134,20 +2135,25 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     const myBid = gameState.bids.find((b) => b.seat === mySeat);
                     if ((gameState.phase === 'playing' || gameState.phase === 'declaring') && isMyDeclarer) {
                       let myContractDisplay = '';
+                      let myContractShort = '';
                       if (gameState.trumpSuit === 'NT') {
                         myContractDisplay = `${gameState.winningBid?.level || 1} NT (No Trump)`;
+                        myContractShort = `${gameState.winningBid?.level || 1}NT`;
                       } else if (gameState.trumpSuit) {
                         myContractDisplay = `${gameState.winningBid?.level || 1}${SUIT_SYMBOLS[gameState.trumpSuit]} ${SUIT_NAMES[gameState.trumpSuit]}`;
+                        myContractShort = `${gameState.winningBid?.level || 1}${SUIT_SYMBOLS[gameState.trumpSuit]}`;
                       } else {
                         myContractDisplay = `${gameState.winningBid?.level || 1} Suit`;
+                        myContractShort = `${gameState.winningBid?.level || 1}S`;
                       }
                       return (
-                        <span className="bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-black text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow border border-white flex items-center gap-1 shrink-0">
+                        <span className="bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-black text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full shadow border border-white flex items-center gap-1 shrink-0">
                           <Crown className="w-2.5 h-2.5 fill-current shrink-0" />
-                          <span>Winning Bid: {myContractDisplay}</span>
+                          <span className="sm:hidden">{myContractShort}</span>
+                          <span className="hidden sm:inline">Winning Bid: {myContractDisplay}</span>
                           {(gameState.winningBid?.isBotAutoPlay || gameState.isTrumpAutoDeclared) && (
-                            <span className="text-[8px] bg-cyan-950 text-cyan-300 border border-cyan-400 px-1 rounded-full font-bold">
-                              🤖 Auto
+                            <span className="text-[7px] sm:text-[8px] bg-cyan-950 text-cyan-300 border border-cyan-400 px-1 rounded-full font-bold">
+                              🤖
                             </span>
                           )}
                         </span>
@@ -2155,11 +2161,18 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     }
                     if (myBid && (gameState.phase === 'playing' || gameState.phase === 'bidding' || gameState.phase === 'declaring')) {
                       return (
-                        <span className="bg-slate-900 border border-slate-700 text-slate-300 font-bold text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-xs shrink-0 flex items-center gap-1">
-                          <span>{myBid.type === 'pass' ? 'Passed' : `Bid ${myBid.level} ${myBid.contractType}`}</span>
+                        <span className="bg-slate-900 border border-slate-700 text-slate-300 font-bold text-[8px] sm:text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full shadow-xs shrink-0 flex items-center gap-1">
+                          <span className="sm:hidden">
+                            {myBid.type === 'pass'
+                              ? 'Pass'
+                              : `${myBid.level}${myBid.contractType === 'NT' ? 'NT' : 'S'}`}
+                          </span>
+                          <span className="hidden sm:inline">
+                            {myBid.type === 'pass' ? 'Passed' : `Bid ${myBid.level} ${myBid.contractType}`}
+                          </span>
                           {myBid.isBotAutoPlay && (
                             <span className="text-[7px] bg-cyan-950 text-cyan-300 border border-cyan-500/60 px-1 rounded-full font-bold">
-                              🤖 Auto
+                              🤖 <span className="hidden sm:inline">Auto</span>
                             </span>
                           )}
                         </span>
@@ -2186,12 +2199,12 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 </div>
 
                 {/* Right Header Section: Live Turn Countdown + Prompt & Throwable Items Dock */}
-                <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                <div className="flex items-center justify-end gap-1 sm:gap-2 shrink-0">
                   {/* Live Turn Countdown Pill for Local Human Player */}
                   {activeTurnSeat === mySeat && turnSecondsLeft !== null && (
                     <span
                       data-testid="my-turn-timer-badge"
-                      className={`px-2 py-0.5 rounded-full font-mono font-black text-[9px] sm:text-[10px] flex items-center gap-1 border shadow ${
+                      className={`px-1.5 sm:px-2 py-0.5 rounded-full font-mono font-black text-[9px] sm:text-[10px] flex items-center gap-1 border shadow shrink-0 ${
                         turnSecondsLeft <= 3
                           ? 'bg-rose-600 border-rose-300 text-white animate-pulse'
                           : turnSecondsLeft <= 5
@@ -2206,18 +2219,23 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   )}
 
                   {/* Live Turn Prompt */}
-                  <div>
+                  <div className="shrink-0">
                     {gameState.phase === 'playing' ? (
                       isMyTurnToPlay ? (
-                        <span className="text-slate-950 font-extrabold text-[9px] sm:text-[10px] flex items-center gap-1 bg-amber-400 px-2 py-0.5 rounded-full shadow animate-pulse">
-                          <span>
+                        <span className="text-slate-950 font-extrabold text-[8px] sm:text-[10px] flex items-center gap-1 bg-amber-400 px-1.5 sm:px-2 py-0.5 rounded-full shadow animate-pulse whitespace-nowrap">
+                          <span className="sm:hidden">
+                            {currentLedSuit
+                              ? `FOLLOW ${SUIT_SYMBOLS[currentLedSuit]}`
+                              : 'YOUR TURN'}
+                          </span>
+                          <span className="hidden sm:inline">
                             {currentLedSuit
                               ? `YOUR TURN • FOLLOW ${SUIT_NAMES[currentLedSuit].toUpperCase()}`
                               : 'YOUR TURN • TAP OR SWIPE CARD TO PLAY'}
                           </span>
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[9px] sm:text-[11px]">
+                        <span className="hidden sm:inline text-slate-400 text-[11px] whitespace-nowrap">
                           Waiting for{' '}
                           <strong className="text-slate-200">
                             {(gameState.currentTurn &&
@@ -2228,7 +2246,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         </span>
                       )
                     ) : gameState.phase === 'bidding' ? (
-                      <span className="text-amber-300 font-semibold text-[9px] sm:text-[10px] flex items-center gap-1">
+                      <span className="hidden sm:flex text-amber-300 font-semibold text-[10px] items-center gap-1 whitespace-nowrap">
                         <Sparkles className="w-2.5 h-2.5 text-amber-400" />
                         <span>
                           {gameState.currentBidder === mySeat
@@ -2237,7 +2255,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         </span>
                       </span>
                     ) : (
-                      <span className="text-amber-300 font-semibold text-[9px] sm:text-[10px]">
+                      <span className="hidden sm:inline text-amber-300 font-semibold text-[10px] whitespace-nowrap">
                         {gameState.declarer === mySeat
                           ? 'Select Trump Suit in the center console'
                           : 'Waiting for Declarer to name Trump'}

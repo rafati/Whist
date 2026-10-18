@@ -24,8 +24,9 @@ A real-time, 4-player trick-taking partnership card game (**تدفيع الثم�
 * **Integrated WebRTC Mesh Voice Chat**:
   * Low-latency, peer-to-peer open mic voice communication directly at the virtual table.
   * Web Audio API real-time Voice Activity Detection (VAD) with animated speaker rings, mute, and deafen controls.
-* **Zero-Scroll Viewport Layout**:
+* **Zero-Scroll & Collision-Free Mobile Viewport Layout**:
   * Designed to strictly fit within `100dvh` on mobile, tablet, and desktop without page scrollbars.
+  * Adaptive mobile header and player hand dock badges (`shrink-0` flex groups with compact `<640px` labels for `#CODE`, match scores, team/bid pills, and turn prompts) guarantee zero text overlap on narrow mobile screens.
 * **Smooth Physics Animations**:
   * Card flight from hand/seats to table center.
   * Trick pause and sweep animation directly into the trick winner's seat.

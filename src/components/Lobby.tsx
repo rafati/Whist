@@ -186,10 +186,11 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
 
             <button
               onClick={() => setShowRules(true)}
-              className="px-3 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 rounded-xl text-xs text-emerald-200 font-medium flex items-center gap-1.5 transition-all cursor-pointer"
+              title="How to Play"
+              className="px-2.5 sm:px-3 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 rounded-xl text-xs text-emerald-200 font-medium flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
-              <span>How to Play</span>
+              <span className="hidden sm:inline">How to Play</span>
             </button>
 
             <div className="flex items-center gap-2.5 bg-black/40 border border-emerald-800/40 rounded-2xl px-2.5 py-1 sm:px-3 sm:py-1.5">
