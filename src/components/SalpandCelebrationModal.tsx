@@ -172,8 +172,12 @@ export const SalpandCelebrationModal: React.FC<SalpandCelebrationModalProps> = (
         <div className="flex flex-col items-center gap-1">
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 border border-amber-400/60 px-3.5 py-1 rounded-full shadow-inner">
             <Flame className="w-4 h-4 text-amber-400 fill-amber-400" />
+            <span className="text-sm font-black text-amber-300">
+              سالابند
+            </span>
+            <span className="text-amber-400/60 font-bold">•</span>
             <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300 font-mono">
-              سالابند • SALPAND
+              SALPAND
             </span>
             <Flame className="w-4 h-4 text-amber-400 fill-amber-400" />
           </div>

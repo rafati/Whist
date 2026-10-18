@@ -44,6 +44,7 @@ import {
   Cpu,
   Crown,
   Sparkles,
+  Flame,
   Trophy,
   Users,
   Trash2,
@@ -360,6 +361,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showSimModal, setShowSimModal] = useState(false);
+  const [previewSalpand, setPreviewSalpand] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showTableMenu, setShowTableMenu] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -1574,6 +1576,18 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                   <span>Full Match Standings</span>
                 </button>
 
+                <button
+                  data-testid="preview-salpand-btn"
+                  onClick={() => {
+                    setShowTableMenu(false);
+                    setPreviewSalpand(true);
+                  }}
+                  className="w-full px-3 py-2 text-left text-amber-300 hover:bg-slate-900 flex items-center gap-2 cursor-pointer font-medium"
+                >
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Preview Salapand (سالابند)</span>
+                </button>
+
                 {isDevMode && (
                   <button
                     onClick={() => {
@@ -2530,6 +2544,38 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
       {/* End-of-Round & End-of-Match Modals */}
       <SalpandCelebrationModal gameState={gameState} />
+
+      {previewSalpand && (
+        <SalpandCelebrationModal
+          gameState={{
+            ...gameState,
+            phase: 'round_over',
+            isSalpand: true,
+            salpandTeam: 'TeamA',
+            roundScores: [
+              ...(gameState.roundScores || []),
+              {
+                roundNumber: gameState.roundNumber || 1,
+                declarer: 'North',
+                contractTeam: 'TeamA',
+                defendingTeam: 'TeamB',
+                bidLevel: 1,
+                contractType: 'Suit',
+                trumpSuit: 'S',
+                tricksWonBidTeam: 13,
+                tricksWonDefTeam: 0,
+                bidSuccess: true,
+                scoreDeltaBidTeam: 11,
+                scoreDeltaDefTeam: 0,
+                explanation: ['🔥 SALPAND! Team 1 captured all 13 tricks! Awarded +11 points.'],
+                isSalpand: true,
+                salpandTeam: 'TeamA',
+              },
+            ],
+          }}
+          onDismiss={() => setPreviewSalpand(false)}
+        />
+      )}
 
       <RoundSummaryModal
         gameState={gameState}
