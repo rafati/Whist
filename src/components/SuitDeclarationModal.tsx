@@ -1,12 +1,13 @@
 import React from 'react';
 import { Card, GameState, Seat, Suit } from '../types.ts';
 import { SUIT_NAMES, SUIT_SYMBOLS, getTeamName, getTeam } from '../logic/gameLogic.ts';
-import { Crown } from 'lucide-react';
+import { Crown, Clock } from 'lucide-react';
 
 interface SuitDeclarationModalProps {
   gameState: GameState;
   mySeat: Seat | null;
   myHand?: Card[];
+  secondsLeft?: number | null;
   onDeclareSuit: (suit: Suit) => void;
 }
 
@@ -14,6 +15,7 @@ export const SuitDeclarationModal: React.FC<SuitDeclarationModalProps> = ({
   gameState,
   mySeat,
   myHand = [],
+  secondsLeft,
   onDeclareSuit,
 }) => {
   if (gameState.phase !== 'declaring') return null;
@@ -34,6 +36,18 @@ export const SuitDeclarationModal: React.FC<SuitDeclarationModalProps> = ({
           <span className="font-bold text-white font-serif-display text-[11px] sm:text-xs">
             Choose Trump Suit
           </span>
+          {secondsLeft !== null && secondsLeft !== undefined && (
+            <span
+              className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full border flex items-center gap-0.5 ${
+                secondsLeft <= 5
+                  ? 'bg-rose-950/80 text-rose-300 border-rose-500/80 animate-pulse'
+                  : 'bg-amber-950/80 text-amber-300 border-amber-500/60'
+              }`}
+            >
+              <Clock className="w-2.5 h-2.5" />
+              <span>{secondsLeft}s</span>
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1 text-[10px] sm:text-[11px]">

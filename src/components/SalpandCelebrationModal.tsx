@@ -24,7 +24,7 @@ export const SalpandCelebrationModal: React.FC<SalpandCelebrationModalProps> = (
   const roundNumber = latestRoundScore?.roundNumber || gameState.roundNumber;
 
   useEffect(() => {
-    if (isSalpand && !dismissed && (gameState.phase === 'round_over' || gameState.phase === 'game_over')) {
+    if (isSalpand && !dismissed && (gameState.phase === 'round_over')) {
       setVisible(true);
 
       // Play audio fanfare

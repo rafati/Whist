@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Bid, Card, ContractType, GameState, Seat } from '../types.ts';
 import { isLegalBid, isDealerPrivilegeMatch, getTeam } from '../logic/gameLogic.ts';
-import { Sparkles, Check, X } from 'lucide-react';
+import { Sparkles, Check, X, Clock } from 'lucide-react';
 
 interface BiddingPanelProps {
   gameState: GameState;
   mySeat: Seat | null;
   myHand?: Card[];
+  secondsLeft?: number | null;
   onMakeBid: (bid: Bid) => void;
 }
 
 export const BiddingPanel: React.FC<BiddingPanelProps> = ({
   gameState,
   mySeat,
+  secondsLeft,
   onMakeBid,
 }) => {
   const [selectedLevel, setSelectedLevel] = useState<number>(1);
@@ -133,6 +135,18 @@ export const BiddingPanel: React.FC<BiddingPanelProps> = ({
           <span className="text-[10px] text-slate-400 font-mono">
             ({gameState.auctionTurnsCount + 1}/4)
           </span>
+          {secondsLeft !== null && secondsLeft !== undefined && (
+            <span
+              className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full border flex items-center gap-0.5 ${
+                secondsLeft <= 5
+                  ? 'bg-rose-950/80 text-rose-300 border-rose-500/80 animate-pulse'
+                  : 'bg-amber-950/80 text-amber-300 border-amber-500/60'
+              }`}
+            >
+              <Clock className="w-2.5 h-2.5" />
+              <span>{secondsLeft}s</span>
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1 text-[10px] sm:text-[11px]">

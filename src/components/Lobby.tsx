@@ -24,6 +24,7 @@ import {
   Clock,
   Hash,
   ArrowRight,
+  Eye,
 } from 'lucide-react';
 import { useSoundSetting, playClickSound } from '../lib/throwSounds.ts';
 
@@ -74,6 +75,33 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
       onEnterRoom(room.id);
     } catch (err) {
       console.error('Failed to start quick play:', err);
+    } finally {
+      setIsQuickStarting(false);
+    }
+  };
+
+  const handleWatchBots = async () => {
+    if (!user || isQuickStarting) return;
+    setIsQuickStarting(true);
+    try {
+      const apiBase = (import.meta.env.VITE_API_URL as string) || '';
+      const res = await fetch(`${apiBase}/api/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `AI Bots Exhibition`,
+          hostId: user.id,
+          user,
+          botDifficulty: botSkill,
+          autoFillBots: true,
+          watchBots: true,
+          turnTimeoutMs: 10000,
+        }),
+      });
+      const room = await res.json();
+      onEnterRoom(room.id);
+    } catch (err) {
+      console.error('Failed to start watch bots match:', err);
     } finally {
       setIsQuickStarting(false);
     }
@@ -292,6 +320,16 @@ export const Lobby: React.FC<LobbyProps> = ({ onEnterRoom }) => {
                 >
                   <Play className="w-4 h-4 fill-current" />
                   <span>{isQuickStarting ? 'Dealing...' : 'Play Instant AI'}</span>
+                </button>
+
+                <button
+                  onClick={handleWatchBots}
+                  disabled={isQuickStarting || isMatchmaking}
+                  className="py-2.5 px-3.5 bg-slate-900 hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-amber-300 font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-60"
+                  title="Watch 4 AI Bots play each other"
+                >
+                  <Eye className="w-4 h-4 text-amber-400" />
+                  <span>Watch 4 Bots</span>
                 </button>
               </div>
             </div>

@@ -170,6 +170,7 @@ export type ClientMessage =
   | { type: 'leave_room'; roomId: string; user: UserProfile }
   | { type: 'claim_seat'; roomId: string; seat: Seat; user: UserProfile }
   | { type: 'leave_seat'; roomId: string; seat: Seat }
+  | { type: 'switch_to_bot'; roomId: string; seat: Seat }
   | { type: 'fill_bots'; roomId: string }
   | { type: 'set_bot_difficulty'; roomId: string; difficulty: 'casual' | 'super' }
   | { type: 'set_turn_timeout'; roomId: string; turnTimeoutMs: number }

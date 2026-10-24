@@ -340,47 +340,52 @@ function scheduleBotActionIfNeeded(roomId: string) {
   const turnTimeoutMs =
     typeof room.turnTimeoutMs === 'number' ? room.turnTimeoutMs : DEFAULT_TURN_TIMEOUT_MS;
 
-  // 1. Bidding Turn
+  const BOT_BID_TIMEOUT_MS = 5000;
+  const HUMAN_BID_TIMEOUT_MS = 20000;
+  const BOT_DECLARE_TIMEOUT_MS = 5000;
+  const HUMAN_DECLARE_TIMEOUT_MS = 20000;
+
+  // 1. Bidding Turn: 5s for bots, 20s for humans
   if (gameState.phase === 'bidding' && gameState.currentBidder) {
     const activeSeat = gameState.currentBidder;
     const bidderProfile = seats[activeSeat];
     if (bidderProfile?.isBot) {
-      gameState.turnDeadlineAt = null;
-      gameState.turnDurationMs = null;
+      gameState.turnDeadlineAt = Date.now() + BOT_BID_TIMEOUT_MS;
+      gameState.turnDurationMs = BOT_BID_TIMEOUT_MS;
       const timer = setTimeout(() => {
         handleBotBid(roomId, activeSeat, false);
-      }, 900);
+      }, BOT_BID_TIMEOUT_MS);
       botTimers.set(roomId, timer);
       return;
     } else if (turnTimeoutMs > 0) {
-      gameState.turnDeadlineAt = Date.now() + turnTimeoutMs;
-      gameState.turnDurationMs = turnTimeoutMs;
+      gameState.turnDeadlineAt = Date.now() + HUMAN_BID_TIMEOUT_MS;
+      gameState.turnDurationMs = HUMAN_BID_TIMEOUT_MS;
       const timer = setTimeout(() => {
         handleBotBid(roomId, activeSeat, true);
-      }, turnTimeoutMs);
+      }, HUMAN_BID_TIMEOUT_MS);
       turnTimeoutTimers.set(roomId, timer);
       return;
     }
   }
 
-  // 2. Declaring Trump Suit Turn
+  // 2. Declaring Trump Suit Turn: 5s for bots, 20s for humans
   if (gameState.phase === 'declaring' && gameState.declarer) {
     const activeSeat = gameState.declarer;
     const declarerProfile = seats[activeSeat];
     if (declarerProfile?.isBot) {
-      gameState.turnDeadlineAt = null;
-      gameState.turnDurationMs = null;
+      gameState.turnDeadlineAt = Date.now() + BOT_DECLARE_TIMEOUT_MS;
+      gameState.turnDurationMs = BOT_DECLARE_TIMEOUT_MS;
       const timer = setTimeout(() => {
         handleBotDeclareTrump(roomId, activeSeat, false);
-      }, 1000);
+      }, BOT_DECLARE_TIMEOUT_MS);
       botTimers.set(roomId, timer);
       return;
     } else if (turnTimeoutMs > 0) {
-      gameState.turnDeadlineAt = Date.now() + turnTimeoutMs;
-      gameState.turnDurationMs = turnTimeoutMs;
+      gameState.turnDeadlineAt = Date.now() + HUMAN_DECLARE_TIMEOUT_MS;
+      gameState.turnDurationMs = HUMAN_DECLARE_TIMEOUT_MS;
       const timer = setTimeout(() => {
         handleBotDeclareTrump(roomId, activeSeat, true);
-      }, turnTimeoutMs);
+      }, HUMAN_DECLARE_TIMEOUT_MS);
       turnTimeoutTimers.set(roomId, timer);
       return;
     }
@@ -970,6 +975,24 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (msg.type === 'switch_to_bot') {
+        const room = rooms.get(msg.roomId);
+        if (!room) return;
+        const seat = msg.seat;
+        clearDisconnectTimer(room.id, seat);
+        room.seats[seat] = {
+          id: `bot_${seat.toLowerCase()}`,
+          name: getBotNameForSeat(room.seats, seat),
+          email: `${seat.toLowerCase()}@ai.studio`,
+          avatar: BOT_AVATARS[seat],
+          isBot: true,
+        };
+        scheduleBotActionIfNeeded(room.id);
+        broadcastRoom(room.id);
+        broadcastRoomList();
+        return;
+      }
+
       if (msg.type === 'fill_bots') {
         const room = rooms.get(msg.roomId);
         if (!room) return;
@@ -1291,6 +1314,7 @@ app.post('/api/rooms', (req, res) => {
     user,
     botDifficulty = 'super',
     autoFillBots = false,
+    watchBots = false,
     isPrivate = false,
     turnTimeoutMs = ANIMATION_CONFIG.DEFAULT_TURN_TIMEOUT_MS,
   } = req.body;
@@ -1298,28 +1322,31 @@ app.post('/api/rooms', (req, res) => {
   const code = generateRoomCode();
   const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
 
-  const initialSouth = user
-    ? {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-      }
-    : null;
+  const initialSouth =
+    user && !watchBots
+      ? {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+        }
+      : null;
+
+  const shouldAutoFill = Boolean(autoFillBots || watchBots);
 
   const seats: Record<Seat, UserProfile | null> = {
-    North: autoFillBots
+    North: shouldAutoFill
       ? { id: 'bot_north', name: BOT_NAMES.North, email: 'north@ai.studio', avatar: BOT_AVATARS.North, isBot: true }
       : null,
-    West: autoFillBots
+    West: shouldAutoFill
       ? { id: 'bot_west', name: BOT_NAMES.West, email: 'west@ai.studio', avatar: BOT_AVATARS.West, isBot: true }
       : null,
     South:
       initialSouth ||
-      (autoFillBots
+      (shouldAutoFill
         ? { id: 'bot_south', name: BOT_NAMES.South, email: 'south@ai.studio', avatar: BOT_AVATARS.South, isBot: true }
         : null),
-    East: autoFillBots
+    East: shouldAutoFill
       ? { id: 'bot_east', name: BOT_NAMES.East, email: 'east@ai.studio', avatar: BOT_AVATARS.East, isBot: true }
       : null,
   };
@@ -1341,7 +1368,7 @@ app.post('/api/rooms', (req, res) => {
   };
 
   rooms.set(roomId, newRoom);
-  if (autoFillBots && SEATS.every((s) => seats[s] !== null)) {
+  if (shouldAutoFill && SEATS.every((s) => seats[s] !== null)) {
     executeDealRound(newRoom, randomDealer, 1);
   } else {
     broadcastRoomList();

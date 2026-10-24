@@ -421,3 +421,55 @@ All procedural synthesized audio (card slide/snap clicks, projectile flight whoo
 * **Seat Pod Badge**: Any seat with `player.isDisconnected === true` displays a pulsing rose alert badge (`Left • Bot in Xs`), a rose-highlighted pod border, a slightly dimmed avatar, and a live `Left (Xs)` status label updated every `250ms`.
 * **Top-Center Table Alert Banner**: A floating banner at the top-center of the table arena announces `{player.name} left the game — replacing with Bot in {secLeft}s`.
 * **Bot Replacement Toast**: When the 10-second countdown completes and the seat transitions from a disconnected human to an AI Bot, a confirmation toast (`{prev.name} did not return — replaced by {curr.name}`) is displayed for 4.5 seconds.
+
+---
+
+## 13. All-Bots Spectator Mode & Dynamic Seating Perspective Rotation
+
+### 13.1 Seating Rotation & Bottom Hand Visibility
+* **All-Bots Detection (`isAllBots`)**: When all 4 table seats are occupied by bots, the table dynamically switches to spectator perspective mode.
+* **Seating Orientation Math**:
+  * The selected bot is placed at `bottomSeat = effectiveSeat`.
+  * The bot's partner is placed at `topSeat = getPartner(effectiveSeat)`.
+  * The left opponent is placed at `leftSeat = getPrevSeat(effectiveSeat)`.
+  * The right opponent is placed at `rightSeat = getNextSeat(effectiveSeat)`.
+  * The center trick card target slots, gather trajectories, and seat pods automatically rotate to reflect this perspective.
+* **Bottom Dock Card Visibility**:
+  * The bottom hand dock renders the face-up hand of the currently selected bottom bot (`gameState.hands[bottomSeat]`).
+  * Cards are sorted by trump suit with full readability, top-left rank & suit index exposure, and suit distribution counters.
+  * Direct card dragging and tapping are disabled for spectators while bot auto-play actions smoothly execute on turn ticks.
+* **Interactive Bot Perspective Switcher**:
+  * A toolbar in the bottom dock (`[👁️ Bot: South | West | North | East]`) allows one-click switching to any bot's perspective.
+  * The active bidder or trick player bot displays an animated indicator badge.
+  * Clicking on any bot seat pod on the table felt or on its `👁️ View Hand` pill immediately rotates the table so that bot occupies the bottom position.
+
+---
+
+## 14. Bidding & Suit Declaration Turn Timers
+
+### 14.1 Server-Enforced Timeouts (`server.ts`)
+* **Bidding Phase**:
+  * **AI Bots**: 5 seconds (`BOT_BID_TIMEOUT_MS = 5000`), allowing spectators and players to observe bot bidding contemplation.
+  * **Human Players**: 20 seconds (`HUMAN_BID_TIMEOUT_MS = 20000`), providing adequate deliberation time.
+* **Contract/Trump Suit Declaration Phase**:
+  * **AI Bots**: 5 seconds (`BOT_DECLARE_TIMEOUT_MS = 5000`).
+  * **Human Players**: 20 seconds (`HUMAN_DECLARE_TIMEOUT_MS = 20000`).
+* **Visual Timer Feedback**:
+  * Both `BiddingPanel` and `SuitDeclarationModal` display a live countdown pill (`⏱️ Xs`) synchronized with server `turnDeadlineAt`.
+  * The bottom dock and active seat pods render real-time progress bars transitioning from emerald to amber (<=5s) and pulsing rose (<=3s).
+
+---
+
+## 15. Salapand Match Victory & Unified Celebration Screen (`GameOverModal.tsx`)
+
+### 15.1 Combined Salapand & Game Over Presentation
+* **Trigger Conditions**: When a team captures all 13 tricks in a round (Salapand / سالابند) and the resulting +11 points causes their total score to meet or exceed the match target (ending the game in `phase === 'game_over'`), `GameOverModal` presents a unified celebration screen.
+* **Visual & Audio Celebration Elements**:
+  * Radiant rotating golden sunburst rays and floating sparkle animations.
+  * Crown + Flame honors badge with cursive Arabic title (`سالابند • SALPAND`).
+  * Salapand +11 PTS bonus callout card and Arabic rules summary.
+  * Full match victory standings comparison (`Team 1` vs `Team 2`).
+  * Multi-stage confetti burst and celebratory audio fanfare.
+  * Action buttons to Rematch or Return to Lobby.
+* **Conflict Prevention**: `SalpandCelebrationModal` is suppressed during `phase === 'game_over'` to prevent duplicate stacked modals, ensuring a single cohesive, high-impact celebration.
+

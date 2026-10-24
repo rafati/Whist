@@ -20,6 +20,7 @@ import {
   SUIT_NAMES,
   SUIT_SYMBOLS,
   sortHand,
+  SEATS,
 } from '../logic/gameLogic.ts';
 import { ANIMATION_CONFIG } from '../logic/animationConfig.ts';
 import { CardView, CardReleaseGesture } from './CardView.tsx';
@@ -61,6 +62,7 @@ import {
   Clock,
   Lock,
   Globe,
+  Eye,
 } from 'lucide-react';
 
 // Physical flight offset vectors based on visual position
@@ -382,6 +384,26 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const mySeat: Seat | null =
     (Object.keys(seats) as Seat[]).find((s) => seats[s]?.id === user?.id) || null;
 
+  // Check if all 4 seats are bots (or spectator watching all bots)
+  const isAllBots = SEATS.every((s) => Boolean(seats[s]?.isBot));
+
+  // Selected bot seat to display at the bottom when all bots are playing
+  const [selectedBotSeat, setSelectedBotSeat] = useState<Seat>('South');
+
+  // Dynamic table seat mapping: selected bot (when all bots play) or active human player is ALWAYS oriented at bottom
+  const effectiveSeat: Seat = isAllBots ? selectedBotSeat : (mySeat || selectedBotSeat || 'South');
+  const bottomSeat: Seat = effectiveSeat;
+  const topSeat: Seat = getPartner(effectiveSeat);
+  const leftSeat: Seat = getPrevSeat(effectiveSeat);
+  const rightSeat: Seat = getNextSeat(effectiveSeat);
+
+  const getSeatVisualPos = (seat: Seat): 'bottom' | 'top' | 'left' | 'right' => {
+    if (seat === bottomSeat) return 'bottom';
+    if (seat === topSeat) return 'top';
+    if (seat === leftSeat) return 'left';
+    return 'right';
+  };
+
   // Animation state for played tricks and card flight
   const [displayTrick, setDisplayTrick] = useState<PlayedCard[]>(room.gameState.currentTrick);
   const [isGathering, setIsGathering] = useState(false);
@@ -678,7 +700,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     mySeat && gameState.phase === 'playing' && gameState.currentTurn === mySeat
   );
 
-  const myHand = mySeat ? gameState.hands[mySeat] || [] : [];
+  const myHand =
+    (isAllBots ? gameState.hands[bottomSeat] : (mySeat ? gameState.hands[mySeat] : [])) || [];
   const sortedMyHand = sortHand(myHand, gameState.trumpSuit);
 
   // Authoritative led suit must always come from gameState.currentTrick so opening leads never inherit a stale suit from displayTrick
@@ -877,19 +900,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     setSelectedThrowable(null);
   };
 
-  // Dynamic table seat mapping: active human player is ALWAYS oriented at the bottom location
-  const bottomSeat: Seat = mySeat || 'South';
-  const topSeat: Seat = mySeat ? getPartner(mySeat) : 'North';
-  const leftSeat: Seat = mySeat ? getPrevSeat(mySeat) : 'West';
-  const rightSeat: Seat = mySeat ? getNextSeat(mySeat) : 'East';
-
-  const getSeatVisualPos = (seat: Seat): 'bottom' | 'top' | 'left' | 'right' => {
-    if (seat === bottomSeat) return 'bottom';
-    if (seat === topSeat) return 'top';
-    if (seat === leftSeat) return 'left';
-    return 'right';
-  };
-
   // Compute live contract & defense trick goals during playing phase
   const contractTeam = gameState.declarer ? getTeam(gameState.declarer) : null;
   const defendingTeam = contractTeam ? (contractTeam === 'TeamA' ? 'TeamB' : 'TeamA') : null;
@@ -984,7 +994,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     const tricksWon = gameState.tricksWonCount[seat] || 0;
 
     const isThisMySeat = mySeat === seat;
-    if (isThisMySeat && gameState.phase !== 'waiting') return null; // Player's profile is docked directly in bottom hand footer during gameplay!
+    const isBottomDockedSeat = isThisMySeat || (isAllBots && seat === bottomSeat);
+    if (isBottomDockedSeat && gameState.phase !== 'waiting') return null; // Docked in bottom hand footer during gameplay!
 
     const visualPos = getSeatVisualPos(seat);
     const isTopSeat = visualPos === 'top';
@@ -1008,9 +1019,18 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
           if (isTargetable) {
             e.stopPropagation();
             handleThrowAtSeat(seat);
+          } else if (isAllBots && seat !== bottomSeat) {
+            e.stopPropagation();
+            setSelectedBotSeat(seat);
           }
         }}
-        className={`absolute ${positionClasses} flex flex-col items-center z-20 ${isTargetable ? 'cursor-crosshair' : ''}`}
+        className={`absolute ${positionClasses} flex flex-col items-center z-20 ${
+          isTargetable
+            ? 'cursor-crosshair'
+            : isAllBots && seat !== bottomSeat
+            ? 'cursor-pointer hover:scale-105 transition-transform'
+            : ''
+        }`}
       >
         {player ? (
           <div className={`flex ${isTopSeat ? 'flex-row items-center gap-2' : 'flex-col items-center gap-1'}`}>
@@ -1272,6 +1292,20 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               </div>
             </div>
           </div>
+          {isAllBots && seat !== bottomSeat && gameState.phase !== 'waiting' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedBotSeat(seat);
+              }}
+              className="mt-1 bg-slate-900/95 hover:bg-amber-400 hover:text-slate-950 border border-amber-500/50 text-amber-300 font-extrabold text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow transition-all flex items-center gap-1 cursor-pointer pointer-events-auto"
+              title={`Rotate table to view ${player.name || seat}'s hand`}
+            >
+              <Eye className="w-2.5 h-2.5" />
+              <span>View Hand</span>
+            </button>
+          )}
         </div>
       ) : (
           /* Empty Seat Claim Button */
@@ -1957,6 +1991,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     gameState={gameState}
                     mySeat={mySeat}
                     myHand={myHand}
+                    secondsLeft={turnSecondsLeft}
                     onMakeBid={(bid) => makeBid(room.id, bid)}
                   />
                 </div>
@@ -1969,6 +2004,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     gameState={gameState}
                     mySeat={mySeat}
                     myHand={myHand}
+                    secondsLeft={turnSecondsLeft}
                     onDeclareSuit={(suit) => declareTrump(room.id, suit)}
                   />
                 </div>
@@ -2082,11 +2118,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
       {(gameState.phase === 'bidding' ||
         gameState.phase === 'declaring' ||
         gameState.phase === 'playing') &&
-        mySeat && (
+        (mySeat || isAllBots) && (
           <footer className="portrait-hand-footer landscape-compact-hand-footer shrink-0 w-full max-w-5xl mx-auto px-1.5 sm:px-3 pb-1 sm:pb-1.5 z-20">
             <div className="portrait-hand-box landscape-compact-hand-box bg-slate-950/92 backdrop-blur-md border border-emerald-800/40 rounded-xl sm:rounded-2xl px-1.5 sm:px-2 py-1 sm:p-2 shadow-2xl relative overflow-visible">
-              {/* Live Turn Timer Progress Bar along top edge of player hand dock when it is your turn */}
-              {activeTurnSeat === mySeat && turnSecondsLeft !== null && (
+              {/* Live Turn Timer Progress Bar along top edge of player hand dock when it is bottom player's turn */}
+              {activeTurnSeat === (mySeat || bottomSeat) && turnSecondsLeft !== null && (
                 <div
                   data-testid="my-turn-progress-bar"
                   className="absolute top-0 left-3 right-3 h-1 bg-slate-900 rounded-full overflow-hidden pointer-events-none"
@@ -2108,19 +2144,23 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               <div className="flex items-center justify-between gap-1 text-xs px-1 mb-0.5">
                 <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                   {/* Player Profile & Identity Pill */}
-                  <div data-throw-seat={mySeat} className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                  <div data-throw-seat={mySeat || bottomSeat} className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                     <div className="relative shrink-0">
                       <img
-                        src={user?.avatar || seats[mySeat]?.avatar || 'https://api.dicebear.com/7.x/initials/svg?seed=You'}
-                        alt="You"
+                        src={
+                          isAllBots
+                            ? seats[bottomSeat]?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=Bot${bottomSeat}`
+                            : user?.avatar || (mySeat ? seats[mySeat]?.avatar : null) || 'https://api.dicebear.com/7.x/initials/svg?seed=You'
+                        }
+                        alt={isAllBots ? seats[bottomSeat]?.name || `Bot ${bottomSeat}` : 'You'}
                         referrerPolicy="no-referrer"
                         className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border object-cover shadow bg-slate-800 ${
-                          recoiledSeats.has(mySeat) ? 'avatar-recoiling' : ''
+                          recoiledSeats.has(bottomSeat) ? 'avatar-recoiling' : ''
                         } ${
-                          getTeam(mySeat) === 'TeamA' ? 'border-emerald-400' : 'border-blue-400'
+                          getTeam(bottomSeat) === 'TeamA' ? 'border-emerald-400' : 'border-blue-400'
                         }`}
                       />
-                      {gameState.dealer === mySeat && (
+                      {gameState.dealer === bottomSeat && (
                         <div
                           className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-amber-500 text-slate-950 font-black text-[7px] flex items-center justify-center border border-white shadow font-mono"
                           title="Dealer"
@@ -2131,29 +2171,66 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     </div>
                     <span
                       className={`text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-[1px] rounded-full border flex items-center gap-1 shrink-0 ${
-                        getTeam(mySeat) === 'TeamA'
+                        getTeam(bottomSeat) === 'TeamA'
                           ? 'text-emerald-300 bg-emerald-950/80 border-emerald-700/50'
                           : 'text-blue-300 bg-blue-950/80 border-blue-700/50'
                       }`}
                     >
-                      <span className="sm:hidden">{getTeam(mySeat) === 'TeamA' ? 'T1' : 'T2'}</span>
-                      <span className="hidden sm:inline">{getTeam(mySeat) === 'TeamA' ? 'Team 1' : 'Team 2'}</span>
+                      <span>{isAllBots ? (seats[bottomSeat]?.name?.replace(/^Bot\s+/i, '') || bottomSeat) : 'You'}</span>
+                      <span className="sm:hidden">({getTeam(bottomSeat) === 'TeamA' ? 'T1' : 'T2'})</span>
+                      <span className="hidden sm:inline">({getTeam(bottomSeat) === 'TeamA' ? 'Team 1' : 'Team 2'})</span>
                       {gameState.phase === 'playing' && (
                         <>
                           <span className="text-slate-500">•</span>
-                          <span className="text-amber-300 font-mono font-bold" title="Tricks won by you this round">
-                            {gameState.tricksWonCount?.[mySeat] || 0}T
+                          <span className="text-amber-300 font-mono font-bold" title="Tricks won by this seat this round">
+                            {gameState.tricksWonCount?.[bottomSeat] || 0}T
                           </span>
                         </>
                       )}
                     </span>
                   </div>
 
+                  {/* Bot Perspective Switcher (when watching all bots) */}
+                  {isAllBots && (
+                    <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-900/90 border border-amber-500/40 rounded-full px-1.5 py-0.5 shadow-sm shrink-0">
+                      <span className="text-[9px] sm:text-[10px] text-amber-300 font-bold flex items-center gap-0.5">
+                        <Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-400" />
+                        <span className="hidden md:inline">Bot:</span>
+                      </span>
+                      {SEATS.map((seat) => {
+                        const isSelected = bottomSeat === seat;
+                        const isTurn =
+                          (gameState.phase === 'bidding' && gameState.currentBidder === seat) ||
+                          (gameState.phase === 'declaring' && gameState.declarer === seat) ||
+                          (gameState.phase === 'playing' && gameState.currentTurn === seat);
+                        return (
+                          <button
+                            key={seat}
+                            type="button"
+                            onClick={() => setSelectedBotSeat(seat)}
+                            title={`Rotate table to view ${seats[seat]?.name || seat}'s hand`}
+                            className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold transition-all flex items-center gap-0.5 cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-400 text-slate-950 shadow-sm scale-105'
+                                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                            }`}
+                          >
+                            <span>{seat[0]}</span>
+                            <span className="hidden lg:inline">{seat.slice(1)}</span>
+                            {isTurn && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {/* Your Bid or Winning Contract in Bottom Dock */}
                   {(() => {
-                    const isMyDeclarer = gameState.declarer === mySeat;
-                    const myBid = gameState.bids.find((b) => b.seat === mySeat);
-                    if ((gameState.phase === 'playing' || gameState.phase === 'declaring') && isMyDeclarer) {
+                    const isBottomDeclarer = gameState.declarer === bottomSeat;
+                    const bottomBid = gameState.bids.find((b) => b.seat === bottomSeat);
+                    if ((gameState.phase === 'playing' || gameState.phase === 'declaring') && isBottomDeclarer) {
                       let myContractDisplay = '';
                       let myContractShort = '';
                       if (gameState.trumpSuit === 'NT') {
@@ -2179,18 +2256,18 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                         </span>
                       );
                     }
-                    if (myBid && (gameState.phase === 'playing' || gameState.phase === 'bidding' || gameState.phase === 'declaring')) {
+                    if (bottomBid && (gameState.phase === 'playing' || gameState.phase === 'bidding' || gameState.phase === 'declaring')) {
                       return (
                         <span className="bg-slate-900 border border-slate-700 text-slate-300 font-bold text-[8px] sm:text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full shadow-xs shrink-0 flex items-center gap-1">
                           <span className="sm:hidden">
-                            {myBid.type === 'pass'
+                            {bottomBid.type === 'pass'
                               ? 'Pass'
-                              : `${myBid.level}${myBid.contractType === 'NT' ? 'NT' : 'S'}`}
+                              : `${bottomBid.level}${bottomBid.contractType === 'NT' ? 'NT' : 'S'}`}
                           </span>
                           <span className="hidden sm:inline">
-                            {myBid.type === 'pass' ? 'Passed' : `Bid ${myBid.level} ${myBid.contractType}`}
+                            {bottomBid.type === 'pass' ? 'Passed' : `Bid ${bottomBid.level} ${bottomBid.contractType}`}
                           </span>
-                          {myBid.isBotAutoPlay && (
+                          {bottomBid.isBotAutoPlay && (
                             <span className="text-[7px] bg-cyan-950 text-cyan-300 border border-cyan-500/60 px-1 rounded-full font-bold">
                               🤖 <span className="hidden sm:inline">Auto</span>
                             </span>
@@ -2220,8 +2297,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
 
                 {/* Right Header Section: Live Turn Countdown + Prompt & Throwable Items Dock */}
                 <div className="flex items-center justify-end gap-1 sm:gap-2 shrink-0">
-                  {/* Live Turn Countdown Pill for Local Human Player */}
-                  {activeTurnSeat === mySeat && turnSecondsLeft !== null && (
+                  {/* Live Turn Countdown Pill for Local Human Player or Bottom Bot */}
+                  {activeTurnSeat === (mySeat || bottomSeat) && turnSecondsLeft !== null && (
                     <span
                       data-testid="my-turn-timer-badge"
                       className={`px-1.5 sm:px-2 py-0.5 rounded-full font-mono font-black text-[9px] sm:text-[10px] flex items-center gap-1 border shadow shrink-0 ${
@@ -2231,7 +2308,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                           ? 'bg-amber-500 border-amber-200 text-slate-950'
                           : 'bg-emerald-950 border-emerald-400 text-emerald-300'
                       }`}
-                      title="Time remaining before AI Bot automatically plays your move"
+                      title={isAllBots ? `Time remaining for ${seats[bottomSeat]?.name || bottomSeat}` : 'Time remaining before AI Bot automatically plays your move'}
                     >
                       <Clock className="w-2.5 h-2.5 shrink-0" />
                       <span>{turnSecondsLeft}s</span>
@@ -2254,6 +2331,12 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                               : 'YOUR TURN • TAP OR SWIPE CARD TO PLAY'}
                           </span>
                         </span>
+                      ) : isAllBots && gameState.currentTurn === bottomSeat ? (
+                        <span className="text-slate-950 font-extrabold text-[8px] sm:text-[10px] flex items-center gap-1 bg-emerald-400 px-1.5 sm:px-2 py-0.5 rounded-full shadow animate-pulse whitespace-nowrap">
+                          <span>
+                            {(seats[bottomSeat]?.name.replace(/^Bot\s+/i, '') || bottomSeat).toUpperCase()} TO PLAY
+                          </span>
+                        </span>
                       ) : (
                         <span className="hidden sm:inline text-slate-400 text-[11px] whitespace-nowrap">
                           Waiting for{' '}
@@ -2269,15 +2352,15 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                       <span className="hidden sm:flex text-amber-300 font-semibold text-[10px] items-center gap-1 whitespace-nowrap">
                         <Sparkles className="w-2.5 h-2.5 text-amber-400" />
                         <span>
-                          {gameState.currentBidder === mySeat
-                            ? 'Your turn to bid above!'
-                            : 'Inspect your hand during the auction'}
+                          {gameState.currentBidder === (mySeat || bottomSeat)
+                            ? `${isAllBots ? seats[bottomSeat]?.name || 'Bot' : 'Your turn'} to bid above!`
+                            : 'Inspect hand during auction'}
                         </span>
                       </span>
                     ) : (
                       <span className="hidden sm:inline text-amber-300 font-semibold text-[10px] whitespace-nowrap">
-                        {gameState.declarer === mySeat
-                          ? 'Select Trump Suit in the center console'
+                        {gameState.declarer === (mySeat || bottomSeat)
+                          ? `${isAllBots ? seats[bottomSeat]?.name || 'Bot' : 'Select Trump Suit'} in center console`
                           : 'Waiting for Declarer to name Trump'}
                       </span>
                     )}

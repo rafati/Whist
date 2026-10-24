@@ -11,6 +11,7 @@ interface SocketContextType {
   leaveRoom: (roomId: string, user: UserProfile) => void;
   claimSeat: (roomId: string, seat: any, user: UserProfile) => void;
   leaveSeat: (roomId: string, seat: any) => void;
+  switchToBot: (roomId: string, seat: Seat) => void;
   fillBots: (roomId: string) => void;
   setBotDifficulty: (roomId: string, difficulty: 'casual' | 'super') => void;
   setTurnTimeout: (roomId: string, turnTimeoutMs: number) => void;
@@ -203,6 +204,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     send({ type: 'leave_seat', roomId, seat });
   }, [send]);
 
+  const switchToBot = useCallback((roomId: string, seat: Seat) => {
+    send({ type: 'switch_to_bot', roomId, seat });
+  }, [send]);
+
   const fillBots = useCallback((roomId: string) => {
     send({ type: 'fill_bots', roomId });
   }, [send]);
@@ -278,6 +283,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         leaveRoom,
         claimSeat,
         leaveSeat,
+        switchToBot,
         fillBots,
         setBotDifficulty,
         setTurnTimeout,
