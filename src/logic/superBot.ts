@@ -1274,19 +1274,12 @@ export function getSuperBotCardPlay(
     // Subsequent Trick Leads (Tricks 2-13):
     // A. Declarer Trump Extraction:
     if (!isNT && isDeclarerTeam) {
-      // Count rounds of trumps led by our team so far
-      let myTeamTrumpLeads = 0;
-      for (const t of gameState.tricksHistory || []) {
-        if (t.ledSuit === trumpSuit && getTeam(t.leader) === myTeam) {
-          myTeamTrumpLeads++;
-        }
-      }
-
+      const trumpsLedBefore = (gameState.tricksHistory || []).some((t) => t.ledSuit === trumpSuit);
       const opponentTrumpsLeft = countRemainingOpponentTrumps(gameState, seat, trumpSuit);
       const myTrumps = legalCards.filter((c) => c.suit === trumpSuit);
-      const oneOppVoid = beliefs[opp1].voids[trumpSuit] || beliefs[opp2].voids[trumpSuit];
-      const maxLeads = oneOppVoid ? 1 : 2;
-      if (opponentTrumpsLeft > 0 && myTeamTrumpLeads < maxLeads && myTrumps.length > 0) {
+
+      // Extract trumps ONLY on the first trump lead of the hand, and only if opponents hold trumps
+      if (!trumpsLedBefore && opponentTrumpsLeft > 0 && myTrumps.length > 0) {
         myTrumps.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
         return myTrumps[0];
       }
@@ -1664,6 +1657,127 @@ export function isHandBalanced(hand: Card[]): boolean {
 }
 
 // -------------------------------------------------------------
+// Partner Bidding Intention Decoding & Partnership Communication
+// -------------------------------------------------------------
+
+export type PartnerBiddingIntention =
+  | 'none'                // Partner hasn't bid yet (we are bidding first)
+  | 'pass'                // Partner passed (weak, 0-9 HCP)
+  | 'open_suit'           // Partner opened 1 Suit (10-14 HCP, 5+ card suit, wants Suit contract)
+  | 'open_nt'             // Partner opened 1 NT (14-16 HCP balanced, wants doubled NT contract)
+  | 'strong_nt'           // Partner opened 2 NT (17+ HCP balanced, powerhouse NT)
+  | 'competitive_suit'    // Partner competed in Suit at level 2+
+  | 'competitive_nt';     // Partner competed in NT at level 2+
+
+export interface PartnerBiddingAnalysis {
+  hasBid: boolean;
+  intention: PartnerBiddingIntention;
+  bid: Bid | null;
+  isWinning: boolean;
+  estimatedMinHCP: number;
+  estimatedMaxHCP: number;
+  estimatedAvgHCP: number;
+  likelySuitContract: boolean;
+  likelyNTContract: boolean;
+}
+
+export function analyzePartnerBiddingIntention(
+  gameState: GameState,
+  mySeat: Seat
+): PartnerBiddingAnalysis {
+  const partner = getPartner(mySeat);
+  const partnerBid = gameState.bids.find((b) => b.seat === partner);
+  const isWinning = gameState.highestBidder === partner;
+
+  if (!partnerBid) {
+    return {
+      hasBid: false,
+      intention: 'none',
+      bid: null,
+      isWinning: false,
+      estimatedMinHCP: 0,
+      estimatedMaxHCP: 20,
+      estimatedAvgHCP: 9.5,
+      likelySuitContract: false,
+      likelyNTContract: false,
+    };
+  }
+
+  if (partnerBid.type === 'pass') {
+    return {
+      hasBid: true,
+      intention: 'pass',
+      bid: partnerBid,
+      isWinning: false,
+      estimatedMinHCP: 0,
+      estimatedMaxHCP: 9,
+      estimatedAvgHCP: 5.5,
+      likelySuitContract: false,
+      likelyNTContract: false,
+    };
+  }
+
+  // Partner made a real bid
+  const level = partnerBid.level || 1;
+  const contractType = partnerBid.contractType || 'Suit';
+
+  if (contractType === 'NT') {
+    if (level === 1) {
+      return {
+        hasBid: true,
+        intention: 'open_nt',
+        bid: partnerBid,
+        isWinning,
+        estimatedMinHCP: 14,
+        estimatedMaxHCP: 17,
+        estimatedAvgHCP: 15.2,
+        likelySuitContract: false,
+        likelyNTContract: true,
+      };
+    } else {
+      return {
+        hasBid: true,
+        intention: level === 2 ? 'strong_nt' : 'competitive_nt',
+        bid: partnerBid,
+        isWinning,
+        estimatedMinHCP: 16,
+        estimatedMaxHCP: 22,
+        estimatedAvgHCP: 17.5,
+        likelySuitContract: false,
+        likelyNTContract: true,
+      };
+    }
+  }
+
+  // ContractType is 'Suit'
+  if (level === 1) {
+    return {
+      hasBid: true,
+      intention: 'open_suit',
+      bid: partnerBid,
+      isWinning,
+      estimatedMinHCP: 10,
+      estimatedMaxHCP: 15,
+      estimatedAvgHCP: 11.8,
+      likelySuitContract: true,
+      likelyNTContract: false,
+    };
+  }
+
+  return {
+    hasBid: true,
+    intention: 'competitive_suit',
+    bid: partnerBid,
+    isWinning,
+    estimatedMinHCP: 12,
+    estimatedMaxHCP: 18,
+    estimatedAvgHCP: 14.0,
+    likelySuitContract: true,
+    likelyNTContract: false,
+  };
+}
+
+// -------------------------------------------------------------
 // Tournament Super Bot Bidding Engine (Expected Value Optimization)
 // -------------------------------------------------------------
 
@@ -1678,10 +1792,10 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
   const partner = getPartner(seat);
   const policy = getActiveBotPolicy();
 
-  // Partner bidding intelligence
-  const partnerBid = gameState.bids.find((b) => b.seat === partner && b.type === 'bid');
+  // 1. Partner intention analysis
+  const partnerAnalysis = analyzePartnerBiddingIntention(gameState, seat);
 
-  // Distribution points (DOP)
+  // 2. Distribution points (DOP)
   let dop = 0;
   const suitCounts: Record<Suit, number> = { S: 0, H: 0, D: 0, C: 0 };
   for (const c of hand) suitCounts[c.suit]++;
@@ -1690,10 +1804,19 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     else if (suitCounts[s] === 1) dop += policy.partnershipCoefficients.singletonBonus;
     else if (suitCounts[s] === 2) dop += policy.partnershipCoefficients.doubletonBonus;
   }
+  // Extra length bonus (6th card +1, 7th+ card +2)
+  if (strongest.count >= 6) dop += (strongest.count - 5);
+
   const effectivePower = hcp + dop;
   const balanced = isHandBalanced(hand);
+  const combinedHCP = hcp + partnerAnalysis.estimatedAvgHCP;
+  const combinedPower = effectivePower + partnerAnalysis.estimatedAvgHCP;
 
-  // 1. Dealer Privilege Resolution on Turn 4
+  // Rule of 20 check for opening: HCP + sum of 2 longest suits >= 20
+  const sortedSuitCounts = Object.values(suitCounts).sort((a, b) => b - a);
+  const ruleOf20 = hcp + (sortedSuitCounts[0] || 0) + (sortedSuitCounts[1] || 0) >= 20;
+
+  // 3. Dealer Privilege Resolution on Turn 4 (Final Turn)
   if (isDealer && isFinalTurn && highest && highest.type === 'bid' && highest.level) {
     const privileges = getDealerPrivileges(highest);
 
@@ -1702,51 +1825,101 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
       return { seat, type: 'pass' };
     }
 
-    // Dealer Match Suit: Steal the contract using learned suit threshold
+    // Opponent holds highest bid on Turn 4: Dealer evaluates Match Privileges
     const tSuit1 = policy.biddingMatrix['1_Suit'];
     const minSuitLen = tSuit1?.minSuitLength ?? 5;
     const minSuitHcp = tSuit1?.minHCP ?? 10;
-    if (privileges.canMatchSuit && strongest.count >= minSuitLen && (hcp >= minSuitHcp || effectivePower >= minSuitHcp + 1)) {
-      return {
-        seat,
-        type: 'bid',
-        level: privileges.matchedSuitLevel,
-        contractType: 'Suit',
-        isDealerPrivilegeMatch: true,
-      };
+
+    // A. Match Suit: Steal the contract at the same level without increasing required tricks!
+    if (privileges.canMatchSuit && privileges.matchedSuitLevel) {
+      const partnerHasOpening = partnerAnalysis.intention === 'open_suit' || partnerAnalysis.intention === 'open_nt' || partnerAnalysis.intention === 'competitive_suit';
+      const dealerCanSupport = strongest.count >= 4 && (hcp >= 8 || effectivePower >= 9);
+      const dealerHasOwnSuit = strongest.count >= minSuitLen && (hcp >= minSuitHcp - 1 || effectivePower >= minSuitHcp);
+
+      if ((partnerHasOpening && dealerCanSupport) || dealerHasOwnSuit || combinedPower >= 19.5) {
+        return {
+          seat,
+          type: 'bid',
+          level: privileges.matchedSuitLevel,
+          contractType: 'Suit',
+          isDealerPrivilegeMatch: true,
+        };
+      }
     }
 
-    // Dealer Match 1 NT: Scores DOUBLED (+2 pts), requires learned NT threshold and balanced hand
-    const tNT1 = policy.biddingMatrix['1_NT'];
-    const minNtHcp = tNT1?.minHCP ?? 14;
-    if (privileges.canMatchNT && balanced && hcp >= minNtHcp) {
-      return {
-        seat,
-        type: 'bid',
-        level: privileges.matchedNTLevel,
-        contractType: 'NT',
-        isDealerPrivilegeMatch: true,
-      };
+    // B. Match NT: Steal doubled NT contract!
+    if (privileges.canMatchNT && privileges.matchedNTLevel && balanced) {
+      const partnerHasOpening = partnerAnalysis.intention === 'open_suit' || partnerAnalysis.intention === 'open_nt';
+      if ((partnerHasOpening && hcp >= 9) || hcp >= 13 || combinedHCP >= 23) {
+        return {
+          seat,
+          type: 'bid',
+          level: privileges.matchedNTLevel,
+          contractType: 'NT',
+          isDealerPrivilegeMatch: true,
+        };
+      }
     }
 
     return { seat, type: 'pass' };
   }
 
-  // 2. Partner Protection:
-  // If partner is currently the winning bidder, PASS unless holding massive hand (17+ HCP)
-  if (gameState.highestBidder === partner) {
-    if (hcp < 17) {
-      return { seat, type: 'pass' };
+  // 4. Partner is Currently Winning the Bid: Upgrades & Protection
+  if (partnerAnalysis.isWinning) {
+    const pBid = partnerAnalysis.bid;
+    const pLevel = pBid?.level || 1;
+    const pType = pBid?.contractType || 'Suit';
+
+    // Upgrade 4A: Partner is winning 1 Suit.
+    // If bot has balanced hand with 14+ HCP, bot can upgrade to 1 NT for DOUBLED scoring (+2 vs +1)!
+    if (pLevel === 1 && pType === 'Suit' && balanced && hcp >= 14) {
+      return {
+        seat,
+        type: 'bid',
+        level: 1,
+        contractType: 'NT',
+      };
     }
+
+    // Upgrade 4B: Partner is winning 1 NT (14-16 HCP balanced, doubled points).
+    if (pType === 'NT' && pLevel === 1) {
+      // 9-12 HCP -> 24-27 combined HCP -> Bid 2 NT (needs 8 tricks, awards +4 pts)!
+      if (hcp >= 9 && hcp <= 12 && (balanced || strongest.count >= 5)) {
+        return {
+          seat,
+          type: 'bid',
+          level: 2,
+          contractType: 'NT',
+        };
+      }
+      // 13+ HCP -> 28+ combined HCP -> Bid 3 NT (needs 9 tricks, awards +6 pts)!
+      if (hcp >= 13) {
+        return {
+          seat,
+          type: 'bid',
+          level: 3,
+          contractType: 'NT',
+        };
+      }
+    }
+
+    // In all other cases: Partner already holds the winning bid!
+    // PASS to let partner win the contract at the lowest, safest level!
+    return { seat, type: 'pass' };
   }
 
-  // 3. Match Context & Vulnerability
+  // 5. Match Context & Vulnerability
   const currentScore = gameState.matchScores[myTeam];
   const isCloseToElimination = currentScore <= -5;
   const isCloseToVictory = currentScore >= 8;
 
-  // 4. Candidate Bids Generation (governed by policy.biddingMatrix)
+  // 4. Candidate Bids Generation (Governed by Partner Intention & Policy Matrix)
   const candidateBids: Array<{ level: number; type: ContractType }> = [];
+  const partnerOpened =
+    partnerAnalysis.intention === 'open_suit' ||
+    partnerAnalysis.intention === 'open_nt' ||
+    partnerAnalysis.intention === 'competitive_suit';
+  const partnerPassed = partnerAnalysis.intention === 'pass';
 
   if (!highest || highest.type === 'pass') {
     // Opening auction: Always open 1 Suit (or 1 NT / 2 NT for doubled points)
@@ -1754,7 +1927,7 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     const minSuit1Len = tSuit1?.minSuitLength ?? 5;
     const minSuit1Hcp = tSuit1?.minHCP ?? 10;
     if (
-      (strongest.count >= minSuit1Len && (hcp >= minSuit1Hcp || effectivePower >= minSuit1Hcp + 1)) ||
+      (strongest.count >= minSuit1Len && (hcp >= minSuit1Hcp || effectivePower >= minSuit1Hcp + 1 || ruleOf20)) ||
       (strongest.count >= 4 && hcp >= minSuit1Hcp + 3)
     ) {
       candidateBids.push({ level: 1, type: 'Suit' });
@@ -1772,31 +1945,71 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
       candidateBids.push({ level: 2, type: 'NT' });
     }
   } else {
+    // Opponent is currently winning the auction.
     const minL = highest.level || 1;
-    const tSuitOver = policy.biddingMatrix[`${minL + 1}_Suit`] || policy.biddingMatrix['2_Suit'];
-    const minOverSuitLen = tSuitOver?.minSuitLength ?? 5;
-    const minOverSuitHcp = tSuitOver?.minHCP ?? 14;
-
-    const canSafelyOverbidSuit =
-      (partnerBid && effectivePower >= policy.partnershipCoefficients.supportRaiseMinHCP) ||
-      (strongest.count >= minOverSuitLen && (hcp >= minOverSuitHcp || effectivePower >= minOverSuitHcp + 1));
-
     const tNTCurrent = policy.biddingMatrix[`${minL}_NT`];
     const minNTCurrentHcp = tNTCurrent?.minHCP ?? (14 + (minL - 1) * 2);
     const tNTNext = policy.biddingMatrix[`${minL + 1}_NT`];
     const minNTNextHcp = tNTNext?.minHCP ?? (14 + minL * 2);
 
-    if (highest.contractType === 'Suit') {
-      if (balanced && hcp >= minNTCurrentHcp) candidateBids.push({ level: minL, type: 'NT' });
-      if (canSafelyOverbidSuit) {
-        candidateBids.push({ level: minL + 1, type: 'Suit' });
+    if (partnerOpened) {
+      // Scenario A: Partner opened earlier, opponent overbid -> Compete with combined partnership strength!
+      if (highest.contractType === 'Suit') {
+        if (balanced && (hcp >= minNTCurrentHcp || combinedHCP >= 23)) {
+          candidateBids.push({ level: minL, type: 'NT' });
+        }
+        if (strongest.count >= 4 && (effectivePower >= 9 || combinedPower >= 20 || combinedHCP >= 21)) {
+          candidateBids.push({ level: minL + 1, type: 'Suit' });
+        }
+        if (balanced && (hcp >= minNTNextHcp || combinedHCP >= 25)) {
+          candidateBids.push({ level: minL + 1, type: 'NT' });
+        }
+      } else {
+        // Highest is NT
+        if (strongest.count >= 4 && (effectivePower >= 10 || combinedPower >= 22)) {
+          candidateBids.push({ level: minL + 1, type: 'Suit' });
+        }
+        if (balanced && combinedHCP >= 26) {
+          candidateBids.push({ level: minL + 1, type: 'NT' });
+        }
       }
-      if (balanced && hcp >= minNTNextHcp) candidateBids.push({ level: minL + 1, type: 'NT' });
+    } else if (partnerPassed) {
+      // Scenario B: Partner passed (<10 HCP, avg ~5.5) -> Sound independent overcall required
+      if (highest.contractType === 'Suit') {
+        if (balanced && hcp >= 16) {
+          candidateBids.push({ level: minL, type: 'NT' });
+        }
+        if (strongest.count >= 5 && (hcp >= 13 || effectivePower >= 15)) {
+          candidateBids.push({ level: minL + 1, type: 'Suit' });
+        }
+        if (balanced && hcp >= 18) {
+          candidateBids.push({ level: minL + 1, type: 'NT' });
+        }
+      } else {
+        if (strongest.count >= 5 && (hcp >= 14 || effectivePower >= 16)) {
+          candidateBids.push({ level: minL + 1, type: 'Suit' });
+        }
+      }
     } else {
-      if (canSafelyOverbidSuit) {
-        candidateBids.push({ level: minL + 1, type: 'Suit' });
+      // Scenario C: Partner has not spoken yet (Turn 2/3 overcall)
+      if (highest.contractType === 'Suit') {
+        if (balanced && hcp >= minNTCurrentHcp) {
+          candidateBids.push({ level: minL, type: 'NT' });
+        }
+        if (strongest.count >= 5 && (hcp >= 11 || effectivePower >= 13)) {
+          candidateBids.push({ level: minL + 1, type: 'Suit' });
+        }
+        if (balanced && hcp >= minNTNextHcp) {
+          candidateBids.push({ level: minL + 1, type: 'NT' });
+        }
+      } else {
+        if (strongest.count >= 5 && (hcp >= 12 || effectivePower >= 14)) {
+          candidateBids.push({ level: minL + 1, type: 'Suit' });
+        }
+        if (balanced && hcp >= minNTNextHcp) {
+          candidateBids.push({ level: minL + 1, type: 'NT' });
+        }
       }
-      if (balanced && hcp >= minNTNextHcp) candidateBids.push({ level: minL + 1, type: 'NT' });
     }
   }
 
@@ -1808,43 +2021,61 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     return { seat, type: 'pass' };
   }
 
-  // 5. Expected Value (EV) Evaluation (empirically calibrated by policy.biddingMatrix)
+  // 5. Expected Value (EV) Evaluation (Calibrated Bridge/Tarneeb Expectation Formula)
   let bestBidOption: { level: number; type: ContractType } | null = null;
   let maxEV = -999;
 
   for (const cand of validCandidates) {
     const matrixEntry = policy.biddingMatrix[`${cand.level}_${cand.type}`];
-    const requiredHCP = matrixEntry?.minHCP ?? ((cand.level - 1) * 3 + (cand.type === 'NT' ? 14 : 9));
-    if (effectivePower < requiredHCP) continue;
-
     const tricksNeeded = 6 + cand.level;
-    const estimatedPartnerHCP = partnerBid ? 11.5 : 9.5;
-    const combinedHCP = hcp + estimatedPartnerHCP;
 
-    let expectedTricks = Math.min(
-      13,
-      Math.max(
-        3,
-        4.2 + (combinedHCP / 3.3) + (cand.type === 'Suit' ? Math.max(0, strongest.count - 4) * 0.8 : 0)
-      )
-    );
-
-    // Partnership fit EV bonus
-    if (partnerBid && cand.type === 'Suit') {
-      const fitBonus = strongest.count >= 5
-        ? policy.partnershipCoefficients.fitBonus9PlusTrumps
-        : policy.partnershipCoefficients.fitBonus8Trumps;
-      expectedTricks = Math.min(13, expectedTricks + fitBonus);
+    // Safety checks against reckless overbidding when partner passed
+    if (partnerPassed && cand.level >= 2 && effectivePower < 14) {
+      continue;
     }
 
+    // Calibrated Bridge/Tarneeb trick expectation:
+    // Base tricks from HCP: 1.5 + (combinedHCP * 0.26)
+    let expectedTricks = 1.5 + (combinedHCP * 0.26);
+
+    if (cand.type === 'Suit') {
+      // Long suit bonus
+      expectedTricks += Math.max(0, strongest.count - 4) * 0.5;
+
+      // Shortness/ruffing value
+      if (dop > 0) {
+        expectedTricks += Math.min(1.5, dop * 0.35);
+      }
+
+      // Partnership fit bonus if partner opened suit
+      if (partnerOpened) {
+        const fitBonus = strongest.count >= 5
+          ? policy.partnershipCoefficients.fitBonus9PlusTrumps
+          : policy.partnershipCoefficients.fitBonus8Trumps;
+        expectedTricks += fitBonus;
+      }
+    } else {
+      // NT: relies on high cards and running long suits
+      if (strongest.count >= 5) {
+        expectedTricks += (strongest.count - 4) * 0.4;
+      }
+    }
+
+    expectedTricks = Math.min(13, Math.max(2, expectedTricks));
+
+    const margin = expectedTricks - tricksNeeded;
     const winProb =
-      expectedTricks >= tricksNeeded + 0.5
-        ? 0.90
-        : expectedTricks >= tricksNeeded
-        ? 0.72
-        : expectedTricks >= tricksNeeded - 0.5
+      margin >= 1.0
+        ? 0.95
+        : margin >= 0.5
+        ? 0.85
+        : margin >= 0.0
+        ? 0.70
+        : margin >= -0.5
         ? 0.42
-        : 0.15;
+        : margin >= -1.0
+        ? 0.18
+        : 0.05;
 
     let calculatedEV = 0;
     const defTricksOverSix = Math.max(0, (13 - expectedTricks) - 6);

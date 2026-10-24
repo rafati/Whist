@@ -11,6 +11,7 @@
     "clean": "rm -rf dist server.js",
     "train": "tsx scripts/train.ts",
     "ai-optimize": "tsx scripts/ai_optimize_superbot.ts",
+    "test": "tsx scripts/test_bidding_intelligence.ts && tsx scripts/test_bot_tactical_fixes.ts && tsx scripts/test_superbot_intelligence.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

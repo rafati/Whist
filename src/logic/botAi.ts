@@ -58,38 +58,47 @@ export function getStrongestSuit(hand: Card[]): { suit: Suit; count: number; hcp
   return { suit: bestSuit, count: counts[bestSuit], hcp: hcp[bestSuit] };
 }
 
+// Check if hand is balanced (no singletons or voids, suitable for No Trump)
+export function isHandBalanced(hand: Card[]): boolean {
+  const counts: Record<Suit, number> = { S: 0, H: 0, D: 0, C: 0 };
+  for (const c of hand) counts[c.suit]++;
+  const values = Object.values(counts);
+  const minCount = Math.min(...values);
+  const maxCount = Math.max(...values);
+  return minCount >= 2 && maxCount <= 5;
+}
+
 // Bot Decision for Bidding
 export function getBotBid(gameState: GameState, seat: Seat): Bid {
   const hand = gameState.hands[seat] || [];
   const hcp = calculateHCP(hand);
   const strongest = getStrongestSuit(hand);
+  const balanced = isHandBalanced(hand);
   const isDealer = gameState.dealer === seat;
   const isFinalTurn = gameState.auctionTurnsCount === 3; // 4th turn
   const highest = gameState.highestBid;
+  const partner = getPartner(seat);
 
-  // Final Turn: Dealer Privileges
+  // Partner intention awareness
+  const partnerBids = (gameState.bids || []).filter((b) => b.seat === partner);
+  const lastPartnerBid = partnerBids.length > 0 ? partnerBids[partnerBids.length - 1] : null;
+  const partnerPassed = lastPartnerBid?.type === 'pass';
+  const partnerOpened = lastPartnerBid?.type === 'bid';
+  const isPartnerWinning = gameState.highestBidder === partner;
+
+  // 1. Final Turn: Dealer Privileges
   if (isDealer && isFinalTurn && highest && highest.type === 'bid' && highest.level) {
-    // If partner is currently winning the bid, dealer passes to let partner win!
-    const partner = getPartner(seat);
-    if (gameState.highestBidder === partner) {
+    // If partner is currently winning the bid, dealer passes to protect partner!
+    if (isPartnerWinning) {
       return { seat, type: 'pass' };
     }
 
     const privileges = getDealerPrivileges(highest);
 
-    // If dealer has very strong hand (HCP >= 14 and balanced), use Match NT if allowed
-    if (privileges.canMatchNT && privileges.matchedNTLevel && hcp >= 14) {
-      return {
-        seat,
-        type: 'bid',
-        level: privileges.matchedNTLevel,
-        contractType: 'NT',
-        isDealerPrivilegeMatch: true,
-      };
-    }
-
-    // If dealer has 5+ cards in a suit and HCP >= 10, use Match Suit if allowed
-    if (privileges.canMatchSuit && privileges.matchedSuitLevel && strongest.count >= 5 && hcp >= 10) {
+    // Dealer privilege match Suit:
+    const canSupportPartnerSuit = partnerOpened && strongest.count >= 4 && hcp >= 8;
+    const canMatchOwnSuit = strongest.count >= 5 && hcp >= 10;
+    if (privileges.canMatchSuit && privileges.matchedSuitLevel && (canSupportPartnerSuit || canMatchOwnSuit)) {
       return {
         seat,
         type: 'bid',
@@ -99,70 +108,149 @@ export function getBotBid(gameState: GameState, seat: Seat): Bid {
       };
     }
 
-    // If dealer cannot match or hand not strong enough, pass
+    // Dealer privilege match NT:
+    const canSupportPartnerNT = partnerOpened && balanced && hcp >= 9;
+    const canMatchOwnNT = balanced && hcp >= 13;
+    if (privileges.canMatchNT && privileges.matchedNTLevel && (canSupportPartnerNT || canMatchOwnNT)) {
+      return {
+        seat,
+        type: 'bid',
+        level: privileges.matchedNTLevel,
+        contractType: 'NT',
+        isDealerPrivilegeMatch: true,
+      };
+    }
+
+    // Cannot match or insufficient hand
     return { seat, type: 'pass' };
   }
 
-  // Standard Turn (Turns 1, 2, 3 or opening)
-  // Determine if hand is strong enough to open/raise
-  const minHCP = highest ? 12 + (highest.level || 1) * 2 : 11;
-  const canNT = hcp >= 15;
+  // 2. Partner is Currently Winning the Bid: Upgrades & Protection
+  if (isPartnerWinning && highest && highest.level) {
+    // Upgrade 2A: Partner holds 1 Suit. If bot has 14+ HCP balanced, upgrade to 1 NT for doubled points!
+    if (highest.level === 1 && highest.contractType === 'Suit' && balanced && hcp >= 14) {
+      return {
+        seat,
+        type: 'bid',
+        level: 1,
+        contractType: 'NT',
+      };
+    }
 
-  // Target candidate level and type
-  let targetLevel = 1;
-  let targetType: ContractType = 'Suit';
+    // Upgrade 2B: Partner holds 1 NT. Raise to 2 NT (9-12 HCP) or 3 NT (13+ HCP)
+    if (highest.contractType === 'NT' && highest.level === 1) {
+      if (hcp >= 9 && hcp <= 12) {
+        return {
+          seat,
+          type: 'bid',
+          level: 2,
+          contractType: 'NT',
+        };
+      }
+      if (hcp >= 13) {
+        return {
+          seat,
+          type: 'bid',
+          level: 3,
+          contractType: 'NT',
+        };
+      }
+    }
 
+    // In all other cases: Partner holds winning contract, pass to protect!
+    return { seat, type: 'pass' };
+  }
+
+  // 3. Opening Bid (No bids made yet)
   if (!highest || highest.type === 'pass') {
     if (hcp < 10 && strongest.count < 5) {
       return { seat, type: 'pass' };
     }
-    targetLevel = hcp >= 16 ? 2 : 1;
-    targetType = canNT ? 'NT' : 'Suit';
-  } else {
-    // Partner has highest bid
-    const partner = getPartner(seat);
-    if (gameState.highestBidder === partner) {
-      // Don't overbid partner unless massive hand
-      if (hcp < 16) {
-        return { seat, type: 'pass' };
-      }
+    // High HCP balanced opens NT for doubled points
+    if (balanced && hcp >= 15) {
+      return {
+        seat,
+        type: 'bid',
+        level: hcp >= 18 ? 2 : 1,
+        contractType: 'NT',
+      };
     }
-
-    if (hcp < minHCP) {
-      return { seat, type: 'pass' };
-    }
-
-    const nextLevel = (highest.level || 1) + (highest.contractType === 'NT' ? 1 : 0);
-    if (nextLevel > 4) {
-      return { seat, type: 'pass' };
-    }
-
-    if (highest.contractType === 'Suit') {
-      // Can bid same level NT or next level Suit
-      if (canNT) {
-        targetLevel = highest.level || 1;
-        targetType = 'NT';
-      } else {
-        targetLevel = (highest.level || 1) + 1;
-        targetType = 'Suit';
-      }
-    } else {
-      targetLevel = (highest.level || 1) + 1;
-      targetType = canNT ? 'NT' : 'Suit';
-    }
-  }
-
-  if (targetLevel > 7) {
-    return { seat, type: 'pass' };
-  }
-
-  if (isBidHigher(targetLevel, targetType, highest)) {
     return {
       seat,
       type: 'bid',
-      level: targetLevel,
-      contractType: targetType,
+      level: 1,
+      contractType: 'Suit',
     };
+  }
+
+  // 4. Competitive Bidding (Opponent holds highest bid)
+  const currentLevel = highest.level || 1;
+  const currentType = highest.contractType || 'Suit';
+
+  // If partner opened earlier, compute combined partnership power
+  if (partnerOpened) {
+    const combinedHCP = hcp + 12; // Partner opened with at least ~11-13 HCP
+
+    // Support partner or compete:
+    if (currentType === 'Suit') {
+      if (balanced && (hcp >= 13 || combinedHCP >= 23)) {
+        return {
+          seat,
+          type: 'bid',
+          level: currentLevel,
+          contractType: 'NT',
+        };
+      }
+      if ((strongest.count >= 4 && hcp >= 8) || combinedHCP >= 21) {
+        if (currentLevel + 1 <= 3) {
+          return {
+            seat,
+            type: 'bid',
+            level: currentLevel + 1,
+            contractType: 'Suit',
+          };
+        }
+      }
+    } else {
+      // Opponent bid NT
+      if (strongest.count >= 5 && combinedHCP >= 22 && currentLevel + 1 <= 3) {
+        return {
+          seat,
+          type: 'bid',
+          level: currentLevel + 1,
+          contractType: 'Suit',
+        };
+      }
+    }
+    return { seat, type: 'pass' };
+  }
+
+  // If partner passed earlier, bot is on its own with weak partner (avg ~5.5 HCP)
+  if (partnerPassed) {
+    // Only overcall with strong sound hand
+    if (currentType === 'Suit') {
+      if (balanced && hcp >= 16) {
+        return { seat, type: 'bid', level: currentLevel, contractType: 'NT' };
+      }
+      if (strongest.count >= 5 && hcp >= 13 && currentLevel + 1 <= 2) {
+        return { seat, type: 'bid', level: currentLevel + 1, contractType: 'Suit' };
+      }
+    }
+    return { seat, type: 'pass' };
+  }
+
+  // Partner has not spoken yet: standard overcall requirements
+  if (currentType === 'Suit') {
+    if (balanced && hcp >= 15) {
+      return { seat, type: 'bid', level: currentLevel, contractType: 'NT' };
+    }
+    if (strongest.count >= 5 && hcp >= 11 && currentLevel + 1 <= 2) {
+      return { seat, type: 'bid', level: currentLevel + 1, contractType: 'Suit' };
+    }
+  } else {
+    if (strongest.count >= 5 && hcp >= 13 && currentLevel + 1 <= 2) {
+      return { seat, type: 'bid', level: currentLevel + 1, contractType: 'Suit' };
+    }
   }
 
   return { seat, type: 'pass' };
@@ -203,7 +291,8 @@ export function getBotCardPlay(
       return aces[0];
     }
 
-    // Check if opponents have any trumps left
+    // Check if opponents have any trumps left or if trumps were already pulled
+    const trumpsLedBefore = (gameState.tricksHistory || []).some((t) => t.ledSuit === trumpSuit);
     let opponentTrumpsLeft = 0;
     if (trumpSuit !== 'NT') {
       let trumpsPlayed = 0;
@@ -234,9 +323,10 @@ export function getBotCardPlay(
       }
     }
 
-    // TACTICAL INVARIANT: If opponent trumps are exhausted (0 left), NEVER lead trump when we hold non-trump cards!
+    // TACTICAL INVARIANT: If opponent trumps are exhausted OR trumps were already led before,
+    // NEVER lead trump when we hold non-trump cards! Establish and cash side suits instead.
     const nonTrumpCards = legalCards.filter((c) => trumpSuit === 'NT' || c.suit !== trumpSuit);
-    if (trumpSuit !== 'NT' && opponentTrumpsLeft === 0 && nonTrumpCards.length > 0) {
+    if (trumpSuit !== 'NT' && (opponentTrumpsLeft === 0 || trumpsLedBefore) && nonTrumpCards.length > 0) {
       const nonTrumpHand = hand.filter((c) => c.suit !== trumpSuit);
       const strongestSide = getStrongestSuit(nonTrumpHand.length > 0 ? nonTrumpHand : hand);
       const inSideSuit = nonTrumpCards.filter((c) => c.suit === strongestSide.suit);

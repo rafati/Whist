@@ -1,54 +1,54 @@
 {
-  "version": "3.5.3983",
-  "lastUpdated": "2026-10-24T17:47:15.249Z",
-  "totalSimulatedHands": 792534,
-  "totalMatchesTrained": 111995,
+  "version": "3.5.3986",
+  "lastUpdated": "2026-10-24T18:06:24.205Z",
+  "totalSimulatedHands": 794594,
+  "totalMatchesTrained": 112295,
   "blunderMetrics": {
     "partnerOvertrumpsTotal": 4,
-    "deadTrumpLeadsTotal": 64
+    "deadTrumpLeadsTotal": 75
   },
   "biddingMatrix": {
     "1_Suit": {
       "minHCP": 10,
       "minSuitLength": 5,
-      "empiricalWinRate": 0.818,
-      "empiricalEV": 2.54,
-      "sampleSize": 486
+      "empiricalWinRate": 0.816,
+      "empiricalEV": 2.56,
+      "sampleSize": 1310
     },
     "1_NT": {
       "minHCP": 14,
       "minSuitLength": 3,
-      "empiricalWinRate": 0.818,
-      "empiricalEV": 2.94,
-      "sampleSize": 486
+      "empiricalWinRate": 0.816,
+      "empiricalEV": 2.96,
+      "sampleSize": 1310
     },
     "2_Suit": {
       "minHCP": 14,
       "minSuitLength": 5,
-      "empiricalWinRate": 0.8,
-      "empiricalEV": 2.44,
-      "sampleSize": 486
+      "empiricalWinRate": 0.799,
+      "empiricalEV": 2.46,
+      "sampleSize": 1310
     },
     "2_NT": {
       "minHCP": 16,
       "minSuitLength": 3,
-      "empiricalWinRate": 0.79,
-      "empiricalEV": 3.44,
-      "sampleSize": 486
+      "empiricalWinRate": 0.789,
+      "empiricalEV": 3.46,
+      "sampleSize": 1310
     },
     "3_Suit": {
       "minHCP": 16,
       "minSuitLength": 6,
       "empiricalWinRate": 0.782,
-      "empiricalEV": 2.24,
-      "sampleSize": 486
+      "empiricalEV": 2.26,
+      "sampleSize": 1310
     },
     "3_NT": {
       "minHCP": 18,
       "minSuitLength": 3,
       "empiricalWinRate": 0.772,
-      "empiricalEV": 3.74,
-      "sampleSize": 486
+      "empiricalEV": 3.76,
+      "sampleSize": 1310
     }
   },
   "openingBook": [
@@ -58,8 +58,8 @@
       "description": "Lead an Ace in an unbid side suit against Suit contract to secure quick entry",
       "targetContract": "Suit",
       "weight": 1.27,
-      "winsCount": 132590,
-      "trialsCount": 198039
+      "winsCount": 132917,
+      "trialsCount": 198555
     },
     {
       "id": "lead_fourth_highest_nt",
@@ -67,8 +67,8 @@
       "description": "Lead 4th highest from length against No Trump to establish long-suit winners",
       "targetContract": "NT",
       "weight": 1.27,
-      "winsCount": 132555,
-      "trialsCount": 197989
+      "winsCount": 132882,
+      "trialsCount": 198505
     },
     {
       "id": "lead_top_of_sequence",
@@ -76,8 +76,8 @@
       "description": "Lead King from KQJ or Queen from QJ10 to force out higher honors cleanly",
       "targetContract": "Both",
       "weight": 1.27,
-      "winsCount": 132480,
-      "trialsCount": 197919
+      "winsCount": 132807,
+      "trialsCount": 198435
     },
     {
       "id": "lead_singleton_ruff",
@@ -85,8 +85,8 @@
       "description": "Lead a singleton in an unbid suit against Suit contract to set up partner ruff",
       "targetContract": "Suit",
       "weight": 1.27,
-      "winsCount": 132390,
-      "trialsCount": 197824
+      "winsCount": 132717,
+      "trialsCount": 198340
     }
   ],
   "partnershipCoefficients": {
