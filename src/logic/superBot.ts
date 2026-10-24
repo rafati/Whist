@@ -339,13 +339,23 @@ export function countRemainingOpponentTrumps(
   const myTrumps = myHand.filter((c) => c.suit === trumpSuit).length;
 
   let trumpsPlayed = 0;
+  let opp1TrumpsPlayed = 0;
+  let opp2TrumpsPlayed = 0;
   for (const trick of gameState.tricksHistory || []) {
     for (const p of trick.cards) {
-      if (p.card.suit === trumpSuit) trumpsPlayed++;
+      if (p.card.suit === trumpSuit) {
+        trumpsPlayed++;
+        if (p.seat === opp1) opp1TrumpsPlayed++;
+        else if (p.seat === opp2) opp2TrumpsPlayed++;
+      }
     }
   }
   for (const p of gameState.currentTrick || []) {
-    if (p.card.suit === trumpSuit) trumpsPlayed++;
+    if (p.card.suit === trumpSuit) {
+      trumpsPlayed++;
+      if (p.seat === opp1) opp1TrumpsPlayed++;
+      else if (p.seat === opp2) opp2TrumpsPlayed++;
+    }
   }
 
   // Known remaining trumps outside bot's hand
@@ -353,18 +363,33 @@ export function countRemainingOpponentTrumps(
   if (trumpsOutsideMyHand === 0) return 0;
 
   const beliefs = extractBeliefState(gameState);
+  const opp1RemainingCards = gameState.cardsCount?.[opp1] ?? gameState.hands?.[opp1]?.length ?? 0;
+  const opp2RemainingCards = gameState.cardsCount?.[opp2] ?? gameState.hands?.[opp2]?.length ?? 0;
+  const opp1IsVoid = beliefs[opp1].voids[trumpSuit] || opp1RemainingCards === 0;
+  const opp2IsVoid = beliefs[opp2].voids[trumpSuit] || opp2RemainingCards === 0;
+
+  if (opp1IsVoid && opp2IsVoid) {
+    return 0;
+  }
+
   if (beliefs[partner].voids[trumpSuit]) {
     return trumpsOutsideMyHand;
   }
-  if (beliefs[opp1].voids[trumpSuit] && beliefs[opp2].voids[trumpSuit]) {
+
+  // If opponents have already played 4+ trumps across tricks and one opponent showed void:
+  if (opp1TrumpsPlayed + opp2TrumpsPlayed >= 4 && (opp1IsVoid || opp2IsVoid)) {
     return 0;
   }
 
   // Use Bayesian posterior distributions to estimate opponent trumps
   const bayesian = reconstructHandProbabilities(gameState, mySeat);
-  const opp1Expected = bayesian.playerDistributions[opp1]?.suitExpectedCounts[trumpSuit] || 0;
-  const opp2Expected = bayesian.playerDistributions[opp2]?.suitExpectedCounts[trumpSuit] || 0;
+  const opp1Expected = opp1IsVoid ? 0 : (bayesian.playerDistributions[opp1]?.suitExpectedCounts[trumpSuit] || 0);
+  const opp2Expected = opp2IsVoid ? 0 : (bayesian.playerDistributions[opp2]?.suitExpectedCounts[trumpSuit] || 0);
   const expectedTotal = opp1Expected + opp2Expected;
+
+  if (expectedTotal < 0.75) {
+    return 0;
+  }
 
   return Math.min(trumpsOutsideMyHand, Math.max(0, Math.round(expectedTotal)));
 }
@@ -408,6 +433,15 @@ export function sampleConsistentDeals(
     East: gameState.cardsCount?.East ?? gameState.hands?.East?.length ?? 0,
   };
 
+  // Sanity check: Ensure total needed cards do not exceed available unknown cards
+  const totalNeeded = otherSeats.reduce((acc, s) => acc + neededCounts[s], 0);
+  if (totalNeeded > unknownCards.length) {
+    for (const s of otherSeats) {
+      const alreadyPlayed = gameState.currentTrick.some((p) => p.seat === s);
+      neededCounts[s] = Math.max(0, myHand.length - (alreadyPlayed ? 1 : 0));
+    }
+  }
+
   const beliefs = extractBeliefState(gameState);
   const bayesian = reconstructHandProbabilities(gameState, mySeat);
   const sampledWorlds: Array<Record<Seat, Card[]>> = [];
@@ -418,13 +452,22 @@ export function sampleConsistentDeals(
     suitFlexibility[s] = otherSeats.filter((seat) => !beliefs[seat].voids[s]).length;
   }
 
+  let nodeCount = 0;
+  const MAX_CSP_NODES = 1500;
+
   function backtrackCSP(
     cards: Card[],
     cardIdx: number,
     candidateHands: Record<Seat, Card[]>
   ): boolean {
+    if (otherSeats.every((s) => candidateHands[s].length === neededCounts[s])) {
+      return true;
+    }
     if (cardIdx >= cards.length) {
-      return otherSeats.every((s) => candidateHands[s].length === neededCounts[s]);
+      return false;
+    }
+    if (++nodeCount > MAX_CSP_NODES) {
+      return false;
     }
 
     const card = cards[cardIdx];
@@ -452,6 +495,7 @@ export function sampleConsistentDeals(
   }
 
   for (let attempt = 0; attempt < count * 4 && sampledWorlds.length < count; attempt++) {
+    nodeCount = 0;
     const shuffled = [...unknownCards];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -508,15 +552,22 @@ export function solveMicroDDS(
   leader: Seat,
   currentTrickCards: Array<{ seat: Seat; card: Card }> = [],
   alpha: number = 0,
-  beta: number = 13
+  beta: number = 13,
+  nodeCounter: { count: number } = { count: 0 }
 ): number {
-  if (
-    hands.North.length === 0 &&
-    hands.West.length === 0 &&
-    hands.South.length === 0 &&
-    hands.East.length === 0 &&
-    currentTrickCards.length === 0
-  ) {
+  const totalRemaining =
+    hands.North.length +
+    hands.West.length +
+    hands.South.length +
+    hands.East.length +
+    currentTrickCards.length;
+  if (totalRemaining === 0) {
+    return 0;
+  }
+
+  // Micro-DDS is exclusively for tricks 10-13 (<= 16 cards total).
+  // If invoked with larger hands or recursion node budget is exceeded, abort search safely.
+  if (totalRemaining > 16 || ++nodeCounter.count > 10000) {
     return 0;
   }
 
@@ -567,7 +618,8 @@ export function solveMicroDDS(
         trickWinner,
         [],
         alpha - trickPoint,
-        beta - trickPoint
+        beta - trickPoint,
+        nodeCounter
       );
       score = trickPoint + rem;
     } else {
@@ -579,7 +631,8 @@ export function solveMicroDDS(
         leader,
         currentTrickCards,
         alpha,
-        beta
+        beta,
+        nodeCounter
       );
       currentTrickCards.pop();
     }
@@ -1154,14 +1207,6 @@ export function getSuperBotCardPlay(
     return legalCards[0];
   }
 
-  // Exact Endgame Micro-DDS Solver for tricks 10-13 (<= 4 cards in hand)
-  if (hand.length <= 4) {
-    const microDdsPlay = getMicroDDSCardPlay(gameState, seat, trumpSuit);
-    if (microDdsPlay) {
-      return microDdsPlay;
-    }
-  }
-
   const isNT = trumpSuit === 'NT';
   const myTeam = getTeam(seat);
   const partner = getPartner(seat);
@@ -1170,6 +1215,52 @@ export function getSuperBotCardPlay(
   const beliefs = extractBeliefState(gameState);
   const bayesian = reconstructHandProbabilities(gameState, seat);
   const isDeclarerTeam = gameState.declarer && getTeam(gameState.declarer) === myTeam;
+
+  // Exact Endgame Micro-DDS Solver for tricks 10-13 (<= 4 cards in hand)
+  const maxOtherCards = Math.max(
+    ...(['North', 'West', 'South', 'East'] as Seat[])
+      .filter((s) => s !== seat)
+      .map((s) => gameState.cardsCount?.[s] ?? gameState.hands?.[s]?.length ?? hand.length)
+  );
+  if (hand.length <= 4 && maxOtherCards <= 4) {
+    const microDdsPlay = getMicroDDSCardPlay(gameState, seat, trumpSuit);
+    if (microDdsPlay) {
+      let isMicroDdsBlunder = false;
+      const nonTrumpCards = legalCards.filter((c) => isNT || c.suit !== trumpSuit);
+
+      // Invariant Guard 1: Following trick - NEVER ruff / overtrump partner's winning trick!
+      if (!isOpeningLead && !isNT && microDdsPlay.suit === trumpSuit && ledSuit !== trumpSuit) {
+        if (nonTrumpCards.length > 0) {
+          const currentLeaderWinner = evaluateTrickWinner(trick, trumpSuit);
+          if (currentLeaderWinner.winner === partner) {
+            const partnerWinningRank = currentLeaderWinner.winningCard.rank;
+            const partnerWinningWithTrump = currentLeaderWinner.winningCard.suit === trumpSuit;
+            const isFourthHand = trick.length === 3;
+            const isPartnerHonor = ['A', 'K', 'Q', 'J'].includes(partnerWinningRank);
+
+            if (partnerWinningWithTrump || isFourthHand || isPartnerHonor) {
+              isMicroDdsBlunder = true;
+            }
+          }
+        }
+      }
+
+      // Invariant Guard 2: Leading trick - NEVER lead trump if opponents have 0 trumps or trumps were already drawn
+      if (isOpeningLead && !isNT && microDdsPlay.suit === trumpSuit) {
+        if (nonTrumpCards.length > 0) {
+          const oppTrumpsEst = countRemainingOpponentTrumps(gameState, seat, trumpSuit);
+          const trumpsLedBefore = (gameState.tricksHistory || []).some((t) => t.ledSuit === trumpSuit);
+          if (oppTrumpsEst === 0 || trumpsLedBefore) {
+            isMicroDdsBlunder = true;
+          }
+        }
+      }
+
+      if (!isMicroDdsBlunder) {
+        return microDdsPlay;
+      }
+    }
+  }
 
   // =========================================================
   // 1. LEADING A TRICK (When trick.length === 0)
@@ -1183,9 +1274,19 @@ export function getSuperBotCardPlay(
     // Subsequent Trick Leads (Tricks 2-13):
     // A. Declarer Trump Extraction:
     if (!isNT && isDeclarerTeam) {
+      // Count rounds of trumps led by our team so far
+      let myTeamTrumpLeads = 0;
+      for (const t of gameState.tricksHistory || []) {
+        if (t.ledSuit === trumpSuit && getTeam(t.leader) === myTeam) {
+          myTeamTrumpLeads++;
+        }
+      }
+
       const opponentTrumpsLeft = countRemainingOpponentTrumps(gameState, seat, trumpSuit);
       const myTrumps = legalCards.filter((c) => c.suit === trumpSuit);
-      if (opponentTrumpsLeft > 0 && myTrumps.length > 0) {
+      const oneOppVoid = beliefs[opp1].voids[trumpSuit] || beliefs[opp2].voids[trumpSuit];
+      const maxLeads = oneOppVoid ? 1 : 2;
+      if (opponentTrumpsLeft > 0 && myTeamTrumpLeads < maxLeads && myTrumps.length > 0) {
         myTrumps.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
         return myTrumps[0];
       }
@@ -1278,6 +1379,21 @@ export function getSuperBotCardPlay(
     }
 
     // E. Lead highest card in strongest suit
+    // CRITICAL TACTICAL INVARIANT: NEVER lead trump in Section E when holding non-trump cards!
+    // Section A already handles active declarer trump drawing. Section E is dedicated to establishing side suits.
+    const nonTrumpCards = legalCards.filter((c) => isNT || c.suit !== trumpSuit);
+    if (!isNT && nonTrumpCards.length > 0) {
+      const nonTrumpHand = hand.filter((c) => c.suit !== trumpSuit);
+      const strongestSide = getStrongestSuit(nonTrumpHand.length > 0 ? nonTrumpHand : hand);
+      const inSideSuit = nonTrumpCards.filter((c) => c.suit === strongestSide.suit);
+      if (inSideSuit.length > 0) {
+        inSideSuit.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+        return inSideSuit[0];
+      }
+      nonTrumpCards.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+      return nonTrumpCards[0];
+    }
+
     const strongest = getStrongestSuit(hand);
     const inStrongest = legalCards.filter((c) => c.suit === strongest.suit);
     if (inStrongest.length > 0) {
@@ -1318,8 +1434,8 @@ export function getSuperBotCardPlay(
         return inLedSuitAsc[0];
       }
 
-      // If partner's winning card is Ace or King: duck lowest card to conserve honors
-      if (partnerWinningRank === 'A' || partnerWinningRank === 'K') {
+      // If partner's winning card is Ace, King, or Queen: duck lowest card to conserve honors and avoid overtaking partner
+      if (['A', 'K', 'Q'].includes(partnerWinningRank)) {
         return inLedSuitAsc[0];
       }
 
@@ -1365,14 +1481,33 @@ export function getSuperBotCardPlay(
       }
 
       // On 3rd hand:
-      // If partner is winning with an established honor (A, K, Q): DO NOT RUFF! Discard off-suit loser.
-      if (['A', 'K', 'Q'].includes(partnerWinningRank)) {
+      // INVARIANT 1: If partner is winning with a TRUMP, NEVER overtrump partner!
+      if (currentLeaderWinner.winningCard.suit === trumpSuit) {
+        if (nonTrumpCards.length > 0) {
+          return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+        }
+        const trumpsAsc = [...legalCards].sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
+        return trumpsAsc[0];
+      }
+
+      // INVARIANT 2: If partner is winning with an honor (A, K, Q, J): NEVER RUFF! Discard off-suit loser.
+      if (['A', 'K', 'Q', 'J'].includes(partnerWinningRank)) {
         if (nonTrumpCards.length > 0) {
           return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
         }
       }
 
-      // If partner's card is a low spot (<= 9) and could easily be beaten by 4th hand in suit contract:
+      // INVARIANT 3: If 4th hand opponent cannot beat partner's card, DO NOT RUFF! Discard off-suit loser.
+      const opp4 = getNextSeat(seat);
+      const opp4IsVoidInTrump = !isNT ? beliefs[opp4]?.voids?.[trumpSuit] : false;
+      const opp4IsVoidInLed = ledSuit ? beliefs[opp4]?.voids?.[ledSuit] : false;
+      if (opp4IsVoidInTrump && opp4IsVoidInLed && nonTrumpCards.length > 0) {
+        return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+      }
+
+      // INVARIANT 4: Only if partner led a weak spot card (<= 9) and 4th hand might beat it,
+      // consider ruffing with a cheap trump (rank <= 10). NEVER waste honor trumps (J, Q, K, A)
+      // over partner's winning card if we have off-suit cards to discard!
       if (!isNT) {
         const trumps = legalCards.filter((c) => c.suit === trumpSuit);
         const winningTrumps = trumps.filter((c) => {
@@ -1381,6 +1516,14 @@ export function getSuperBotCardPlay(
         });
         if (winningTrumps.length > 0) {
           winningTrumps.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
+          if (nonTrumpCards.length > 0) {
+            const cheapWinningTrumps = winningTrumps.filter((c) => RANK_VALUES[c.rank] <= 10);
+            if (cheapWinningTrumps.length > 0) {
+              return cheapWinningTrumps[0];
+            }
+            // Discard off-suit loser instead of squandering high honor trump!
+            return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+          }
           return winningTrumps[0];
         }
       }

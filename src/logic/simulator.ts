@@ -16,6 +16,7 @@ import {
   evaluateTrickWinner,
   getDealerPrivileges,
   getNextSeat,
+  getPartner,
   getTeam,
   getTeamName,
   isBidHigher,
@@ -39,6 +40,13 @@ export interface SimulationConfig {
   maxRoundsPerMatch?: number;
 }
 
+export interface BlunderTelemetry {
+  teamAPartnerOvertrumps: number;
+  teamBPartnerOvertrumps: number;
+  teamADeadTrumpLeads: number;
+  teamBDeadTrumpLeads: number;
+}
+
 export interface SimulationResult {
   totalMatches: number;
   totalRounds: number;
@@ -56,6 +64,10 @@ export interface SimulationResult {
   teamBSuccessfulContracts: number;
   averageRoundsPerMatch: number;
   durationMs: number;
+  teamAPartnerOvertrumps: number;
+  teamBPartnerOvertrumps: number;
+  teamADeadTrumpLeads: number;
+  teamBDeadTrumpLeads: number;
 }
 
 // Helper to get bid according to team strategy
@@ -86,7 +98,8 @@ function getCardPlayForSeat(state: GameState, seat: Seat, trump: TrumpSuit, stra
 export function simulateSingleRound(
   state: GameState,
   teamAStrategy: BotStrategy,
-  teamBStrategy: BotStrategy
+  teamBStrategy: BotStrategy,
+  telemetry?: BlunderTelemetry
 ): GameState {
   let curState = { ...state };
   const getStrategy = (seat: Seat) => (getTeam(seat) === 'TeamA' ? teamAStrategy : teamBStrategy);
@@ -159,8 +172,58 @@ export function simulateSingleRound(
     const strat = getStrategy(seat);
     const trump = curState.trumpSuit!;
     const card = getCardPlayForSeat(curState, seat, trump, strat);
-
+    const seatTeam = getTeam(seat);
     const hand = curState.hands[seat];
+    const isNT = trump === 'NT';
+
+    // Blunder Telemetry Verification
+    if (telemetry) {
+      const isLead = curState.currentTrick.length === 0;
+      const partner = getPartner(seat);
+      const opp1 = getNextSeat(seat);
+      const opp2 = getNextSeat(partner);
+
+      if (isLead) {
+        // Dead trump lead: Bot leads trump when opponents hold 0 trumps, partner still holds trumps,
+        // trumps were already led previously, and bot holds legal non-trump alternatives
+        if (!isNT && card.suit === trump) {
+          const nonTrumps = hand.filter((c) => c.suit !== trump);
+          const partnerTrumps = (curState.hands[partner] || []).filter((c) => c.suit === trump).length;
+          const trumpsLedBefore = (curState.tricksHistory || []).some((t) => t.ledSuit === trump);
+          if (nonTrumps.length > 0 && partnerTrumps > 0 && trumpsLedBefore) {
+            const oppTrumps =
+              (curState.hands[opp1] || []).filter((c) => c.suit === trump).length +
+              (curState.hands[opp2] || []).filter((c) => c.suit === trump).length;
+            if (oppTrumps === 0) {
+              if (seatTeam === 'TeamA') telemetry.teamADeadTrumpLeads++;
+              else telemetry.teamBDeadTrumpLeads++;
+            }
+          }
+        }
+      } else {
+        // In-progress trick
+        const ledSuit = curState.currentTrick[0].card.suit;
+        // Check if bot ruffs/trumps when led suit was not trump
+        if (!isNT && card.suit === trump && ledSuit !== trump) {
+          const nonTrumps = hand.filter((c) => c.suit !== trump);
+          if (nonTrumps.length > 0) {
+            const currentLeaderWinner = evaluateTrickWinner(curState.currentTrick, trump);
+            if (currentLeaderWinner.winner === partner) {
+              const partnerWinningRank = currentLeaderWinner.winningCard.rank;
+              const partnerWinningWithTrump = currentLeaderWinner.winningCard.suit === trump;
+              const isFourthHand = curState.currentTrick.length === 3;
+              const isPartnerHonor = ['A', 'K', 'Q', 'J'].includes(partnerWinningRank);
+
+              if (partnerWinningWithTrump || isFourthHand || isPartnerHonor) {
+                if (seatTeam === 'TeamA') telemetry.teamAPartnerOvertrumps++;
+                else telemetry.teamBPartnerOvertrumps++;
+              }
+            }
+          }
+        }
+      }
+    }
+
     const cIdx = hand.findIndex((c) => c.id === card.id);
     if (cIdx !== -1) {
       hand.splice(cIdx, 1);
@@ -232,7 +295,8 @@ export function simulateSingleRound(
 export function simulateSingleMatch(
   teamAStrategy: BotStrategy,
   teamBStrategy: BotStrategy,
-  maxRounds: number = 20
+  maxRounds: number = 20,
+  telemetry?: BlunderTelemetry
 ): {
   winner: Team;
   roundsPlayed: number;
@@ -243,6 +307,10 @@ export function simulateSingleMatch(
   teamBBidsAttempted: number;
   teamABidsWon: number;
   teamBBidsWon: number;
+  teamAPartnerOvertrumps: number;
+  teamBPartnerOvertrumps: number;
+  teamADeadTrumpLeads: number;
+  teamBDeadTrumpLeads: number;
 } {
   let state = createInitialGameState('North');
   state = startDealRound(state, 'North');
@@ -255,8 +323,15 @@ export function simulateSingleMatch(
   let teamBBidsWon = 0;
   let roundsCount = 0;
 
+  const matchTelemetry: BlunderTelemetry = {
+    teamAPartnerOvertrumps: 0,
+    teamBPartnerOvertrumps: 0,
+    teamADeadTrumpLeads: 0,
+    teamBDeadTrumpLeads: 0,
+  };
+
   while (state.phase !== 'game_over' && roundsCount < maxRounds) {
-    state = simulateSingleRound(state, teamAStrategy, teamBStrategy);
+    state = simulateSingleRound(state, teamAStrategy, teamBStrategy, matchTelemetry);
     roundsCount++;
 
     const lastRound = state.roundScores[state.roundScores.length - 1];
@@ -280,6 +355,13 @@ export function simulateSingleMatch(
     }
   }
 
+  if (telemetry) {
+    telemetry.teamAPartnerOvertrumps += matchTelemetry.teamAPartnerOvertrumps;
+    telemetry.teamBPartnerOvertrumps += matchTelemetry.teamBPartnerOvertrumps;
+    telemetry.teamADeadTrumpLeads += matchTelemetry.teamADeadTrumpLeads;
+    telemetry.teamBDeadTrumpLeads += matchTelemetry.teamBDeadTrumpLeads;
+  }
+
   const winner: Team =
     state.winnerTeam ||
     (state.matchScores.TeamA >= state.matchScores.TeamB ? 'TeamA' : 'TeamB');
@@ -294,6 +376,10 @@ export function simulateSingleMatch(
     teamBBidsAttempted,
     teamABidsWon,
     teamBBidsWon,
+    teamAPartnerOvertrumps: matchTelemetry.teamAPartnerOvertrumps,
+    teamBPartnerOvertrumps: matchTelemetry.teamBPartnerOvertrumps,
+    teamADeadTrumpLeads: matchTelemetry.teamADeadTrumpLeads,
+    teamBDeadTrumpLeads: matchTelemetry.teamBDeadTrumpLeads,
   };
 }
 
@@ -314,6 +400,10 @@ export async function runBatchSimulation(
   let teamBContracts = 0;
   let teamASuccessful = 0;
   let teamBSuccessful = 0;
+  let teamAPartnerOvertrumps = 0;
+  let teamBPartnerOvertrumps = 0;
+  let teamADeadTrumpLeads = 0;
+  let teamBDeadTrumpLeads = 0;
 
   for (let i = 0; i < totalMatches; i++) {
     const match = simulateSingleMatch(teamAStrategy, teamBStrategy, maxRoundsPerMatch);
@@ -328,6 +418,10 @@ export async function runBatchSimulation(
     teamBContracts += match.teamBBidsAttempted;
     teamASuccessful += match.teamABidsWon;
     teamBSuccessful += match.teamBBidsWon;
+    teamAPartnerOvertrumps += match.teamAPartnerOvertrumps;
+    teamBPartnerOvertrumps += match.teamBPartnerOvertrumps;
+    teamADeadTrumpLeads += match.teamADeadTrumpLeads;
+    teamBDeadTrumpLeads += match.teamBDeadTrumpLeads;
 
     if (onProgress && (i + 1) % 5 === 0) {
       onProgress(i + 1, totalMatches);
@@ -358,5 +452,9 @@ export async function runBatchSimulation(
     teamBSuccessfulContracts: teamBSuccessful,
     averageRoundsPerMatch: totalMatches > 0 ? Number((totalRounds / totalMatches).toFixed(1)) : 0,
     durationMs,
+    teamAPartnerOvertrumps,
+    teamBPartnerOvertrumps,
+    teamADeadTrumpLeads,
+    teamBDeadTrumpLeads,
   };
 }

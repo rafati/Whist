@@ -20,7 +20,11 @@ async function main() {
     result.totalMatches,
     result.totalRounds,
     result.teamAWins,
-    result.teamABidSuccessRate
+    result.teamABidSuccessRate,
+    {
+      partnerOvertrumps: result.teamAPartnerOvertrumps,
+      deadTrumpLeads: result.teamADeadTrumpLeads,
+    }
   );
 
   const durationSec = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -33,6 +37,11 @@ async function main() {
   console.log(`Bid Success Rate:     ${result.teamABidSuccessRate}%`);
   console.log(`Avg Tricks per Round: ${result.teamAAverageTricks} tricks`);
   console.log(`Training Time:        ${durationSec}s`);
+  console.log(`---------------- TACTICAL INVARIANTS -------------`);
+  console.log(`SuperBot Partner Overtrumps: ${result.teamAPartnerOvertrumps} (Blunders: ${result.teamAPartnerOvertrumps === 0 ? '✅ 0%' : '❌ ' + result.teamAPartnerOvertrumps})`);
+  console.log(`SuperBot Dead Trump Leads:   ${result.teamADeadTrumpLeads} (Blunders: ${result.teamADeadTrumpLeads === 0 ? '✅ 0%' : '❌ ' + result.teamADeadTrumpLeads})`);
+  console.log(`CasualBot Partner Overtrumps: ${result.teamBPartnerOvertrumps}`);
+  console.log(`CasualBot Dead Trump Leads:   ${result.teamBDeadTrumpLeads}`);
   console.log(`==================================================`);
   console.log(`\n💾 Saved to Disk: src/data/learnedPolicy.json`);
   console.log(`New Brain Version:    ${updatedPolicy.version}`);
@@ -41,3 +50,4 @@ async function main() {
 }
 
 main().catch(console.error);
+

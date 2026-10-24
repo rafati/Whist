@@ -40,6 +40,11 @@ export interface TacticalParameters {
   secondHandLowMultiplier: number; // Defensive 2nd hand duck
 }
 
+export interface BlunderMetrics {
+  partnerOvertrumpsTotal: number;
+  deadTrumpLeadsTotal: number;
+}
+
 export interface BotPolicyData {
   version: string;
   lastUpdated: string;
@@ -49,6 +54,7 @@ export interface BotPolicyData {
   openingBook: OpeningLeadRule[];
   partnershipCoefficients: PartnershipCoefficients;
   tacticalParameters: TacticalParameters;
+  blunderMetrics?: BlunderMetrics;
 }
 
 export const DEFAULT_BOT_POLICY: BotPolicyData = {
@@ -56,6 +62,10 @@ export const DEFAULT_BOT_POLICY: BotPolicyData = {
   lastUpdated: new Date().toISOString(),
   totalSimulatedHands: 8000,
   totalMatchesTrained: 1200,
+  blunderMetrics: {
+    partnerOvertrumpsTotal: 0,
+    deadTrumpLeadsTotal: 0,
+  },
   biddingMatrix: {
     '1_Suit': {
       level: 1,
@@ -188,6 +198,10 @@ export function loadBotPolicy(): BotPolicyData {
           ...DEFAULT_BOT_POLICY.tacticalParameters,
           ...(parsed.tacticalParameters || {}),
         },
+        blunderMetrics: {
+          partnerOvertrumpsTotal: parsed.blunderMetrics?.partnerOvertrumpsTotal || 0,
+          deadTrumpLeadsTotal: parsed.blunderMetrics?.deadTrumpLeadsTotal || 0,
+        },
       };
       return currentPolicy;
     }
@@ -223,10 +237,22 @@ export function trainPolicyFromSimulation(
   matchesCount: number,
   roundsCount: number,
   teamAWins: number,
-  teamABidSuccessRate: number
+  teamABidSuccessRate: number,
+  blunders?: {
+    partnerOvertrumps: number;
+    deadTrumpLeads: number;
+  }
 ): BotPolicyData {
   currentPolicy.totalMatchesTrained += matchesCount;
   currentPolicy.totalSimulatedHands += roundsCount;
+
+  if (blunders) {
+    if (!currentPolicy.blunderMetrics) {
+      currentPolicy.blunderMetrics = { partnerOvertrumpsTotal: 0, deadTrumpLeadsTotal: 0 };
+    }
+    currentPolicy.blunderMetrics.partnerOvertrumpsTotal += blunders.partnerOvertrumps;
+    currentPolicy.blunderMetrics.deadTrumpLeadsTotal += blunders.deadTrumpLeads;
+  }
 
   // Bump version with patch iteration
   const parts = currentPolicy.version.split('.');

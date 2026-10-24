@@ -203,6 +203,51 @@ export function getBotCardPlay(
       return aces[0];
     }
 
+    // Check if opponents have any trumps left
+    let opponentTrumpsLeft = 0;
+    if (trumpSuit !== 'NT') {
+      let trumpsPlayed = 0;
+      for (const t of gameState.tricksHistory || []) {
+        for (const p of t.cards) {
+          if (p.card.suit === trumpSuit) trumpsPlayed++;
+        }
+      }
+      const myTrumps = hand.filter((c) => c.suit === trumpSuit).length;
+      opponentTrumpsLeft = Math.max(0, 13 - trumpsPlayed - myTrumps);
+
+      // Check if both opponents showed void in trump
+      const partner = getPartner(seat);
+      const opp1 = getNextSeat(seat);
+      const opp2 = getNextSeat(partner);
+      let opp1VoidInTrump = false;
+      let opp2VoidInTrump = false;
+      for (const t of gameState.tricksHistory || []) {
+        if (t.ledSuit === trumpSuit) {
+          const p1 = t.cards.find((c) => c.seat === opp1);
+          if (p1 && p1.card.suit !== trumpSuit) opp1VoidInTrump = true;
+          const p2 = t.cards.find((c) => c.seat === opp2);
+          if (p2 && p2.card.suit !== trumpSuit) opp2VoidInTrump = true;
+        }
+      }
+      if (opp1VoidInTrump && opp2VoidInTrump) {
+        opponentTrumpsLeft = 0;
+      }
+    }
+
+    // TACTICAL INVARIANT: If opponent trumps are exhausted (0 left), NEVER lead trump when we hold non-trump cards!
+    const nonTrumpCards = legalCards.filter((c) => trumpSuit === 'NT' || c.suit !== trumpSuit);
+    if (trumpSuit !== 'NT' && opponentTrumpsLeft === 0 && nonTrumpCards.length > 0) {
+      const nonTrumpHand = hand.filter((c) => c.suit !== trumpSuit);
+      const strongestSide = getStrongestSuit(nonTrumpHand.length > 0 ? nonTrumpHand : hand);
+      const inSideSuit = nonTrumpCards.filter((c) => c.suit === strongestSide.suit);
+      if (inSideSuit.length > 0) {
+        inSideSuit.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+        return inSideSuit[0];
+      }
+      nonTrumpCards.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+      return nonTrumpCards[0];
+    }
+
     // Lead highest card in strongest suit
     const strongest = getStrongestSuit(hand);
     const inStrongest = legalCards.filter((c) => c.suit === strongest.suit);
@@ -225,8 +270,25 @@ export function getBotCardPlay(
     (a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]
   );
 
-  // If partner is currently winning the trick, play the lowest legal card
+  // TACTICAL INVARIANT: If partner is currently winning the trick:
+  // NEVER trump partner's winning card unless forced (holding only trumps)!
   if (partnerIsWinning) {
+    const inLedSuit = legalCards.filter((c) => c.suit === ledSuit);
+    if (inLedSuit.length > 0) {
+      // If following led suit, play lowest card in led suit!
+      inLedSuit.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
+      return inLedSuit[0];
+    }
+
+    // Void in led suit: DISCARD LOWEST NON-TRUMP CARD!
+    // NEVER trump or overtrump partner's winning trick!
+    const nonTrumps = legalCards.filter((c) => trumpSuit === 'NT' || c.suit !== trumpSuit);
+    if (nonTrumps.length > 0) {
+      nonTrumps.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
+      return nonTrumps[0];
+    }
+
+    // Only trumps remain: forced to play lowest trump
     return sortedLegal[0];
   }
 
@@ -246,6 +308,16 @@ export function getBotCardPlay(
     return winningPlays[0];
   }
 
-  // Cannot win: play lowest card (sluff)
+  // Cannot win: play lowest card (prefer discarding non-trumps before throwing away trumps!)
+  const inLedSuit = legalCards.filter((c) => c.suit === ledSuit);
+  if (inLedSuit.length > 0) {
+    inLedSuit.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
+    return inLedSuit[0];
+  }
+  const nonTrumps = legalCards.filter((c) => trumpSuit === 'NT' || c.suit !== trumpSuit);
+  if (nonTrumps.length > 0) {
+    nonTrumps.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
+    return nonTrumps[0];
+  }
   return sortedLegal[0];
 }
