@@ -1656,6 +1656,40 @@ export function isHandBalanced(hand: Card[]): boolean {
   return minCount >= 2 && maxCount <= 5;
 }
 
+// Check if hand is suitable for No Trump (balanced or semi-balanced with stoppers)
+export function isHandNTEligible(hand: Card[]): boolean {
+  const counts: Record<Suit, number> = { S: 0, H: 0, D: 0, C: 0 };
+  for (const c of hand) counts[c.suit]++;
+  const values = Object.values(counts);
+  const minCount = Math.min(...values);
+  const maxCount = Math.max(...values);
+
+  // 1. Standard balanced: 4-3-3-3, 4-4-3-2, 5-3-3-2 (minCount >= 2, maxCount <= 5)
+  if (minCount >= 2 && maxCount <= 5) return true;
+
+  // 2. Voids (0 cards in any suit) are unstopped and fatal in NT
+  if (minCount === 0) return false;
+
+  // 3. Semi-balanced with singleton (minCount === 1, maxCount <= 6):
+  // Safe if the singleton is an unassailable stopper/winner (Ace or King)
+  if (minCount === 1 && maxCount <= 6) {
+    for (const suit of SUITS) {
+      if (counts[suit] === 1) {
+        const card = hand.find((c) => c.suit === suit);
+        if (card && (card.rank === 'A' || card.rank === 'K')) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // 4. Semi-balanced 5-4-2-2 or 6-3-2-2
+  if (minCount >= 2 && maxCount <= 6) return true;
+
+  return false;
+}
+
 // -------------------------------------------------------------
 // Partner Bidding Intention Decoding & Partnership Communication
 // -------------------------------------------------------------
@@ -1809,6 +1843,13 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
 
   const effectivePower = hcp + dop;
   const balanced = isHandBalanced(hand);
+  const ntReady = isHandNTEligible(hand);
+
+  // Match Context & Vulnerability
+  const currentScore = gameState.matchScores[myTeam];
+  const isCloseToElimination = currentScore <= -5;
+  const isCloseToVictory = currentScore >= 7; // At +7, a 4-point win (+4) achieves +11 match victory!
+
   const combinedHCP = hcp + partnerAnalysis.estimatedAvgHCP;
   const combinedPower = effectivePower + partnerAnalysis.estimatedAvgHCP;
 
@@ -1848,7 +1889,7 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     }
 
     // B. Match NT: Steal doubled NT contract!
-    if (privileges.canMatchNT && privileges.matchedNTLevel && balanced) {
+    if (privileges.canMatchNT && privileges.matchedNTLevel && (balanced || ntReady)) {
       const partnerHasOpening = partnerAnalysis.intention === 'open_suit' || partnerAnalysis.intention === 'open_nt';
       if ((partnerHasOpening && hcp >= 9) || hcp >= 13 || combinedHCP >= 23) {
         return {
@@ -1871,20 +1912,11 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     const pType = pBid?.contractType || 'Suit';
 
     // Upgrade 4A: Partner is winning 1 Suit.
-    // If bot has balanced hand with 14+ HCP, bot can upgrade to 1 NT for DOUBLED scoring (+2 vs +1)!
-    if (pLevel === 1 && pType === 'Suit' && balanced && hcp >= 14) {
-      return {
-        seat,
-        type: 'bid',
-        level: 1,
-        contractType: 'NT',
-      };
-    }
-
-    // Upgrade 4B: Partner is winning 1 NT (14-16 HCP balanced, doubled points).
-    if (pType === 'NT' && pLevel === 1) {
-      // 9-12 HCP -> 24-27 combined HCP -> Bid 2 NT (needs 8 tricks, awards +4 pts)!
-      if (hcp >= 9 && hcp <= 12 && (balanced || strongest.count >= 5)) {
+    if (pLevel === 1 && pType === 'Suit') {
+      // 4A-1: Game-winning 2 NT when close to victory or holding strong opening values:
+      // If team has +7 points, winning 4 points (+4) reaches +11 and WINS THE MATCH!
+      // With 12+ HCP and NT-eligible hand, or 14+ HCP, seize the match with 2 NT!
+      if (ntReady && (hcp >= 14 || (hcp >= 12 && isCloseToVictory))) {
         return {
           seat,
           type: 'bid',
@@ -1892,8 +1924,44 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
           contractType: 'NT',
         };
       }
-      // 13+ HCP -> 28+ combined HCP -> Bid 3 NT (needs 9 tricks, awards +6 pts)!
-      if (hcp >= 13) {
+
+      // 4A-2: High-Reward 1 NT Upgrade:
+      // Requires the EXACT SAME 7 tricks as 1 Suit, but DOUBLES scoring (+2 pts vs +1 pt)!
+      // Responder with 10+ HCP (or 9 HCP with a 5-card suit) and NT-eligible hand MUST NEVER PASS!
+      if (ntReady && (hcp >= 10 || (hcp >= 9 && strongest.count >= 5))) {
+        return {
+          seat,
+          type: 'bid',
+          level: 1,
+          contractType: 'NT',
+        };
+      }
+
+      // 4A-3: Dominant Suit Overcall with 13+ HCP:
+      // If not NT-ready (e.g. holding a void), but holds 13+ HCP and a dominant 6+ card suit:
+      if (!ntReady && strongest.count >= 6 && hcp >= 13) {
+        return {
+          seat,
+          type: 'bid',
+          level: 2,
+          contractType: 'Suit',
+        };
+      }
+    }
+
+    // Upgrade 4B: Partner is winning 1 NT (14-16 HCP balanced, doubled points).
+    if (pType === 'NT' && pLevel === 1) {
+      // 8-11 HCP -> 22-27 combined HCP -> Bid 2 NT (needs 8 tricks, awards +4 pts)!
+      if (hcp >= 8 && hcp <= 11 && (ntReady || strongest.count >= 5)) {
+        return {
+          seat,
+          type: 'bid',
+          level: 2,
+          contractType: 'NT',
+        };
+      }
+      // 12+ HCP -> 26+ combined HCP -> Bid 3 NT (needs 9 tricks, awards +6 pts)!
+      if (hcp >= 12) {
         return {
           seat,
           type: 'bid',
@@ -1907,11 +1975,6 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     // PASS to let partner win the contract at the lowest, safest level!
     return { seat, type: 'pass' };
   }
-
-  // 5. Match Context & Vulnerability
-  const currentScore = gameState.matchScores[myTeam];
-  const isCloseToElimination = currentScore <= -5;
-  const isCloseToVictory = currentScore >= 8;
 
   // 4. Candidate Bids Generation (Governed by Partner Intention & Policy Matrix)
   const candidateBids: Array<{ level: number; type: ContractType }> = [];
@@ -1932,16 +1995,16 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     ) {
       candidateBids.push({ level: 1, type: 'Suit' });
     }
-    // High-reward 1 NT: balanced hand governed by learned threshold
+    // High-reward 1 NT: balanced or NT-ready hand governed by learned threshold
     const tNT1 = policy.biddingMatrix['1_NT'];
     const minNT1Hcp = tNT1?.minHCP ?? 14;
-    if (balanced && hcp >= minNT1Hcp) {
+    if ((balanced || ntReady) && hcp >= minNT1Hcp) {
       candidateBids.push({ level: 1, type: 'NT' });
     }
-    // 2 NT: balanced hand governed by learned threshold
+    // 2 NT: balanced or NT-ready hand governed by learned threshold
     const tNT2 = policy.biddingMatrix['2_NT'];
     const minNT2Hcp = tNT2?.minHCP ?? 16;
-    if (balanced && hcp >= minNT2Hcp) {
+    if ((balanced || ntReady) && hcp >= minNT2Hcp) {
       candidateBids.push({ level: 2, type: 'NT' });
     }
   } else {
@@ -1955,13 +2018,13 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     if (partnerOpened) {
       // Scenario A: Partner opened earlier, opponent overbid -> Compete with combined partnership strength!
       if (highest.contractType === 'Suit') {
-        if (balanced && (hcp >= minNTCurrentHcp || combinedHCP >= 23)) {
+        if ((balanced || ntReady) && (hcp >= minNTCurrentHcp || combinedHCP >= 23)) {
           candidateBids.push({ level: minL, type: 'NT' });
         }
         if (strongest.count >= 4 && (effectivePower >= 9 || combinedPower >= 20 || combinedHCP >= 21)) {
           candidateBids.push({ level: minL + 1, type: 'Suit' });
         }
-        if (balanced && (hcp >= minNTNextHcp || combinedHCP >= 25)) {
+        if ((balanced || ntReady) && (hcp >= minNTNextHcp || combinedHCP >= 25)) {
           candidateBids.push({ level: minL + 1, type: 'NT' });
         }
       } else {
@@ -1969,20 +2032,20 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
         if (strongest.count >= 4 && (effectivePower >= 10 || combinedPower >= 22)) {
           candidateBids.push({ level: minL + 1, type: 'Suit' });
         }
-        if (balanced && combinedHCP >= 26) {
+        if ((balanced || ntReady) && combinedHCP >= 26) {
           candidateBids.push({ level: minL + 1, type: 'NT' });
         }
       }
     } else if (partnerPassed) {
       // Scenario B: Partner passed (<10 HCP, avg ~5.5) -> Sound independent overcall required
       if (highest.contractType === 'Suit') {
-        if (balanced && hcp >= 16) {
+        if ((balanced || ntReady) && hcp >= 16) {
           candidateBids.push({ level: minL, type: 'NT' });
         }
         if (strongest.count >= 5 && (hcp >= 13 || effectivePower >= 15)) {
           candidateBids.push({ level: minL + 1, type: 'Suit' });
         }
-        if (balanced && hcp >= 18) {
+        if ((balanced || ntReady) && hcp >= 18) {
           candidateBids.push({ level: minL + 1, type: 'NT' });
         }
       } else {
@@ -1993,20 +2056,20 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     } else {
       // Scenario C: Partner has not spoken yet (Turn 2/3 overcall)
       if (highest.contractType === 'Suit') {
-        if (balanced && hcp >= minNTCurrentHcp) {
+        if ((balanced || ntReady) && hcp >= minNTCurrentHcp) {
           candidateBids.push({ level: minL, type: 'NT' });
         }
         if (strongest.count >= 5 && (hcp >= 11 || effectivePower >= 13)) {
           candidateBids.push({ level: minL + 1, type: 'Suit' });
         }
-        if (balanced && hcp >= minNTNextHcp) {
+        if ((balanced || ntReady) && hcp >= minNTNextHcp) {
           candidateBids.push({ level: minL + 1, type: 'NT' });
         }
       } else {
         if (strongest.count >= 5 && (hcp >= 12 || effectivePower >= 14)) {
           candidateBids.push({ level: minL + 1, type: 'Suit' });
         }
-        if (balanced && hcp >= minNTNextHcp) {
+        if ((balanced || ntReady) && hcp >= minNTNextHcp) {
           candidateBids.push({ level: minL + 1, type: 'NT' });
         }
       }

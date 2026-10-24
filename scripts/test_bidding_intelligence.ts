@@ -1,4 +1,5 @@
 import { GameState, Card, Seat, Bid } from '../src/types.ts';
+import { createInitialGameState } from '../src/logic/gameLogic.ts';
 import { getSuperBotBid, analyzePartnerBiddingIntention } from '../src/logic/superBot.ts';
 import { getBotBid } from '../src/logic/botAi.ts';
 
@@ -7,31 +8,11 @@ function makeCard(suit: 'S' | 'H' | 'D' | 'C', rank: any): Card {
 }
 
 function createMockGameState(overrides?: Partial<GameState>): GameState {
+  const base = createInitialGameState('South');
   return {
-    gameId: 'test-bidding',
+    ...base,
     phase: 'bidding',
-    dealer: 'South',
     currentTurn: 'North',
-    hands: {
-      North: [],
-      South: [],
-      East: [],
-      West: [],
-    },
-    bids: [],
-    highestBid: null,
-    highestBidder: null,
-    consecutivePasses: 0,
-    auctionTurnsCount: 0,
-    declarer: null,
-    contractType: null,
-    contractLevel: null,
-    trumpSuit: null,
-    tricks: [],
-    currentTrick: [],
-    scores: { TeamA: 0, TeamB: 0 },
-    matchScores: { TeamA: 0, TeamB: 0 },
-    gameHistory: [],
     ...overrides,
   };
 }
@@ -91,24 +72,24 @@ console.log('=== RUNNING PARTNERSHIP BIDDING INTELLIGENCE TESTS ===\n');
 
 // -------------------------------------------------------------
 // Test 3: Upgrading Partner's 1 Suit to 1 NT (Doubled Scoring)
-// North has 14+ HCP balanced, South opened 1 Suit and is winning
+// North has 11 HCP balanced, South opened 1 Suit and is winning
 // -------------------------------------------------------------
 {
   const northHand: Card[] = [
-    makeCard('S', 'A'), // 4
     makeCard('S', 'K'), // 3
-    makeCard('H', 'A'), // 4
+    makeCard('S', '8'),
+    makeCard('H', 'Q'), // 2
     makeCard('H', '9'),
     makeCard('D', 'K'), // 3
-    makeCard('D', 'Q'), // 2
+    makeCard('D', 'J'), // 1
     makeCard('D', '8'),
-    makeCard('C', 'J'), // 1
+    makeCard('C', 'Q'), // 2
     makeCard('C', '10'),
     makeCard('C', '7'),
     makeCard('S', '4'),
     makeCard('H', '5'),
     makeCard('D', '3'),
-  ]; // Total HCP = 17, Balanced (3-3-4-3)
+  ]; // Total HCP = 11, Balanced (3-3-4-3)
 
   const state = createMockGameState({
     dealer: 'South',
@@ -358,14 +339,94 @@ console.log('=== RUNNING PARTNERSHIP BIDDING INTELLIGENCE TESTS ===\n');
 
   const superBotBid = getSuperBotBid(state, 'South');
   assert(
-    superBotBid.type === 'bid' && superBotBid.isDealerPrivilegeMatch && superBotBid.level === 2,
+    superBotBid.type === 'bid' && Boolean(superBotBid.isDealerPrivilegeMatch) && superBotBid.level === 2,
     `SuperBot Dealer executes Turn 4 Match Suit privilege at level 2 (got ${superBotBid.type} level=${superBotBid.level} match=${superBotBid.isDealerPrivilegeMatch})`
   );
 
   const botBid = getBotBid(state, 'South');
   assert(
-    botBid.type === 'bid' && botBid.isDealerPrivilegeMatch && botBid.level === 2,
+    botBid.type === 'bid' && Boolean(botBid.isDealerPrivilegeMatch) && botBid.level === 2,
     `BotAi Dealer executes Turn 4 Match Suit privilege at level 2 (got ${botBid.type} level=${botBid.level} match=${botBid.isDealerPrivilegeMatch})`
+  );
+}
+
+// -------------------------------------------------------------
+// Test 9: Exhibition Scenario - 12 HCP with Singleton Ace & 5-card Suit
+// Partner (West) opened 1 Suit. East holds:
+// AS, QH, 10H, 8H, 4H, KD, JD, 9D, 4D, 3D, QC, 5C, 2C (12 HCP)
+// Bot MUST NEVER PASS!
+// -------------------------------------------------------------
+{
+  const eastHand: Card[] = [
+    makeCard('S', 'A'), // 4 HCP
+    makeCard('H', 'Q'), // 2 HCP
+    makeCard('H', '10'),
+    makeCard('H', '8'),
+    makeCard('H', '4'),
+    makeCard('D', 'K'), // 3 HCP
+    makeCard('D', 'J'), // 1 HCP
+    makeCard('D', '9'),
+    makeCard('D', '4'),
+    makeCard('D', '3'),
+    makeCard('C', 'Q'), // 2 HCP
+    makeCard('C', '5'),
+    makeCard('C', '2'),
+  ]; // Total HCP = 12, 5 Diamonds, 4 Hearts, 3 Clubs, 1 Spade (Ace)
+
+  // 9A: At Score +7 (Team B at +7, 4 pts from +11 match victory)
+  const stateClinchVictory = createMockGameState({
+    dealer: 'West',
+    auctionTurnsCount: 2,
+    hands: { East: eastHand, West: [], North: [], South: [] },
+    bids: [
+      { seat: 'West', type: 'bid', level: 1, contractType: 'Suit' },
+      { seat: 'North', type: 'pass' },
+    ],
+    highestBid: { seat: 'West', type: 'bid', level: 1, contractType: 'Suit' },
+    highestBidder: 'West',
+    matchScores: { TeamA: -2, TeamB: 7 },
+  });
+
+  const superBotClinch = getSuperBotBid(stateClinchVictory, 'East');
+  assert(
+    superBotClinch.type === 'bid' && superBotClinch.contractType === 'NT',
+    `SuperBot bids NT (got ${superBotClinch.type} ${superBotClinch.level} ${superBotClinch.contractType}) and NEVER passes with 12 HCP + singleton Ace!`
+  );
+  assert(
+    superBotClinch.level === 2,
+    `SuperBot bids 2 NT to seize 4 points and win the match (+11) when score is +7 (got level ${superBotClinch.level})`
+  );
+
+  const casualBotClinch = getBotBid(stateClinchVictory, 'East');
+  assert(
+    casualBotClinch.type === 'bid' && casualBotClinch.contractType === 'NT' && casualBotClinch.level === 2,
+    `CasualBot bids 2 NT to seize 4 points and win match when score is +7 (got ${casualBotClinch.level} ${casualBotClinch.contractType})`
+  );
+
+  // 9B: At Score 0-0 (Regular opening context)
+  const stateNeutral = createMockGameState({
+    dealer: 'West',
+    auctionTurnsCount: 2,
+    hands: { East: eastHand, West: [], North: [], South: [] },
+    bids: [
+      { seat: 'West', type: 'bid', level: 1, contractType: 'Suit' },
+      { seat: 'North', type: 'pass' },
+    ],
+    highestBid: { seat: 'West', type: 'bid', level: 1, contractType: 'Suit' },
+    highestBidder: 'West',
+    matchScores: { TeamA: 0, TeamB: 0 },
+  });
+
+  const superBotNeutral = getSuperBotBid(stateNeutral, 'East');
+  assert(
+    superBotNeutral.type === 'bid' && superBotNeutral.contractType === 'NT' && superBotNeutral.level === 1,
+    `SuperBot upgrades to 1 NT for doubled points on 7 tricks at score 0-0 (got ${superBotNeutral.level} ${superBotNeutral.contractType})`
+  );
+
+  const casualBotNeutral = getBotBid(stateNeutral, 'East');
+  assert(
+    casualBotNeutral.type === 'bid' && casualBotNeutral.contractType === 'NT' && casualBotNeutral.level === 1,
+    `CasualBot upgrades to 1 NT for doubled points on 7 tricks at score 0-0 (got ${casualBotNeutral.level} ${casualBotNeutral.contractType})`
   );
 }
 

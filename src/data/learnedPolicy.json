@@ -1,8 +1,8 @@
 {
-  "version": "3.5.3986",
-  "lastUpdated": "2026-10-24T18:06:24.205Z",
-  "totalSimulatedHands": 794594,
-  "totalMatchesTrained": 112295,
+  "version": "3.5.3987",
+  "lastUpdated": "2026-10-24T18:22:00.511Z",
+  "totalSimulatedHands": 795305,
+  "totalMatchesTrained": 112395,
   "blunderMetrics": {
     "partnerOvertrumpsTotal": 4,
     "deadTrumpLeadsTotal": 75
@@ -13,42 +13,42 @@
       "minSuitLength": 5,
       "empiricalWinRate": 0.816,
       "empiricalEV": 2.56,
-      "sampleSize": 1310
+      "sampleSize": 1594
     },
     "1_NT": {
       "minHCP": 14,
       "minSuitLength": 3,
       "empiricalWinRate": 0.816,
       "empiricalEV": 2.96,
-      "sampleSize": 1310
+      "sampleSize": 1594
     },
     "2_Suit": {
       "minHCP": 14,
       "minSuitLength": 5,
       "empiricalWinRate": 0.799,
       "empiricalEV": 2.46,
-      "sampleSize": 1310
+      "sampleSize": 1594
     },
     "2_NT": {
       "minHCP": 16,
       "minSuitLength": 3,
       "empiricalWinRate": 0.789,
       "empiricalEV": 3.46,
-      "sampleSize": 1310
+      "sampleSize": 1594
     },
     "3_Suit": {
       "minHCP": 16,
       "minSuitLength": 6,
       "empiricalWinRate": 0.782,
       "empiricalEV": 2.26,
-      "sampleSize": 1310
+      "sampleSize": 1594
     },
     "3_NT": {
       "minHCP": 18,
       "minSuitLength": 3,
       "empiricalWinRate": 0.772,
       "empiricalEV": 3.76,
-      "sampleSize": 1310
+      "sampleSize": 1594
     }
   },
   "openingBook": [
@@ -58,8 +58,8 @@
       "description": "Lead an Ace in an unbid side suit against Suit contract to secure quick entry",
       "targetContract": "Suit",
       "weight": 1.27,
-      "winsCount": 132917,
-      "trialsCount": 198555
+      "winsCount": 133018,
+      "trialsCount": 198733
     },
     {
       "id": "lead_fourth_highest_nt",
@@ -67,8 +67,8 @@
       "description": "Lead 4th highest from length against No Trump to establish long-suit winners",
       "targetContract": "NT",
       "weight": 1.27,
-      "winsCount": 132882,
-      "trialsCount": 198505
+      "winsCount": 132983,
+      "trialsCount": 198683
     },
     {
       "id": "lead_top_of_sequence",
@@ -76,8 +76,8 @@
       "description": "Lead King from KQJ or Queen from QJ10 to force out higher honors cleanly",
       "targetContract": "Both",
       "weight": 1.27,
-      "winsCount": 132807,
-      "trialsCount": 198435
+      "winsCount": 132908,
+      "trialsCount": 198613
     },
     {
       "id": "lead_singleton_ruff",
@@ -85,8 +85,8 @@
       "description": "Lead a singleton in an unbid suit against Suit contract to set up partner ruff",
       "targetContract": "Suit",
       "weight": 1.27,
-      "winsCount": 132717,
-      "trialsCount": 198340
+      "winsCount": 132818,
+      "trialsCount": 198518
     }
   ],
   "partnershipCoefficients": {

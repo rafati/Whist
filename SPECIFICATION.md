@@ -530,22 +530,33 @@ To treat bidding with the same strategic depth as card play, bots analyze auctio
   * `competitive_suit` / `competitive_nt`: Partner competed over opponent bids. Estimated HCP: $\mu = 14.0$.
   * `none`: Partner has not spoken yet (Turn 1 or 2). Estimated HCP: $\mu = 8.5$.
 
-#### 16.4.2 Coordinated Partnership Bidding Rules
-1. **Doubled NT Upgrade**:
-   * When partner is currently winning `1_Suit` and responder holds 14+ HCP with a balanced hand (2–5 cards in each suit), responder upgrades to `1_NT`. This requires the exact same 7 tricks but doubles the score reward from +1 to +2 points upon making the contract.
-2. **Game / Level Raise on NT**:
+#### 16.4.2 Coordinated Partnership Bidding Rules & NT Eligibility (`isHandNTEligible`)
+1. **NT Eligibility Criteria (`isHandNTEligible`)**:
+   * Evaluates hands beyond rigid 4-3-3-3 balanced shapes:
+     * **Balanced**: Standard 4-3-3-3, 4-4-3-2, 5-3-3-2 ($\min \ge 2, \max \le 5$).
+     * **Semi-Balanced**: 5-4-2-2 or 6-3-2-2 shapes without voids.
+     * **Singleton Stopper Exemption**: Hands with a singleton ($\min = 1$) where the singleton card is an unassailable stopper/winner (`A` or `K`), such as $5-4-3-1$ with singleton $A\spadesuit$.
+     * **Void Ban**: Hands with voids ($0$ cards in any suit) are strictly barred from NT.
+2. **Doubled NT Upgrade (10+ HCP)**:
+   * When partner is currently winning `1_Suit` and responder holds an NT-eligible hand with **10+ HCP** (or **9 HCP with a 5-card suit**):
+     * Responder upgrades to `1_NT`.
+     * **Strategic Rationale**: `1_NT` requires the **exact same 7 tricks** as `1_Suit`, but doubles the scoring reward from **+1 point to +2 points**. Passing partner's opening with 10–13 HCP and stoppers is strictly forbidden.
+3. **Match Victory Clinch (2 NT at Score $\ge +7$)**:
+   * When team match score is $\ge +7$, winning $+4$ points instantly achieves $+11$ match victory.
+   * When partner opened `1_Suit` and responder holds an NT-eligible hand with **12+ HCP** (combined $24+$ HCP), responder bids `2_NT` to seize 4 points and close out the tournament match.
+4. **Game / Level Raise on NT**:
    * When partner opened `1_NT` (14–16 HCP, doubled scoring):
-     * With 9–12 HCP (combined 24–27 HCP): Responder raises to `2_NT` (awards +4 points).
-     * With 13+ HCP (combined 28+ HCP): Responder raises to `3_NT` (awards +6 points).
-3. **Contract Protection (Zero Friendly Fire)**:
-   * When partner is winning a contract and neither an upgrade nor a game raise is warranted, the bot **passes unconditionally**. Overbidding partner's `1_Suit` with `2_Suit` is strictly forbidden because it raises trick requirements from 7 to 8 for the exact same +1 point while risking defeat.
-4. **Competitive Partnership Overcalls**:
+     * With 8–11 HCP (combined 22–27 HCP): Responder raises to `2_NT` (awards +4 points).
+     * With 12+ HCP (combined 26+ HCP): Responder raises to `3_NT` (awards +6 points).
+5. **Contract Protection (Zero Friendly Fire)**:
+   * When partner is winning a contract and neither an upgrade nor a game raise is warranted, the bot **passes unconditionally**. Overbidding partner's `1_Suit` with `2_Suit` is strictly forbidden unless holding a self-sufficient powerhouse suit (13+ HCP and $6+$ trumps) with an unsuited hand.
+6. **Competitive Partnership Overcalls**:
    * When opponent overbids partner's opening bid, the bot calculates combined partnership power:
      $$\text{CombinedHCP} = \text{HandHCP} + \text{PartnerEstimatedAvgHCP}$$
    * If combined HCP $\ge 21$ (or combined effective power $\ge 20$), the bot competes with `2_Suit` or `2_NT` rather than folding with 10–12 HCP.
-5. **Conservative Discipline after Partner Pass**:
+7. **Conservative Discipline after Partner Pass**:
    * When partner previously passed, the bot knows partner holds $<10$ HCP ($\mu = 5.5$). The bot refuses to make marginal competitive bids on level 2/3 and only overcalls with sound, self-sufficient hands (13+ HCP for Suit, 16+ HCP for NT).
-6. **Turn 4 Dealer Match Privileges**:
+8. **Turn 4 Dealer Match Privileges**:
    * Dealer on Turn 4 evaluates Match Suit and Match NT privileges. When partner showed opening values, dealer supports with $\ge 4$ trumps and 8+ HCP, stealing the contract at the same level without increasing required tricks.
 
 #### 16.4.3 Calibrated EV Trick Expectation Formula
@@ -557,7 +568,7 @@ $$\text{ExpectedTricks} = 1.5 + (\text{CombinedHCP} \times 0.26) + \text{LengthB
 * **Doubled Penalty Accounting**: Fully accounts for doubled contract rewards ($L \times 2$) and doubled defender set penalties.
 
 #### 16.4.4 Verification & Test Coverage
-* Automated test suite `scripts/test_bidding_intelligence.ts` validates 17 test assertions across all 6 partnership bidding scenarios with 100% pass rate.
-* Headless 100-match batch simulation (`scripts/train.ts`) confirms 0 partner overtrumps (0% blunders), 0 dead trump leads (0% blunders), and a 76%+ contract success rate.
+* Automated test suite `scripts/test_bidding_intelligence.ts` validates 22 test assertions across all partnership bidding scenarios (including the exhibition hand with 12 HCP and singleton Ace) with 100% pass rate.
+* Headless 100-match batch simulation (`scripts/train.ts`) confirms 0 partner overtrumps (0% blunders), 0 dead trump leads (0% blunders), and a 70%+ contract success rate.
 
 
