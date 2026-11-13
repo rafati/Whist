@@ -24,6 +24,48 @@ interface RoomSettingsModalProps {
   onUpdateTimingSettings: (settings: RoomTimingSettings) => void;
 }
 
+export const TIMING_PRESET_BLITZ: RoomTimingSettings = {
+  humanBidTimeSeconds: 10,
+  humanDeclareTimeSeconds: 10,
+  humanPlayCardTimeSeconds: 8,
+  botBidDelaySeconds: 1.0,
+  botDeclareDelaySeconds: 1.0,
+  botPlayCardDelaySeconds: 0.5,
+  trickReviewDelaySeconds: 0.5,
+};
+
+export const TIMING_PRESET_STANDARD: RoomTimingSettings = {
+  humanBidTimeSeconds: 20,
+  humanDeclareTimeSeconds: 20,
+  humanPlayCardTimeSeconds: 15,
+  botBidDelaySeconds: 2.5,
+  botDeclareDelaySeconds: 2.5,
+  botPlayCardDelaySeconds: 1.0,
+  trickReviewDelaySeconds: 0.8,
+};
+
+export const TIMING_PRESET_RELAXED: RoomTimingSettings = {
+  humanBidTimeSeconds: 35,
+  humanDeclareTimeSeconds: 35,
+  humanPlayCardTimeSeconds: 25,
+  botBidDelaySeconds: 4.0,
+  botDeclareDelaySeconds: 4.0,
+  botPlayCardDelaySeconds: 2.0,
+  trickReviewDelaySeconds: 1.4,
+};
+
+function matchesPreset(s: RoomTimingSettings, p: RoomTimingSettings): boolean {
+  return (
+    s.humanBidTimeSeconds === p.humanBidTimeSeconds &&
+    s.humanDeclareTimeSeconds === p.humanDeclareTimeSeconds &&
+    s.humanPlayCardTimeSeconds === p.humanPlayCardTimeSeconds &&
+    Math.abs(s.botBidDelaySeconds - p.botBidDelaySeconds) < 0.05 &&
+    Math.abs(s.botDeclareDelaySeconds - p.botDeclareDelaySeconds) < 0.05 &&
+    Math.abs(s.botPlayCardDelaySeconds - p.botPlayCardDelaySeconds) < 0.05 &&
+    Math.abs((s.trickReviewDelaySeconds ?? 0.8) - (p.trickReviewDelaySeconds ?? 0.8)) < 0.05
+  );
+}
+
 export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -31,24 +73,24 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   myUser,
   onUpdateTimingSettings,
 }) => {
-  const currentSettings = room.timingSettings || DEFAULT_ROOM_TIMING_SETTINGS;
-
   const [settings, setSettings] = useState<RoomTimingSettings>({
     ...DEFAULT_ROOM_TIMING_SETTINGS,
-    ...currentSettings,
+    ...(room.timingSettings || {}),
   });
 
   const [hasSaved, setHasSaved] = useState(false);
 
-  // Sync state whenever room timing settings update
+  // Synchronize ONLY when the modal is opened!
+  // Prevents active WebSocket game ticks from resetting sliders while the user is adjusting them.
   useEffect(() => {
-    if (room.timingSettings) {
+    if (isOpen) {
+      const initial = room.timingSettings || DEFAULT_ROOM_TIMING_SETTINGS;
       setSettings({
         ...DEFAULT_ROOM_TIMING_SETTINGS,
-        ...room.timingSettings,
+        ...initial,
       });
     }
-  }, [room.timingSettings]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -58,40 +100,25 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
     room.hostId === 'system' ||
     Object.values(room.seats).filter((p) => p && !p.isBot).length <= 1;
 
+  // Strict preset detection: matches ONLY if all 7 sliders match the preset
+  const activePreset = matchesPreset(settings, TIMING_PRESET_BLITZ)
+    ? 'blitz'
+    : matchesPreset(settings, TIMING_PRESET_STANDARD)
+    ? 'standard'
+    : matchesPreset(settings, TIMING_PRESET_RELAXED)
+    ? 'relaxed'
+    : 'custom';
+
   const handlePresetSelect = (preset: 'blitz' | 'standard' | 'relaxed') => {
     if (!isHost) return;
     playClickSound();
 
     if (preset === 'blitz') {
-      setSettings({
-        humanBidTimeSeconds: 10,
-        humanDeclareTimeSeconds: 10,
-        humanPlayCardTimeSeconds: 8,
-        botBidDelaySeconds: 1.0,
-        botDeclareDelaySeconds: 1.0,
-        botPlayCardDelaySeconds: 0.5,
-        trickReviewDelaySeconds: 0.5,
-      });
+      setSettings({ ...TIMING_PRESET_BLITZ });
     } else if (preset === 'standard') {
-      setSettings({
-        humanBidTimeSeconds: 20,
-        humanDeclareTimeSeconds: 20,
-        humanPlayCardTimeSeconds: 15,
-        botBidDelaySeconds: 2.5,
-        botDeclareDelaySeconds: 2.5,
-        botPlayCardDelaySeconds: 1.0,
-        trickReviewDelaySeconds: 0.8,
-      });
+      setSettings({ ...TIMING_PRESET_STANDARD });
     } else if (preset === 'relaxed') {
-      setSettings({
-        humanBidTimeSeconds: 35,
-        humanDeclareTimeSeconds: 35,
-        humanPlayCardTimeSeconds: 25,
-        botBidDelaySeconds: 4.0,
-        botDeclareDelaySeconds: 4.0,
-        botPlayCardDelaySeconds: 2.0,
-        trickReviewDelaySeconds: 1.4,
-      });
+      setSettings({ ...TIMING_PRESET_RELAXED });
     }
   };
 
@@ -170,9 +197,14 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           {/* Quick Presets */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1">
+              <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Gauge className="w-3 h-3 text-emerald-400" />
-                Quick Speed Presets
+                <span>Quick Speed Presets</span>
+                {activePreset === 'custom' && (
+                  <span className="px-1.5 py-0.2 rounded-md bg-purple-950/80 border border-purple-600/70 text-purple-300 text-[9px] font-mono font-bold tracking-normal">
+                    Custom Tuning
+                  </span>
+                )}
               </span>
               {isHost && (
                 <button
@@ -192,8 +224,8 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 disabled={!isHost}
                 onClick={() => handlePresetSelect('blitz')}
                 className={`py-1.5 px-2 rounded-xl border text-center transition-all cursor-pointer ${
-                  settings.humanPlayCardTimeSeconds <= 10 && settings.botPlayCardDelaySeconds <= 0.6
-                    ? 'bg-amber-950/70 border-amber-500 text-amber-300 font-bold shadow-xs'
+                  activePreset === 'blitz'
+                    ? 'bg-amber-950/90 border-amber-500 text-amber-300 font-bold shadow-md ring-1 ring-amber-500/50'
                     : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 text-slate-300'
                 } ${!isHost ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
@@ -209,8 +241,8 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 disabled={!isHost}
                 onClick={() => handlePresetSelect('standard')}
                 className={`py-1.5 px-2 rounded-xl border text-center transition-all cursor-pointer ${
-                  settings.humanPlayCardTimeSeconds === 15 && settings.botPlayCardDelaySeconds === 1.0
-                    ? 'bg-emerald-950/70 border-emerald-500 text-emerald-300 font-bold shadow-xs'
+                  activePreset === 'standard'
+                    ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 font-bold shadow-md ring-1 ring-emerald-500/50'
                     : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 text-slate-300'
                 } ${!isHost ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
@@ -225,8 +257,8 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                 disabled={!isHost}
                 onClick={() => handlePresetSelect('relaxed')}
                 className={`py-1.5 px-2 rounded-xl border text-center transition-all cursor-pointer ${
-                  settings.humanPlayCardTimeSeconds >= 25
-                    ? 'bg-blue-950/70 border-blue-500 text-blue-300 font-bold shadow-xs'
+                  activePreset === 'relaxed'
+                    ? 'bg-blue-950/90 border-blue-500 text-blue-300 font-bold shadow-md ring-1 ring-blue-500/50'
                     : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 text-slate-300'
                 } ${!isHost ? 'opacity-60 cursor-not-allowed' : ''}`}
               >

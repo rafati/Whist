@@ -76,6 +76,33 @@ const clampedHigh = sanitizeTimingSettings({ humanPlayCardTimeSeconds: 999, botB
 assert(clampedHigh.humanPlayCardTimeSeconds === 120, 'Human play time clamped to maximum 120s');
 assert(clampedHigh.botBidDelaySeconds === 15, 'Bot bid delay clamped to maximum 15s');
 
+// Test 4: Strict preset detection vs custom manual tuning
+console.log('\n--- Test 4: Strict Preset Matching vs Custom Manual Tuning ---');
+import { TIMING_PRESET_BLITZ, TIMING_PRESET_STANDARD, TIMING_PRESET_RELAXED } from '../src/components/RoomSettingsModal.tsx';
+
+function isStrictPreset(s: RoomTimingSettings, p: RoomTimingSettings) {
+  return (
+    s.humanBidTimeSeconds === p.humanBidTimeSeconds &&
+    s.humanDeclareTimeSeconds === p.humanDeclareTimeSeconds &&
+    s.humanPlayCardTimeSeconds === p.humanPlayCardTimeSeconds &&
+    Math.abs(s.botBidDelaySeconds - p.botBidDelaySeconds) < 0.05 &&
+    Math.abs(s.botDeclareDelaySeconds - p.botDeclareDelaySeconds) < 0.05 &&
+    Math.abs(s.botPlayCardDelaySeconds - p.botPlayCardDelaySeconds) < 0.05 &&
+    Math.abs((s.trickReviewDelaySeconds ?? 0.8) - (p.trickReviewDelaySeconds ?? 0.8)) < 0.05
+  );
+}
+
+assert(isStrictPreset(DEFAULT_ROOM_TIMING_SETTINGS, TIMING_PRESET_STANDARD), 'Default matches Standard preset');
+
+// Move ONE slider manually: should NOT match standard or relaxed
+const customSettings: RoomTimingSettings = {
+  ...DEFAULT_ROOM_TIMING_SETTINGS,
+  humanPlayCardTimeSeconds: 25, // moved single slider
+};
+assert(!isStrictPreset(customSettings, TIMING_PRESET_STANDARD), 'Moving one slider breaks Standard preset match');
+assert(!isStrictPreset(customSettings, TIMING_PRESET_RELAXED), 'Moving one slider does not falsely trigger Relaxed preset');
+assert(!isStrictPreset(customSettings, TIMING_PRESET_BLITZ), 'Moving one slider does not trigger Blitz preset');
+
 console.log('\n============================================================');
 console.log(`🎉 TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED`);
 console.log('============================================================');
