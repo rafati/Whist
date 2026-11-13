@@ -105,6 +105,7 @@ export interface GameState {
 
   // Hands
   hands: Record<Seat, Card[]>;
+  initialHands?: Record<Seat, Card[]>;
   cardsCount: Record<Seat, number>;
 
   // Bidding Phase

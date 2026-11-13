@@ -704,6 +704,12 @@ export function startDealRound(
     dealer: dealerSeat,
     misdealInfo: null,
     hands,
+    initialHands: {
+      North: [...hands.North],
+      West: [...hands.West],
+      South: [...hands.South],
+      East: [...hands.East],
+    },
     cardsCount: {
       North: 13,
       West: 13,

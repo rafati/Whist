@@ -898,6 +898,21 @@ function resolveRoundEnd(room: Room) {
   }
 
   // Flight Recorder: Save full match round replay (asynchronous and non-blocking)
+  let recordedInitialHands = state.initialHands;
+  if (!recordedInitialHands || Object.values(recordedInitialHands).every((h) => h.length === 0)) {
+    const reconstructed: Record<Seat, Card[]> = { North: [], West: [], South: [], East: [] };
+    for (const trick of state.tricksHistory || []) {
+      if (Array.isArray(trick.cards)) {
+        for (const item of trick.cards) {
+          if (item?.seat && item?.card && reconstructed[item.seat as Seat]) {
+            reconstructed[item.seat as Seat].push(item.card);
+          }
+        }
+      }
+    }
+    recordedInitialHands = reconstructed;
+  }
+
   const replayRecord: MatchReplayRecord = {
     id: `round_${room.id}_r${state.roundNumber}_${Date.now()}`,
     roomId: room.id,
@@ -914,7 +929,7 @@ function resolveRoundEnd(room: Room) {
     tricksWonTeamB: state.teamTricksWon.TeamB,
     matchScoreTeamA: state.matchScores.TeamA,
     matchScoreTeamB: state.matchScores.TeamB,
-    initialHands: state.hands,
+    initialHands: recordedInitialHands,
     auctionHistory: state.bids || [],
     tricksHistory: state.tricksHistory || [],
     timestamp: Date.now(),
