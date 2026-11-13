@@ -723,5 +723,44 @@ To resolve identified blunders:
    ```
    Render automatically deploys the updated engine in under 60 seconds.
 
+---
+
+## 20. Per-Game Custom Timing & Delay Settings (Creator Authority)
+
+Inside every active game table, the room creator can adjust and fine-tune all game pacing, decision timeouts, and AI bot thinking delays via the in-game Settings screen ([src/components/RoomSettingsModal.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/RoomSettingsModal.tsx)).
+
+### 20.1 Per-Game Isolation
+* **Room-Scoped Persistence**: Timings are saved to `room.timingSettings` on the server and broadcast via `room_state`.
+* **Zero Cross-Table Bleed**: Adjusting timings in Table A (e.g. Blitz mode) has zero effect on Table B (which remains in Balanced or Relaxed mode).
+* **Reset to Defaults**: The room creator can reset the table to `DEFAULT_ROOM_TIMING_SETTINGS` at any time with one click.
+
+### 20.2 Creator vs Guest Permission Model
+* **Creator Control**: Only the room creator (`room.hostId === user.id` or single human host) is authorized to modify delays.
+* **Unauthorized Rejection**: The server strictly rejects unauthorized timing modifications (`update_room_timing`).
+* **Guest Transparency**: Other players and spectators at the table can open the Settings screen to view active table speed rules in read-only mode, with a visible "Host Only" status badge.
+
+### 20.3 Independent Human vs Bot Timing Parameters (`RoomTimingSettings`)
+
+| Timing Parameter | Default | Range | Description |
+| :--- | :--- | :--- | :--- |
+| `humanBidTimeSeconds` | **20s** | 5s – 60s | Allowed human countdown to place a bid before auto-pass/auto-bid. |
+| `humanDeclareTimeSeconds` | **20s** | 5s – 60s | Allowed human countdown for declarer to choose trump suit. |
+| `humanPlayCardTimeSeconds` | **15s** | 5s – 60s | Allowed human countdown per trick play before bot plays legal card. |
+| `botBidDelaySeconds` | **2.5s** | 0.2s – 10s | Simulated thinking pause before an AI bot announces its bid. |
+| `botDeclareDelaySeconds` | **2.5s** | 0.2s – 10s | Simulated thinking pause before bot declarer chooses trump suit. |
+| `botPlayCardDelaySeconds` | **1.0s** | 0.2s – 5.0s | Simulated thinking pause before an AI bot plays a card into the trick. |
+| `trickReviewDelaySeconds` | **0.8s** | 0.3s – 3.0s | Pause duration all 4 cards stay on the table before sweep to winner. |
+
+### 20.4 Quick Speed Presets
+* ⚡ **Blitz**: Fast pace (Humans: 10s bid, 10s declare, 8s play; Bots: 1.0s bid, 1.0s declare, 0.5s play; 0.5s review).
+* ⚖️ **Balanced (Default)**: Tournament standard (Humans: 20s bid, 20s declare, 15s play; Bots: 2.5s bid, 2.5s declare, 1.0s play; 0.8s review).
+* 🐢 **Relaxed**: Leisurely learning pace (Humans: 35s bid, 35s declare, 25s play; Bots: 4.0s bid, 4.0s declare, 2.0s play; 1.4s review).
+
+### 20.5 In-Game UI Integration ([VirtualTable.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/VirtualTable.tsx))
+* **Header Button**: A dedicated Settings gear icon (`Settings`) in the top table bar opens the modal instantly during gameplay.
+* **Overflow Menu**: Also accessible via the table options dropdown menu.
+* **Real-Time Visual Sliders**: Responsive sliders with numeric seconds badges and slider track fills.
+
+
 
 

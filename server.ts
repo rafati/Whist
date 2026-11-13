@@ -18,6 +18,8 @@ import {
   VoicePeer,
   ThrownObjectEvent,
   BotEngineType,
+  RoomTimingSettings,
+  DEFAULT_ROOM_TIMING_SETTINGS,
 } from './src/types.ts';
 import {
   calculateRoundScores,
@@ -345,6 +347,7 @@ export function buildPublicRoomsSummary(): RoomSummary[] {
         isPrivate: Boolean(r.isPrivate),
         isMatchmaking: Boolean(r.isMatchmaking),
         turnTimeoutMs: r.turnTimeoutMs ?? DEFAULT_TURN_TIMEOUT_MS,
+        timingSettings: r.timingSettings || DEFAULT_ROOM_TIMING_SETTINGS,
       };
     });
 }
@@ -379,78 +382,81 @@ function scheduleBotActionIfNeeded(roomId: string) {
   clearTurnTimeoutTimer(roomId);
 
   const { gameState, seats } = room;
-  const turnTimeoutMs =
-    typeof room.turnTimeoutMs === 'number' ? room.turnTimeoutMs : DEFAULT_TURN_TIMEOUT_MS;
+  const timings = room.timingSettings || DEFAULT_ROOM_TIMING_SETTINGS;
 
-  const BOT_BID_TIMEOUT_MS = 5000;
-  const HUMAN_BID_TIMEOUT_MS = 20000;
-  const BOT_DECLARE_TIMEOUT_MS = 5000;
-  const HUMAN_DECLARE_TIMEOUT_MS = 20000;
+  const botBidDelayMs = Math.max(200, Math.round((timings.botBidDelaySeconds ?? 2.5) * 1000));
+  const humanBidTimeoutMs = Math.max(5000, Math.round((timings.humanBidTimeSeconds ?? 20) * 1000));
 
-  // 1. Bidding Turn: 5s for bots, 20s for humans
+  const botDeclareDelayMs = Math.max(200, Math.round((timings.botDeclareDelaySeconds ?? 2.5) * 1000));
+  const humanDeclareTimeoutMs = Math.max(5000, Math.round((timings.humanDeclareTimeSeconds ?? 20) * 1000));
+
+  const botPlayDelayMs = Math.max(200, Math.round((timings.botPlayCardDelaySeconds ?? 1.0) * 1000));
+  const humanPlayTimeoutMs = Math.max(3000, Math.round((timings.humanPlayCardTimeSeconds ?? 15) * 1000));
+
+  // 1. Bidding Turn: custom bot delay vs custom human timeout
   if (gameState.phase === 'bidding' && gameState.currentBidder) {
     const activeSeat = gameState.currentBidder;
     const bidderProfile = seats[activeSeat];
     if (bidderProfile?.isBot) {
-      gameState.turnDeadlineAt = Date.now() + BOT_BID_TIMEOUT_MS;
-      gameState.turnDurationMs = BOT_BID_TIMEOUT_MS;
+      gameState.turnDeadlineAt = Date.now() + botBidDelayMs;
+      gameState.turnDurationMs = botBidDelayMs;
       const timer = setTimeout(() => {
         handleBotBid(roomId, activeSeat, false);
-      }, BOT_BID_TIMEOUT_MS);
+      }, botBidDelayMs);
       botTimers.set(roomId, timer);
       return;
-    } else if (turnTimeoutMs > 0) {
-      gameState.turnDeadlineAt = Date.now() + HUMAN_BID_TIMEOUT_MS;
-      gameState.turnDurationMs = HUMAN_BID_TIMEOUT_MS;
+    } else {
+      gameState.turnDeadlineAt = Date.now() + humanBidTimeoutMs;
+      gameState.turnDurationMs = humanBidTimeoutMs;
       const timer = setTimeout(() => {
         handleBotBid(roomId, activeSeat, true);
-      }, HUMAN_BID_TIMEOUT_MS);
+      }, humanBidTimeoutMs);
       turnTimeoutTimers.set(roomId, timer);
       return;
     }
   }
 
-  // 2. Declaring Trump Suit Turn: 5s for bots, 20s for humans
+  // 2. Declaring Trump Suit Turn: custom bot delay vs custom human timeout
   if (gameState.phase === 'declaring' && gameState.declarer) {
     const activeSeat = gameState.declarer;
     const declarerProfile = seats[activeSeat];
     if (declarerProfile?.isBot) {
-      gameState.turnDeadlineAt = Date.now() + BOT_DECLARE_TIMEOUT_MS;
-      gameState.turnDurationMs = BOT_DECLARE_TIMEOUT_MS;
+      gameState.turnDeadlineAt = Date.now() + botDeclareDelayMs;
+      gameState.turnDurationMs = botDeclareDelayMs;
       const timer = setTimeout(() => {
         handleBotDeclareTrump(roomId, activeSeat, false);
-      }, BOT_DECLARE_TIMEOUT_MS);
+      }, botDeclareDelayMs);
       botTimers.set(roomId, timer);
       return;
-    } else if (turnTimeoutMs > 0) {
-      gameState.turnDeadlineAt = Date.now() + HUMAN_DECLARE_TIMEOUT_MS;
-      gameState.turnDurationMs = HUMAN_DECLARE_TIMEOUT_MS;
+    } else {
+      gameState.turnDeadlineAt = Date.now() + humanDeclareTimeoutMs;
+      gameState.turnDurationMs = humanDeclareTimeoutMs;
       const timer = setTimeout(() => {
         handleBotDeclareTrump(roomId, activeSeat, true);
-      }, HUMAN_DECLARE_TIMEOUT_MS);
+      }, humanDeclareTimeoutMs);
       turnTimeoutTimers.set(roomId, timer);
       return;
     }
   }
 
-  // 3. Playing Card Turn
+  // 3. Playing Card Turn: custom bot delay vs custom human timeout
   if (gameState.phase === 'playing' && gameState.currentTurn) {
     const activeSeat = gameState.currentTurn;
     const turnProfile = seats[activeSeat];
     if (turnProfile?.isBot) {
-      gameState.turnDeadlineAt = null;
-      gameState.turnDurationMs = null;
+      gameState.turnDeadlineAt = Date.now() + botPlayDelayMs;
+      gameState.turnDurationMs = botPlayDelayMs;
       const timer = setTimeout(() => {
         handleBotPlayCard(roomId, activeSeat, false);
-      }, 950);
+      }, botPlayDelayMs);
       botTimers.set(roomId, timer);
       return;
-    } else if (turnTimeoutMs > 0) {
-      gameState.turnDeadlineAt = Date.now() + turnTimeoutMs;
-      gameState.turnDurationMs = turnTimeoutMs;
+    } else {
+      gameState.turnDeadlineAt = Date.now() + humanPlayTimeoutMs;
+      gameState.turnDurationMs = humanPlayTimeoutMs;
       const timer = setTimeout(() => {
         handleBotPlayCard(roomId, activeSeat, true);
-      }, turnTimeoutMs);
+      }, humanPlayTimeoutMs);
       turnTimeoutTimers.set(roomId, timer);
       return;
     }
@@ -825,6 +831,14 @@ function processPlayCard(room: Room, seat: Seat, card: Card, isBotAutoPlay = fal
   broadcastRoom(room.id);
 
   // Evaluate trick winner after short visual delay
+  const timings = room.timingSettings || DEFAULT_ROOM_TIMING_SETTINGS;
+  const reviewDelayMs = Math.round((timings.trickReviewDelaySeconds ?? 0.8) * 1000);
+  const resolveDelayMs =
+    ANIMATION_CONFIG.CARD_PLAY_DURATION_MS +
+    reviewDelayMs +
+    ANIMATION_CONFIG.TRICK_COLLECT_DURATION_MS +
+    150;
+
   setTimeout(() => {
     const trickWinnerResult = evaluateTrickWinner(state.currentTrick, state.trumpSuit!);
     const winnerSeat = trickWinnerResult.winner;
@@ -853,7 +867,7 @@ function processPlayCard(room: Room, seat: Seat, card: Card, isBotAutoPlay = fal
       scheduleBotActionIfNeeded(room.id);
       broadcastRoom(room.id);
     }
-  }, SERVER_TRICK_RESOLVE_DELAY_MS);
+  }, resolveDelayMs);
 }
 
 // Round End & Scoring Engine
@@ -1334,6 +1348,38 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (msg.type === 'update_room_timing') {
+        const room = rooms.get(msg.roomId);
+        if (!room) return;
+
+        // Check creator permission: caller must be hostId, or only 1 human at the table
+        const humanSeats = Object.values(room.seats).filter((p) => p && !p.isBot);
+        const isCreator = (msg.userId && room.hostId === msg.userId) || humanSeats.length <= 1;
+        if (!isCreator) {
+          console.warn(`[TimingSettings] Unauthorized update attempt by user ${msg.userId} for room ${room.id} (host is ${room.hostId})`);
+          return;
+        }
+
+        const s = msg.settings;
+        room.timingSettings = {
+          humanBidTimeSeconds: Math.min(120, Math.max(5, Number(s.humanBidTimeSeconds) || 20)),
+          humanDeclareTimeSeconds: Math.min(120, Math.max(5, Number(s.humanDeclareTimeSeconds) || 20)),
+          humanPlayCardTimeSeconds: Math.min(120, Math.max(5, Number(s.humanPlayCardTimeSeconds) || 15)),
+          botBidDelaySeconds: Math.min(15, Math.max(0.2, Number(s.botBidDelaySeconds) || 2.5)),
+          botDeclareDelaySeconds: Math.min(15, Math.max(0.2, Number(s.botDeclareDelaySeconds) || 2.5)),
+          botPlayCardDelaySeconds: Math.min(10, Math.max(0.2, Number(s.botPlayCardDelaySeconds) || 1.0)),
+          trickReviewDelaySeconds: Math.min(5, Math.max(0.2, Number(s.trickReviewDelaySeconds) || 0.8)),
+        };
+
+        room.turnTimeoutMs = room.timingSettings.humanPlayCardTimeSeconds * 1000;
+        console.log(`[TimingSettings] Updated timings for room ${room.id}:`, room.timingSettings);
+
+        scheduleBotActionIfNeeded(room.id);
+        broadcastRoom(room.id);
+        broadcastRoomList();
+        return;
+      }
+
       if (msg.type === 'make_bid') {
         const room = rooms.get(msg.roomId);
         if (!room) return;
@@ -1725,6 +1771,7 @@ app.post('/api/rooms', (req, res) => {
     botDifficulty: botDifficulty === 'casual' ? 'casual' : 'super',
     defaultBotEngine: defEngine,
     botEngines: customEngines,
+    timingSettings: { ...DEFAULT_ROOM_TIMING_SETTINGS },
   };
 
   rooms.set(roomId, newRoom);
@@ -1863,6 +1910,7 @@ app.post('/api/matchmaking', (req, res) => {
     },
     gameState: createInitialGameState(randomDealer),
     botDifficulty: botDifficulty === 'casual' ? 'casual' : 'super',
+    timingSettings: { ...DEFAULT_ROOM_TIMING_SETTINGS },
   };
 
   rooms.set(roomId, newRoom);
@@ -2095,6 +2143,7 @@ if (rooms.size === 0) {
     },
     gameState: createInitialGameState('North'),
     botDifficulty: 'super',
+    timingSettings: { ...DEFAULT_ROOM_TIMING_SETTINGS },
   });
 }
 

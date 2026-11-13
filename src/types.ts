@@ -152,6 +152,31 @@ export interface GameState {
   } | null;
 }
 
+export interface RoomTimingSettings {
+  // Human allowed times (seconds before bot auto-plays)
+  humanBidTimeSeconds: number;       // default: 20s (range: 5s - 60s)
+  humanDeclareTimeSeconds: number;   // default: 20s (range: 5s - 60s)
+  humanPlayCardTimeSeconds: number;  // default: 15s (range: 5s - 60s)
+
+  // Bot thinking delays (seconds before bot acts)
+  botBidDelaySeconds: number;        // default: 2.5s (range: 0.2s - 10s)
+  botDeclareDelaySeconds: number;    // default: 2.5s (range: 0.2s - 10s)
+  botPlayCardDelaySeconds: number;   // default: 1.0s (range: 0.2s - 6s)
+
+  // Visual trick review pause (seconds completed trick stays on felt before being swept)
+  trickReviewDelaySeconds: number;   // default: 0.8s (range: 0.3s - 3s)
+}
+
+export const DEFAULT_ROOM_TIMING_SETTINGS: RoomTimingSettings = {
+  humanBidTimeSeconds: 20,
+  humanDeclareTimeSeconds: 20,
+  humanPlayCardTimeSeconds: 15,
+  botBidDelaySeconds: 2.5,
+  botDeclareDelaySeconds: 2.5,
+  botPlayCardDelaySeconds: 1.0,
+  trickReviewDelaySeconds: 0.8,
+};
+
 export interface Room {
   id: string;
   code?: string; // 4-character invite code (e.g. "K7M2")
@@ -167,6 +192,7 @@ export interface Room {
   isMatchmaking?: boolean; // Public matchmaking queue table
   matchmakingAutoStartAt?: number | null; // Timestamp when remaining matchmaking seats auto-fill with bots
   turnTimeoutMs?: number; // Configurable turn timer (default 10000ms = 10s; 0 = unlimited)
+  timingSettings?: RoomTimingSettings; // Per-game custom timing configuration controlled by creator
 }
 
 export type ThrowableObjectType = 'shoe' | 'beer' | 'medal';
@@ -192,6 +218,7 @@ export type ClientMessage =
   | { type: 'set_seat_bot_engine'; roomId: string; seat: Seat; engine: BotEngineType }
   | { type: 'set_default_bot_engine'; roomId: string; engine: BotEngineType }
   | { type: 'set_turn_timeout'; roomId: string; turnTimeoutMs: number }
+  | { type: 'update_room_timing'; roomId: string; settings: RoomTimingSettings; userId?: string }
   | { type: 'make_bid'; roomId: string; bid: Bid }
   | { type: 'declare_trump'; roomId: string; suit: Suit }
   | { type: 'play_card'; roomId: string; seat: Seat; card: Card }
@@ -227,6 +254,7 @@ export interface RoomSummary {
   isPrivate?: boolean;
   isMatchmaking?: boolean;
   turnTimeoutMs?: number;
+  timingSettings?: RoomTimingSettings;
 }
 
 // Server to Client Messages

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { ClientMessage, Room, RoomSummary, ServerMessage, UserProfile, Seat, ThrowableObjectType, BotEngineType } from '../types.ts';
+import { ClientMessage, Room, RoomSummary, ServerMessage, UserProfile, Seat, ThrowableObjectType, BotEngineType, RoomTimingSettings } from '../types.ts';
 
 interface SocketContextType {
   isConnected: boolean;
@@ -17,6 +17,7 @@ interface SocketContextType {
   setSeatBotEngine: (roomId: string, seat: Seat, engine: BotEngineType) => void;
   setDefaultBotEngine: (roomId: string, engine: BotEngineType) => void;
   setTurnTimeout: (roomId: string, turnTimeoutMs: number) => void;
+  updateRoomTiming: (roomId: string, settings: RoomTimingSettings, userId?: string) => void;
   makeBid: (roomId: string, bid: any) => void;
   declareTrump: (roomId: string, suit: any) => void;
   playCard: (roomId: string, seat: any, card: any) => void;
@@ -230,6 +231,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     send({ type: 'set_turn_timeout', roomId, turnTimeoutMs });
   }, [send]);
 
+  const updateRoomTiming = useCallback((roomId: string, settings: RoomTimingSettings, userId?: string) => {
+    send({ type: 'update_room_timing', roomId, settings, userId });
+  }, [send]);
+
   const makeBid = useCallback((roomId: string, bid: any) => {
     send({ type: 'make_bid', roomId, bid });
   }, [send]);
@@ -299,6 +304,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setSeatBotEngine,
         setDefaultBotEngine,
         setTurnTimeout,
+        updateRoomTiming,
         makeBid,
         declareTrump,
         playCard,

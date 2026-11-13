@@ -37,6 +37,7 @@ import { ThrowableDock } from './ThrowableDock.tsx';
 import { ThrowableOverlay } from './ThrowableOverlay.tsx';
 import { LastTrickCross } from './LastTrickCross.tsx';
 import { ContractHud } from './ContractHud.tsx';
+import { RoomSettingsModal } from './RoomSettingsModal.tsx';
 import { useVoiceChat } from '../lib/useVoiceChat.ts';
 import { playCardSnapSound, useSoundSetting, playClickSound } from '../lib/throwSounds.ts';
 import {
@@ -63,6 +64,7 @@ import {
   Lock,
   Globe,
   Eye,
+  Settings,
 } from 'lucide-react';
 
 // Physical flight offset vectors based on visual position
@@ -350,6 +352,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
     fillBots,
     setBotDifficulty,
     setTurnTimeout,
+    updateRoomTiming,
     makeBid,
     declareTrump,
     playCard,
@@ -362,6 +365,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   } = useSocket();
 
   const [showScoreModal, setShowScoreModal] = useState(false);
+  const [showRoomSettingsModal, setShowRoomSettingsModal] = useState(false);
   const [showSimModal, setShowSimModal] = useState(false);
   const [previewSalpand, setPreviewSalpand] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -1498,6 +1502,19 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
             {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
           </button>
 
+          {/* Game Timing & Speed Settings Button */}
+          <button
+            onClick={() => {
+              playClickSound();
+              setShowRoomSettingsModal(true);
+            }}
+            className="flex px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700/70 hover:border-emerald-500/50 rounded-lg text-[11px] sm:text-xs text-slate-300 hover:text-white items-center gap-1 transition-all cursor-pointer"
+            title="Game Speed & Delays (This Table Only)"
+          >
+            <Settings className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden md:inline">Settings</span>
+          </button>
+
           {/* Secondary Table Actions Menu (Preserved for testing & dev verification via ?dev=true or whist_dev_mode) */}
           {isDevMode && (
             <>
@@ -1601,6 +1618,17 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     ))}
                   </div>
                 </div>
+
+                <button
+                  onClick={() => {
+                    setShowTableMenu(false);
+                    setShowRoomSettingsModal(true);
+                  }}
+                  className="w-full px-3 py-2 text-left text-slate-200 hover:bg-slate-900 flex items-center gap-2 cursor-pointer border-b border-slate-800/80"
+                >
+                  <Settings className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Custom Delays & Timers</span>
+                </button>
 
                 <button
                   onClick={() => {
@@ -2674,6 +2702,17 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
         gameState={gameState}
         onRestartMatch={() => restartMatch(room.id)}
         onLeaveRoom={onLeaveRoom}
+      />
+
+      {/* Per-Game Room Speed & Timings Modal */}
+      <RoomSettingsModal
+        isOpen={showRoomSettingsModal}
+        onClose={() => setShowRoomSettingsModal(false)}
+        room={room}
+        myUser={user}
+        onUpdateTimingSettings={(newSettings) => {
+          updateRoomTiming(room.id, newSettings, user.id);
+        }}
       />
 
       {/* Standings Modal */}
