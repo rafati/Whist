@@ -913,6 +913,20 @@ function resolveRoundEnd(room: Room) {
     recordedInitialHands = reconstructed;
   }
 
+  const seatPlayersRecord = SEATS.reduce((acc, s) => {
+    const user = room.seats[s];
+    const isBot = !user || !!user.isBot;
+    const engine = isBot
+      ? (user?.botEngine || room.botEngines?.[s] || (room.botDifficulty !== 'casual' ? 'super' : 'casual'))
+      : undefined;
+    acc[s] = {
+      isBot,
+      name: user?.name || `${s} Bot`,
+      engine,
+    };
+    return acc;
+  }, {} as Record<Seat, { isBot: boolean; name: string; engine?: string }>);
+
   const replayRecord: MatchReplayRecord = {
     id: `round_${room.id}_r${state.roundNumber}_${Date.now()}`,
     roomId: room.id,
@@ -929,6 +943,7 @@ function resolveRoundEnd(room: Room) {
     tricksWonTeamB: state.teamTricksWon.TeamB,
     matchScoreTeamA: state.matchScores.TeamA,
     matchScoreTeamB: state.matchScores.TeamB,
+    players: seatPlayersRecord,
     initialHands: recordedInitialHands,
     auctionHistory: state.bids || [],
     tricksHistory: state.tricksHistory || [],
@@ -1453,6 +1468,8 @@ wss.on('connection', (ws) => {
             timestamp: now,
             fromSeat: msg.fromSeat,
             toSeat: msg.toSeat,
+            fromIsBot: !room.seats[msg.fromSeat] || !!room.seats[msg.fromSeat]?.isBot,
+            fromPlayerName: room.seats[msg.fromSeat]?.name || msg.fromSeat,
             isPartner,
             objectType: msg.objectType,
             sentiment,

@@ -15,6 +15,7 @@ import {
   saveBotFeedback,
   getTelemetryStats,
   getBotFeedbackList,
+  getMatchReplaysList,
   MatchReplayRecord,
   BotFeedbackRecord,
 } from '../src/services/telemetryDb.ts';
@@ -59,6 +60,12 @@ async function runTests() {
     tricksWonTeamB: 5,
     matchScoreTeamA: 2,
     matchScoreTeamB: 0,
+    players: {
+      North: { isBot: false, name: 'Alice' },
+      West: { isBot: true, name: 'West Bot', engine: 'super' },
+      South: { isBot: false, name: 'Bob' },
+      East: { isBot: true, name: 'East Bot', engine: 'super' },
+    },
     initialHands: {
       North: [{ id: 'AS', suit: 'S', rank: 'A' }],
       West: [{ id: 'KS', suit: 'S', rank: 'K' }],
@@ -93,6 +100,8 @@ async function runTests() {
     timestamp: Date.now(),
     fromSeat: 'North', // Partner of South
     toSeat: 'South',   // Target is bot South
+    fromIsBot: false,
+    fromPlayerName: 'Alice',
     isPartner: true,
     objectType: 'shoe',
     sentiment: 'bad_move',
@@ -158,6 +167,14 @@ async function runTests() {
   assert(partnerShoesList.length >= 1, `Queried partner shoes list: got ${partnerShoesList.length} records`);
   assert(partnerShoesList[0].sentiment === 'bad_move', 'Filtered record has sentiment bad_move');
   assert(partnerShoesList[0].isPartner === true, 'Filtered record has isPartner true');
+  assert(partnerShoesList[0].fromIsBot === false, 'Feedback correctly identifies thrower as human player (fromIsBot = false)');
+
+  const replaysList = await getMatchReplaysList(5);
+  assert(replaysList.length >= 1, `Queried match replays list: got ${replaysList.length} records`);
+  if (replaysList[0]?.players) {
+    assert(replaysList[0].players.North.isBot === false, 'Replay correctly tracks North as human');
+    assert(replaysList[0].players.West.isBot === true, 'Replay correctly tracks West as bot (engine: super)');
+  }
 
   // Test 6: Zero Gameplay Impact Verification
   console.log('\n--- Test 6: Zero Gameplay Impact Verification ---');

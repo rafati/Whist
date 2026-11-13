@@ -13,6 +13,12 @@ import fs from 'fs';
 import path from 'path';
 import { Card, ContractType, PlayedCard, Seat, ThrowableObjectType, TrumpSuit } from '../types.ts';
 
+export interface PlayerSeatInfo {
+  isBot: boolean;
+  name: string;
+  engine?: string;
+}
+
 export interface MatchReplayRecord {
   id: string;
   roomId: string;
@@ -27,6 +33,7 @@ export interface MatchReplayRecord {
   tricksWonTeamB: number;
   matchScoreTeamA: number;
   matchScoreTeamB: number;
+  players?: Record<Seat, PlayerSeatInfo>;
   initialHands: Record<Seat, Card[]>;
   auctionHistory?: any[];
   tricksHistory: any[];
@@ -40,6 +47,8 @@ export interface BotFeedbackRecord {
   timestamp: number;
   fromSeat: Seat;
   toSeat: Seat;
+  fromIsBot?: boolean;
+  fromPlayerName?: string;
   isPartner: boolean;
   objectType: ThrowableObjectType;
   sentiment: 'bad_move' | 'good_move' | 'neutral'; // 'shoe' = bad_move, 'medal' = good_move, 'beer' = neutral
@@ -128,6 +137,8 @@ export async function initTelemetryDatabase(): Promise<boolean> {
           bot_engine VARCHAR(32) NOT NULL,
           action_type VARCHAR(16) NOT NULL,
           action_details JSONB NOT NULL,
+          from_is_bot BOOLEAN DEFAULT FALSE,
+          from_player_name VARCHAR(64),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -135,6 +146,11 @@ export async function initTelemetryDatabase(): Promise<boolean> {
         CREATE INDEX IF NOT EXISTS idx_bot_feedback_to_seat ON bot_feedback(to_seat);
         CREATE INDEX IF NOT EXISTS idx_bot_feedback_partner ON bot_feedback(is_partner);
         CREATE INDEX IF NOT EXISTS idx_match_replays_room ON match_replays(room_id);
+
+        -- Safe column migrations if tables already exist
+        ALTER TABLE match_replays ADD COLUMN IF NOT EXISTS players JSONB;
+        ALTER TABLE bot_feedback ADD COLUMN IF NOT EXISTS from_is_bot BOOLEAN DEFAULT FALSE;
+        ALTER TABLE bot_feedback ADD COLUMN IF NOT EXISTS from_player_name VARCHAR(64);
       `);
 
       isInitialized = true;
@@ -171,8 +187,8 @@ export async function saveMatchReplay(replay: MatchReplayRecord): Promise<void> 
         `INSERT INTO match_replays (
           id, room_id, round_number, dealer, declarer, trump_suit, contract_level, contract_type,
           winning_team, tricks_won_team_a, tricks_won_team_b, match_score_team_a, match_score_team_b,
-          initial_hands, auction_history, tricks_history, timestamp
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          initial_hands, auction_history, tricks_history, players, timestamp
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         ON CONFLICT (id) DO NOTHING`,
         [
           replay.id,
@@ -191,6 +207,7 @@ export async function saveMatchReplay(replay: MatchReplayRecord): Promise<void> 
           JSON.stringify(replay.initialHands),
           JSON.stringify(replay.auctionHistory),
           JSON.stringify(replay.tricksHistory),
+          JSON.stringify(replay.players || {}),
           replay.timestamp,
         ]
       );
@@ -217,9 +234,9 @@ export async function saveBotFeedback(feedback: BotFeedbackRecord): Promise<void
     if (pool) {
       await pool.query(
         `INSERT INTO bot_feedback (
-          id, room_id, match_id, timestamp, from_seat, to_seat, is_partner,
+          id, room_id, match_id, timestamp, from_seat, to_seat, from_is_bot, from_player_name, is_partner,
           object_type, sentiment, bot_engine, action_type, action_details
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (id) DO NOTHING`,
         [
           feedback.id,
@@ -228,6 +245,8 @@ export async function saveBotFeedback(feedback: BotFeedbackRecord): Promise<void
           feedback.timestamp,
           feedback.fromSeat,
           feedback.toSeat,
+          !!feedback.fromIsBot,
+          feedback.fromPlayerName || feedback.fromSeat,
           feedback.isPartner,
           feedback.objectType,
           feedback.sentiment,
@@ -354,7 +373,9 @@ export async function getBotFeedbackList(options?: {
       const query = `
         SELECT 
           id, room_id AS "roomId", match_id AS "matchId", timestamp,
-          from_seat AS "fromSeat", to_seat AS "toSeat", is_partner AS "isPartner",
+          from_seat AS "fromSeat", to_seat AS "toSeat",
+          from_is_bot AS "fromIsBot", from_player_name AS "fromPlayerName",
+          is_partner AS "isPartner",
           object_type AS "objectType", sentiment, bot_engine AS "botEngine",
           action_type AS "actionType", action_details AS "actionDetails"
         FROM bot_feedback
@@ -402,6 +423,7 @@ export async function getMatchReplaysList(limit = 50): Promise<MatchReplayRecord
           trump_suit AS "trumpSuit", contract_level AS "contractLevel", contract_type AS "contractType",
           winning_team AS "winningTeam", tricks_won_team_a AS "tricksWonTeamA", tricks_won_team_b AS "tricksWonTeamB",
           match_score_team_a AS "matchScoreTeamA", match_score_team_b AS "matchScoreTeamB",
+          players,
           initial_hands AS "initialHands", auction_history AS "auctionHistory", tricks_history AS "tricksHistory",
           timestamp
         FROM match_replays
