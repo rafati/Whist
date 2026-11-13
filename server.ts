@@ -45,6 +45,7 @@ import {
   saveBotFeedback,
   getTelemetryStats,
   getBotFeedbackList,
+  getMatchReplaysList,
   MatchReplayRecord,
   BotFeedbackRecord,
 } from './src/services/telemetryDb.ts';
@@ -2088,6 +2089,17 @@ app.get('/api/telemetry/feedback', async (req, res) => {
 
     const list = await getBotFeedbackList({ sentiment, partnerOnly, limit });
     res.json({ success: true, count: list.length, feedback: list });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// List match replays
+app.get('/api/telemetry/replays', async (req, res) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+    const list = await getMatchReplaysList(limit);
+    res.json({ success: true, count: list.length, replays: list });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

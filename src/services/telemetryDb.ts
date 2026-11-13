@@ -389,3 +389,45 @@ export async function getBotFeedbackList(options?: {
   }
   return results;
 }
+
+/**
+ * Returns recent match replays.
+ */
+export async function getMatchReplaysList(limit = 50): Promise<MatchReplayRecord[]> {
+  if (pool) {
+    try {
+      const query = `
+        SELECT 
+          id, room_id AS "roomId", round_number AS "roundNumber", dealer, declarer,
+          trump_suit AS "trumpSuit", contract_level AS "contractLevel", contract_type AS "contractType",
+          winning_team AS "winningTeam", tricks_won_team_a AS "tricksWonTeamA", tricks_won_team_b AS "tricksWonTeamB",
+          match_score_team_a AS "matchScoreTeamA", match_score_team_b AS "matchScoreTeamB",
+          initial_hands AS "initialHands", auction_history AS "auctionHistory", tricks_history AS "tricksHistory",
+          timestamp
+        FROM match_replays
+        ORDER BY timestamp DESC
+        LIMIT $1
+      `;
+      const res = await pool.query(query, [limit]);
+      return res.rows;
+    } catch (err) {
+      console.error('[TelemetryDB] Error querying match replays:', err);
+      return [];
+    }
+  }
+
+  const dataDir = path.resolve(process.cwd(), 'data');
+  const replaysFile = path.join(dataDir, 'telemetry_replays.jsonl');
+  if (!fs.existsSync(replaysFile)) return [];
+
+  const results: MatchReplayRecord[] = [];
+  const lines = fs.readFileSync(replaysFile, 'utf8').trim().split('\n').filter(Boolean);
+  for (let i = lines.length - 1; i >= 0 && results.length < limit; i--) {
+    try {
+      results.push(JSON.parse(lines[i]));
+    } catch {
+      // ignore
+    }
+  }
+  return results;
+}

@@ -23,7 +23,36 @@ async function runAnalysis() {
   let replays: MatchReplayRecord[] = [];
   let feedback: BotFeedbackRecord[] = [];
 
-  if (dbUrl) {
+  const remoteArgIdx = process.argv.indexOf('--remote');
+  const urlArgIdx = process.argv.indexOf('--url');
+  const remoteUrl =
+    urlArgIdx !== -1 && process.argv[urlArgIdx + 1]
+      ? process.argv[urlArgIdx + 1]
+      : remoteArgIdx !== -1
+      ? 'https://whist-jfvx.onrender.com'
+      : process.env.RENDER_URL;
+
+  if (remoteUrl) {
+    console.log(`🌐 Fetching live production telemetry from ${remoteUrl}...`);
+    try {
+      const statsRes = await fetch(`${remoteUrl}/api/telemetry/stats`).then((r) => r.json());
+      const fbRes = await fetch(`${remoteUrl}/api/telemetry/feedback?limit=500`).then((r) => r.json());
+      if (fbRes.success && fbRes.feedback) {
+        feedback = fbRes.feedback;
+      }
+      try {
+        const repRes = await fetch(`${remoteUrl}/api/telemetry/replays?limit=500`).then((r) => r.json());
+        if (repRes.success && repRes.replays) {
+          replays = repRes.replays;
+        }
+      } catch {
+        // endpoint may be deploying
+      }
+      console.log(`✅ Loaded ${feedback.length} feedback records and ${replays.length} match replays live from Render (${statsRes.stats?.storageType || 'unknown'}).\n`);
+    } catch (err) {
+      console.error(`❌ Failed to fetch from remote URL ${remoteUrl}:`, err);
+    }
+  } else if (dbUrl) {
     console.log('🌐 Connecting to PostgreSQL via DATABASE_URL...');
     const pool = new pg.Pool({
       connectionString: dbUrl,
