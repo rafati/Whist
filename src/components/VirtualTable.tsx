@@ -9,6 +9,8 @@ import {
   ThrowableObjectType,
   ThrownObjectEvent,
   UserProfile,
+  RoomTimingSettings,
+  DEFAULT_ROOM_TIMING_SETTINGS,
 } from '../types.ts';
 import {
   getTeam,
@@ -65,6 +67,7 @@ import {
   Globe,
   Eye,
   Settings,
+  Sliders,
 } from 'lucide-react';
 
 // Physical flight offset vectors based on visual position
@@ -383,6 +386,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
   const isProBot = room.botDifficulty !== 'casual';
   const gameState = room.gameState;
   const seats = room.seats;
+
+  // Determine if the current user is the creator/host of this specific game
+  const isHost =
+    user?.id === room.hostId ||
+    room.hostId === 'system' ||
+    Object.values(room.seats).filter((p) => p && !p.isBot).length <= 1;
+
+  const timingSettings = room.timingSettings || DEFAULT_ROOM_TIMING_SETTINGS;
 
   // Determine current user's seat
   const mySeat: Seat | null =
@@ -1907,31 +1918,39 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl px-2 py-1 mb-2">
-                    <span className="text-[10px] text-slate-300 font-medium flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-emerald-400" />
-                      <span>Turn Timer:</span>
-                    </span>
-                    <div className="inline-flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 gap-0.5">
-                      {[
-                        { label: '10s', value: 10000 },
-                        { label: '15s', value: 15000 },
-                        { label: '30s', value: 30000 },
-                        { label: 'Off', value: 0 },
-                      ].map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setTurnTimeout(room.id, opt.value)}
-                          className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-all cursor-pointer ${
-                            (room.turnTimeoutMs ?? 10000) === opt.value
-                              ? 'bg-emerald-600 text-white'
-                              : 'text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                  {/* Pre-Game Custom Timing & Delays Preview Bar */}
+                  <div className="bg-slate-900/95 border border-slate-800 rounded-xl p-2 mb-2">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] text-slate-300 font-bold flex items-center gap-1">
+                        <Sliders className="w-3 h-3 text-emerald-400" />
+                        <span>Game Delays &amp; Timers</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playClickSound();
+                          setShowRoomSettingsModal(true);
+                        }}
+                        className="text-[9px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-0.5 cursor-pointer bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 hover:border-emerald-600 transition-all"
+                      >
+                        <Settings className="w-2.5 h-2.5" />
+                        <span>{isHost ? 'Customize' : 'View'}</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                      <div className="bg-slate-950/80 px-2 py-1 rounded-lg border border-slate-800/80 text-left">
+                        <div className="text-slate-500 font-sans text-[8px] uppercase tracking-wider font-semibold">👤 Humans</div>
+                        <div className="text-emerald-300 font-bold mt-0.5">
+                          Bid {timingSettings.humanBidTimeSeconds}s • Play {timingSettings.humanPlayCardTimeSeconds}s
+                        </div>
+                      </div>
+                      <div className="bg-slate-950/80 px-2 py-1 rounded-lg border border-slate-800/80 text-left">
+                        <div className="text-slate-500 font-sans text-[8px] uppercase tracking-wider font-semibold">🤖 AI Bots</div>
+                        <div className="text-amber-300 font-bold mt-0.5">
+                          Bid {timingSettings.botBidDelaySeconds}s • Play {timingSettings.botPlayCardDelaySeconds}s
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -2015,6 +2034,65 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               {/* Bidding Phase: Centered Bidding Console */}
               {gameState.phase === 'bidding' && (
                 <div className="landscape-compact-console w-[320px] sm:w-[350px] shrink-0 z-20">
+                  {/* Pre-Bidding Active Timing Banner (Shown when game starts before bidding begins) */}
+                  {gameState.auctionTurnsCount === 0 ? (
+                    <div className="mb-2 p-2 rounded-xl bg-slate-950/95 border border-emerald-500/50 shadow-xl text-[11px] animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Game Timings Active</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playClickSound();
+                            setShowRoomSettingsModal(true);
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 border border-emerald-600/60 font-semibold text-[10px] flex items-center gap-1 cursor-pointer transition-all"
+                        >
+                          <Settings className="w-3 h-3" />
+                          <span>{isHost ? 'Adjust Delays' : 'View Timers'}</span>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 mt-1.5 text-[10px] font-mono">
+                        <div className="bg-slate-900/90 px-2 py-1 rounded border border-slate-800 flex items-center justify-between">
+                          <span className="text-slate-400">👤 Human Bid:</span>
+                          <span className="text-emerald-300 font-bold">{timingSettings.humanBidTimeSeconds}s</span>
+                        </div>
+                        <div className="bg-slate-900/90 px-2 py-1 rounded border border-slate-800 flex items-center justify-between">
+                          <span className="text-slate-400">🤖 Bot Bid:</span>
+                          <span className="text-amber-300 font-bold">{timingSettings.botBidDelaySeconds}s</span>
+                        </div>
+                        <div className="bg-slate-900/90 px-2 py-1 rounded border border-slate-800 flex items-center justify-between">
+                          <span className="text-slate-400">👤 Human Play:</span>
+                          <span className="text-emerald-300 font-bold">{timingSettings.humanPlayCardTimeSeconds}s</span>
+                        </div>
+                        <div className="bg-slate-900/90 px-2 py-1 rounded border border-slate-800 flex items-center justify-between">
+                          <span className="text-slate-400">🤖 Bot Play:</span>
+                          <span className="text-amber-300 font-bold">{timingSettings.botPlayCardDelaySeconds}s</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-1.5 px-2 py-0.5 bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-lg flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-2.5 h-2.5 text-emerald-400" />
+                        <span>H: {timingSettings.humanBidTimeSeconds}s/{timingSettings.humanPlayCardTimeSeconds}s • B: {timingSettings.botBidDelaySeconds}s/{timingSettings.botPlayCardDelaySeconds}s</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playClickSound();
+                          setShowRoomSettingsModal(true);
+                        }}
+                        className="text-emerald-400 hover:text-emerald-300 text-[9px] flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Settings className="w-2.5 h-2.5" />
+                        <span>{isHost ? 'Settings' : 'View'}</span>
+                      </button>
+                    </div>
+                  )}
+
                   <BiddingPanel
                     gameState={gameState}
                     mySeat={mySeat}
