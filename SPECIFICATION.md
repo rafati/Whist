@@ -761,6 +761,30 @@ Inside every active game table, the room creator can adjust and fine-tune all ga
 * **Overflow Menu**: Also accessible via the table options dropdown menu.
 * **Real-Time Visual Sliders**: Responsive sliders with numeric seconds badges and slider track fills.
 
+### 20.6 Pre-Game Setting Hold (Holding State Before Bidding)
+* **Hold Invariant (`gameState.isHoldingForSettings`)**:
+  When a new game starts (Round 1 deal) or when the match is restarted, the game enters a holding state (`isHoldingForSettings: true`).
+  - **No Bidding Allowed**: Any bid attempts (`make_bid`) sent while holding are strictly rejected on the server.
+  - **No Ticking Turn Timers**: `turnDeadlineAt` and `turnDurationMs` remain `null` so no countdown timers tick down.
+  - **No Autonomous Bot Actions**: Bots do not place bids; `scheduleBotActionIfNeeded` exits immediately without arming timers.
+* **Creator Experience**:
+  - The `RoomSettingsModal` opens automatically for the table creator/host upon dealing Round 1.
+  - Displays a holding indicator banner: *"Game Paused: Bidding is on hold until table timings are confirmed."*
+  - The modal provides two direct unhold actions:
+    - **Confirm & Start Bidding**: Saves the configured slider settings, clears `isHoldingForSettings`, and begins the bidding auction.
+    - **Start with Defaults**: Keeps standard timings and starts bidding immediately.
+  - If the creator dismisses the modal, the central table console displays a prominent pause card with *"Customize & Start Bidding"* and *"Start with Default Timings"* buttons, allowing resume at any time.
+* **Guest / Opponent Experience**:
+  - Guests and spectators see a clear pause card: *"Game Paused: Waiting for table creator to configure game speed and timing settings before bidding begins..."*
+  - Guests have a *"View Timing Details"* button to inspect timings in read-only mode.
+  - The interactive bidding panel remains suspended until the creator confirms.
+* **Unhold & Auction Activation**:
+  - Upon receiving `update_room_timing` or `start_bidding` from the authorized creator, the server sets `isHoldingForSettings = false`.
+  - The server immediately activates `scheduleBotActionIfNeeded(room.id)`:
+    - If the opening bidder is a bot, its bid timer is scheduled with `botBidDelaySeconds`.
+    - If the opening bidder is human, their countdown deadline is armed with `humanBidTimeSeconds`.
+  - The updated room state is broadcast to all clients, dismissing the hold screen and launching bidding.
+
 
 
 

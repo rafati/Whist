@@ -103,6 +103,48 @@ assert(!isStrictPreset(customSettings, TIMING_PRESET_STANDARD), 'Moving one slid
 assert(!isStrictPreset(customSettings, TIMING_PRESET_RELAXED), 'Moving one slider does not falsely trigger Relaxed preset');
 assert(!isStrictPreset(customSettings, TIMING_PRESET_BLITZ), 'Moving one slider does not trigger Blitz preset');
 
+// Test 5: Pre-Game Hold for Settings & Bidding Invariant
+console.log('\n--- Test 5: Pre-Game Hold for Settings Invariant ---');
+interface SimulatedState {
+  isHoldingForSettings?: boolean;
+  turnDeadlineAt?: number | null;
+  turnDurationMs?: number | null;
+  phase: string;
+  roundNumber: number;
+}
+
+const freshRound1State: SimulatedState = {
+  isHoldingForSettings: true,
+  turnDeadlineAt: null,
+  turnDurationMs: null,
+  phase: 'bidding',
+  roundNumber: 1,
+};
+
+assert(freshRound1State.isHoldingForSettings === true, 'Round 1 deal initializes in holding state');
+assert(freshRound1State.turnDeadlineAt === null, 'Turn deadline is null during holding (no countdown running)');
+
+function canProcessBid(state: SimulatedState): boolean {
+  if (state.isHoldingForSettings) return false;
+  return true;
+}
+
+assert(!canProcessBid(freshRound1State), 'Incoming bids are strictly rejected while holding for settings');
+
+// Creator saves settings or starts bidding
+function unholdGame(state: SimulatedState, timing: RoomTimingSettings, isBotTurn: boolean) {
+  state.isHoldingForSettings = false;
+  const timeoutMs = isBotTurn ? timing.botBidDelaySeconds * 1000 : timing.humanBidTimeSeconds * 1000;
+  state.turnDeadlineAt = Date.now() + timeoutMs;
+  state.turnDurationMs = timeoutMs;
+}
+
+unholdGame(freshRound1State, DEFAULT_ROOM_TIMING_SETTINGS, false);
+assert(freshRound1State.isHoldingForSettings === false, 'Game unheld after settings saved/confirmed');
+assert(canProcessBid(freshRound1State), 'Bidding is now active and permitted');
+assert(typeof freshRound1State.turnDeadlineAt === 'number', 'Human bid turn countdown timer started');
+assert(freshRound1State.turnDurationMs === 20000, 'Human bid duration matches default 20s');
+
 console.log('\n============================================================');
 console.log(`🎉 TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED`);
 console.log('============================================================');

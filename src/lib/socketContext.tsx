@@ -17,7 +17,8 @@ interface SocketContextType {
   setSeatBotEngine: (roomId: string, seat: Seat, engine: BotEngineType) => void;
   setDefaultBotEngine: (roomId: string, engine: BotEngineType) => void;
   setTurnTimeout: (roomId: string, turnTimeoutMs: number) => void;
-  updateRoomTiming: (roomId: string, settings: RoomTimingSettings, userId?: string) => void;
+  updateRoomTiming: (roomId: string, settings: RoomTimingSettings, userId?: string, startBidding?: boolean) => void;
+  startBidding: (roomId: string, userId?: string) => void;
   makeBid: (roomId: string, bid: any) => void;
   declareTrump: (roomId: string, suit: any) => void;
   playCard: (roomId: string, seat: any, card: any) => void;
@@ -231,8 +232,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     send({ type: 'set_turn_timeout', roomId, turnTimeoutMs });
   }, [send]);
 
-  const updateRoomTiming = useCallback((roomId: string, settings: RoomTimingSettings, userId?: string) => {
-    send({ type: 'update_room_timing', roomId, settings, userId });
+  const updateRoomTiming = useCallback((roomId: string, settings: RoomTimingSettings, userId?: string, startBidding?: boolean) => {
+    send({ type: 'update_room_timing', roomId, settings, userId, startBidding });
+  }, [send]);
+
+  const startBidding = useCallback((roomId: string, userId?: string) => {
+    send({ type: 'start_bidding', roomId, userId });
   }, [send]);
 
   const makeBid = useCallback((roomId: string, bid: any) => {
@@ -305,6 +310,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setDefaultBotEngine,
         setTurnTimeout,
         updateRoomTiming,
+        startBidding,
         makeBid,
         declareTrump,
         playCard,

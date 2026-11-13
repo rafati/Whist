@@ -382,6 +382,14 @@ function scheduleBotActionIfNeeded(roomId: string) {
   clearTurnTimeoutTimer(roomId);
 
   const { gameState, seats } = room;
+
+  // If game is holding for creator to configure timing settings, do not schedule any bids or timers
+  if (gameState.isHoldingForSettings) {
+    gameState.turnDeadlineAt = null;
+    gameState.turnDurationMs = null;
+    return;
+  }
+
   const timings = room.timingSettings || DEFAULT_ROOM_TIMING_SETTINGS;
 
   const botBidDelayMs = Math.max(200, Math.round((timings.botBidDelaySeconds ?? 2.5) * 1000));
@@ -646,6 +654,10 @@ async function handleBotPlayCard(roomId: string, seat: Seat, isHumanTimeoutAutoP
 // Bidding Engine
 function processBid(room: Room, bid: Bid) {
   const state = room.gameState;
+  if (state.isHoldingForSettings) {
+    console.warn(`[Bidding] Bid rejected: room ${room.id} is holding for timing settings`);
+    return;
+  }
   const currentSeat = state.currentBidder;
   if (!currentSeat || bid.seat !== currentSeat) return;
 
@@ -1080,9 +1092,15 @@ function executeDealRound(room: Room, dealerSeat: Seat, roundNumber?: number) {
   }
 
   // All 4 players have at least one winning card - proceed to bidding
+  const wasHolding = room.gameState.isHoldingForSettings;
   room.gameState = startDealRound(room.gameState, dealerSeat, hands);
   if (typeof roundNumber === 'number') {
     room.gameState.roundNumber = roundNumber;
+  }
+
+  // When starting round 1 of a game, hold the game before bidding starts until creator confirms/saves timing settings
+  if (roundNumber === 1 && wasHolding !== false) {
+    room.gameState.isHoldingForSettings = true;
   }
 
   // Initialize AI Bot sessions on port 8008 for any bot seat configured as 'api'
@@ -1115,6 +1133,7 @@ function advanceToNextRound(room: Room) {
 function resetMatch(room: Room) {
   const randomDealer = SEATS[Math.floor(Math.random() * SEATS.length)];
   const freshState = createInitialGameState(randomDealer);
+  freshState.isHoldingForSettings = true;
   room.gameState = freshState;
   executeDealRound(room, randomDealer, 1);
 }
@@ -1374,9 +1393,35 @@ wss.on('connection', (ws) => {
         room.turnTimeoutMs = room.timingSettings.humanPlayCardTimeSeconds * 1000;
         console.log(`[TimingSettings] Updated timings for room ${room.id}:`, room.timingSettings);
 
+        if (room.gameState.isHoldingForSettings) {
+          room.gameState.isHoldingForSettings = false;
+          console.log(`[TimingSettings] Room ${room.id} unheld for bidding after timing saved.`);
+        }
+
         scheduleBotActionIfNeeded(room.id);
         broadcastRoom(room.id);
         broadcastRoomList();
+        return;
+      }
+
+      if (msg.type === 'start_bidding') {
+        const room = rooms.get(msg.roomId);
+        if (!room) return;
+
+        const humanSeats = Object.values(room.seats).filter((p) => p && !p.isBot);
+        const isCreator = (msg.userId && room.hostId === msg.userId) || humanSeats.length <= 1;
+        if (!isCreator) {
+          console.warn(`[StartBidding] Unauthorized attempt by user ${msg.userId} for room ${room.id} (host is ${room.hostId})`);
+          return;
+        }
+
+        if (room.gameState.isHoldingForSettings) {
+          room.gameState.isHoldingForSettings = false;
+          console.log(`[StartBidding] Room ${room.id} unheld for bidding.`);
+          scheduleBotActionIfNeeded(room.id);
+          broadcastRoom(room.id);
+          broadcastRoomList();
+        }
         return;
       }
 

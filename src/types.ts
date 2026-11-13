@@ -102,6 +102,7 @@ export interface GameState {
   turnDeadlineAt?: number | null;
   turnDurationMs?: number | null;
   lastAutoPlayNotice?: AutoPlayNotice | null;
+  isHoldingForSettings?: boolean; // Holds the game before bidding starts until creator confirms/saves timing settings
 
   // Hands
   hands: Record<Seat, Card[]>;
@@ -218,7 +219,8 @@ export type ClientMessage =
   | { type: 'set_seat_bot_engine'; roomId: string; seat: Seat; engine: BotEngineType }
   | { type: 'set_default_bot_engine'; roomId: string; engine: BotEngineType }
   | { type: 'set_turn_timeout'; roomId: string; turnTimeoutMs: number }
-  | { type: 'update_room_timing'; roomId: string; settings: RoomTimingSettings; userId?: string }
+  | { type: 'update_room_timing'; roomId: string; settings: RoomTimingSettings; userId?: string; startBidding?: boolean }
+  | { type: 'start_bidding'; roomId: string; userId?: string }
   | { type: 'make_bid'; roomId: string; bid: Bid }
   | { type: 'declare_trump'; roomId: string; suit: Suit }
   | { type: 'play_card'; roomId: string; seat: Seat; card: Card }

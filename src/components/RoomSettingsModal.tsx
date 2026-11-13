@@ -13,6 +13,8 @@ import {
   X,
   Gauge,
   Info,
+  Play,
+  Pause,
 } from 'lucide-react';
 import { playClickSound } from '../lib/throwSounds.ts';
 
@@ -21,7 +23,9 @@ interface RoomSettingsModalProps {
   onClose: () => void;
   room: Room;
   myUser: UserProfile;
-  onUpdateTimingSettings: (settings: RoomTimingSettings) => void;
+  isHoldingGame?: boolean;
+  onStartWithDefaults?: () => void;
+  onUpdateTimingSettings: (settings: RoomTimingSettings, startBidding?: boolean) => void;
 }
 
 export const TIMING_PRESET_BLITZ: RoomTimingSettings = {
@@ -71,6 +75,8 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   onClose,
   room,
   myUser,
+  isHoldingGame,
+  onStartWithDefaults,
   onUpdateTimingSettings,
 }) => {
   const [settings, setSettings] = useState<RoomTimingSettings>({
@@ -131,12 +137,12 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
   const handleSave = () => {
     if (!isHost) return;
     playClickSound();
-    onUpdateTimingSettings(settings);
+    onUpdateTimingSettings(settings, isHoldingGame);
     setHasSaved(true);
     setTimeout(() => {
       setHasSaved(false);
       onClose();
-    }, 500);
+    }, 400);
   };
 
   return (
@@ -173,20 +179,31 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Creator Permission Status Banner */}
-        <div className="px-4 py-2 border-b border-slate-800/60 bg-slate-900/40">
+        {/* Creator Permission Status Banner & Pre-Game Hold Notification */}
+        <div className="px-4 py-2 border-b border-slate-800/60 bg-slate-900/40 space-y-1.5">
+          {isHoldingGame && (
+            <div className="p-2 rounded-lg bg-emerald-950/90 border border-emerald-500/60 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[11px] text-emerald-200 font-semibold">
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span>Game Paused: Bidding is on hold until table timings are confirmed.</span>
+              </div>
+            </div>
+          )}
           {isHost ? (
             <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
               <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>
-                <strong>Room Creator Control:</strong> Changes apply instantly to all players and bots in this table.
+                <strong>Room Creator Control:</strong> {isHoldingGame ? 'Confirm your speed preferences to start bidding.' : 'Changes apply instantly to all players and bots in this table.'}
               </span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-[11px] text-amber-300 font-medium">
               <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>
-                <strong>Host Only (View Mode):</strong> Only the creator of this game can modify timing settings.
+                <strong>Host Only (View Mode):</strong> {isHoldingGame ? 'Waiting for creator to confirm settings before bidding begins.' : 'Only the creator of this game can modify timing settings.'}
               </span>
             </div>
           )}
@@ -517,6 +534,21 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {isHoldingGame && isHost && onStartWithDefaults && (
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  onStartWithDefaults();
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 border border-slate-700"
+                title="Start bidding immediately with default timings"
+              >
+                <Play className="w-3 h-3 text-emerald-400" />
+                <span>Start with Defaults</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -525,7 +557,7 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
               }}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all cursor-pointer"
             >
-              Close
+              {isHoldingGame ? 'Cancel' : 'Close'}
             </button>
 
             {isHost && (
@@ -539,8 +571,13 @@ export const RoomSettingsModal: React.FC<RoomSettingsModalProps> = ({
                     <Check className="w-3.5 h-3.5" />
                     <span>Applied!</span>
                   </>
+                ) : isHoldingGame ? (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Confirm &amp; Start Bidding</span>
+                  </>
                 ) : (
-                  <span>Save & Apply</span>
+                  <span>Save &amp; Apply</span>
                 )}
               </button>
             )}
