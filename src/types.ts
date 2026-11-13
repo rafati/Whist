@@ -13,12 +13,15 @@ export interface Card {
   rank: Rank;
 }
 
+export type BotEngineType = 'builtin' | 'api';
+
 export interface UserProfile {
   id: string;
   name: string;
   email: string;
   avatar: string;
   isBot?: boolean;
+  botEngine?: BotEngineType;
   isDisconnected?: boolean;
   botReplaceAt?: number;
 }
@@ -136,6 +139,16 @@ export interface GameState {
   roundScores: RoundScoreBreakdown[];
   winnerTeam: Team | null;
   winnerReason: string | null;
+
+  // Bot Decision Inspector & Tactical Telemetry
+  lastBotReasoning?: {
+    seat: Seat;
+    action: 'bid' | 'play';
+    cardId?: string;
+    bidText?: string;
+    reason: string;
+    timestamp: number;
+  } | null;
 }
 
 export interface Room {
@@ -147,6 +160,8 @@ export interface Room {
   seats: Record<Seat, UserProfile | null>;
   gameState: GameState;
   botDifficulty?: 'casual' | 'super';
+  defaultBotEngine?: BotEngineType;
+  botEngines?: Partial<Record<Seat, BotEngineType>>;
   isPrivate?: boolean; // Private friend rooms are hidden from public lobby list and joined via code/link
   isMatchmaking?: boolean; // Public matchmaking queue table
   matchmakingAutoStartAt?: number | null; // Timestamp when remaining matchmaking seats auto-fill with bots
@@ -173,6 +188,8 @@ export type ClientMessage =
   | { type: 'switch_to_bot'; roomId: string; seat: Seat }
   | { type: 'fill_bots'; roomId: string }
   | { type: 'set_bot_difficulty'; roomId: string; difficulty: 'casual' | 'super' }
+  | { type: 'set_seat_bot_engine'; roomId: string; seat: Seat; engine: BotEngineType }
+  | { type: 'set_default_bot_engine'; roomId: string; engine: BotEngineType }
   | { type: 'set_turn_timeout'; roomId: string; turnTimeoutMs: number }
   | { type: 'make_bid'; roomId: string; bid: Bid }
   | { type: 'declare_trump'; roomId: string; suit: Suit }

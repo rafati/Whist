@@ -1,0 +1,27 @@
+{
+  "status": "completed",
+  "mode": "machine_speed",
+  "totalMatches": 1000,
+  "durationSec": 28.137,
+  "matchesPerSec": 35.5,
+  "teamA": {
+    "name": "Built-in Pro SuperBot (North & South)",
+    "wins": 981,
+    "winPct": 98.1,
+    "contractsAttempted": 2346,
+    "contractsMade": 1938,
+    "contractSuccessPct": 82.6,
+    "averageTricksPerRound": 8.1
+  },
+  "teamB": {
+    "name": "WhistAPI Engine Bot (West & East)",
+    "wins": 19,
+    "winPct": 1.9,
+    "contractsAttempted": 2142,
+    "contractsMade": 558,
+    "contractSuccessPct": 26.1,
+    "averageTricksPerRound": 4.87
+  },
+  "averageRoundsPerMatch": 4.5,
+  "lastUpdated": "2026-11-13T17:23:26.077Z"
+}

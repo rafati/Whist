@@ -206,7 +206,7 @@ export function reconstructHandProbabilities(
   const otherSeats: Seat[] = (['North', 'West', 'South', 'East'] as Seat[]).filter((s) => s !== observerSeat);
 
   const getSeatRemainingCount = (s: Seat): number => {
-    if (gameState.cardsCount && typeof gameState.cardsCount[s] === 'number') {
+    if (gameState.cardsCount && typeof gameState.cardsCount[s] === 'number' && gameState.cardsCount[s] > 0) {
       return gameState.cardsCount[s];
     }
     if (gameState.hands && gameState.hands[s]?.length) {
@@ -538,11 +538,49 @@ export function sampleConsistentDeals(
 }
 
 // -------------------------------------------------------------
-// Exact Micro-DDS (Alpha-Beta Minimax Solver for Endgame Tricks)
+// Master Card Tracker (Promoted Winners)
 // -------------------------------------------------------------
 
 /**
- * Exact Alpha-Beta Minimax Solver for double-dummy endgame play (tricks 10-13, <= 4 cards per player).
+ * Determines whether a given card is currently the highest remaining unplayed card in its suit.
+ * (e.g. Ace is always master; King is master if Ace has been played; Queen is master if Ace & King have been played).
+ */
+export function isMasterCard(card: Card, gameState: GameState): boolean {
+  const suit = card.suit;
+  const rankVal = RANK_VALUES[card.rank];
+  if (rankVal === 14) return true; // Ace is always the natural master card
+
+  // Collect all played cards of this suit from tricks history and current trick
+  const playedRanks = new Set<string>();
+  for (const trick of gameState.tricksHistory || []) {
+    for (const p of trick.cards || []) {
+      if (p.card.suit === suit) {
+        playedRanks.add(p.card.rank);
+      }
+    }
+  }
+  for (const p of gameState.currentTrick || []) {
+    if (p.card.suit === suit) {
+      playedRanks.add(p.card.rank);
+    }
+  }
+
+  // Check if every rank strictly higher than card.rank has already been played
+  for (const r of RANKS) {
+    if (RANK_VALUES[r] > rankVal && !playedRanks.has(r)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// -------------------------------------------------------------
+// Exact Micro-DDS (Alpha-Beta Minimax Solver for Mid & Endgame Tricks)
+// -------------------------------------------------------------
+
+/**
+ * Exact Alpha-Beta Minimax Solver for double-dummy mid/endgame play (tricks 8-13, <= 6 cards per player).
  * Computes the exact maximum number of remaining tricks targetTeam can win against optimal defense.
  */
 export function solveMicroDDS(
@@ -565,9 +603,9 @@ export function solveMicroDDS(
     return 0;
   }
 
-  // Micro-DDS is exclusively for tricks 10-13 (<= 16 cards total).
+  // Micro-DDS handles up to 6 cards per player (<= 24 cards total).
   // If invoked with larger hands or recursion node budget is exceeded, abort search safely.
-  if (totalRemaining > 16 || ++nodeCounter.count > 10000) {
+  if (totalRemaining > 24 || ++nodeCounter.count > 15000) {
     return 0;
   }
 
@@ -716,15 +754,16 @@ export function getMicroDDSCardPlay(
       }
 
       let tricksWon = 0;
+      const remLimit = Math.max(4, hand.length);
       if (trick.length === 3) {
         const completedTrick = [...trick, { seat, card: cand }];
         const trickWinner = evaluateTrickWinner(completedTrick, trumpSuit).winner;
         const trickPt = getTeam(trickWinner) === myTeam ? 1 : 0;
-        const rem = solveMicroDDS(simHands, trumpSuit, myTeam, trickWinner, [], 0, 4);
+        const rem = solveMicroDDS(simHands, trumpSuit, myTeam, trickWinner, [], 0, remLimit);
         tricksWon = trickPt + rem;
       } else {
         const ongoingTrick = [...trick, { seat, card: cand }];
-        tricksWon = solveMicroDDS(simHands, trumpSuit, myTeam, leader, ongoingTrick, 0, 4);
+        tricksWon = solveMicroDDS(simHands, trumpSuit, myTeam, leader, ongoingTrick, 0, remLimit);
       }
 
       cardScoreSum += tricksWon;
@@ -1185,14 +1224,19 @@ export function getGrandmasterOpeningLead(
 }
 
 // -------------------------------------------------------------
-// Tournament-Grade Super Bot Card Play
+// Tournament-Grade Super Bot Card Play (Tactical Engine)
 // -------------------------------------------------------------
 
-export function getSuperBotCardPlay(
+export interface BotCardPlayDecision {
+  card: Card;
+  reason: string;
+}
+
+export function getSuperBotCardPlayWithReason(
   gameState: GameState,
   seat: Seat,
   trumpSuit: TrumpSuit
-): Card {
+): BotCardPlayDecision {
   const hand = gameState.hands[seat];
   if (!hand || hand.length === 0) {
     throw new Error('No cards in hand for seat ' + seat);
@@ -1200,12 +1244,17 @@ export function getSuperBotCardPlay(
 
   const trick = gameState.currentTrick;
   const isOpeningLead = trick.length === 0;
+  const isSecondHand = trick.length === 1;
+  const isThirdHand = trick.length === 2;
+  const isFourthHand = trick.length === 3;
   const ledSuit = isOpeningLead ? null : trick[0].card.suit;
 
   const legalCards = hand.filter((c) => isCardLegal(c, hand, ledSuit));
   if (legalCards.length === 1) {
-    return legalCards[0];
+    return { card: legalCards[0], reason: 'Forced: only legal card in hand' };
   }
+
+  const inLedSuit = ledSuit ? legalCards.filter((c) => c.suit === ledSuit) : [];
 
   const isNT = trumpSuit === 'NT';
   const myTeam = getTeam(seat);
@@ -1216,13 +1265,13 @@ export function getSuperBotCardPlay(
   const bayesian = reconstructHandProbabilities(gameState, seat);
   const isDeclarerTeam = gameState.declarer && getTeam(gameState.declarer) === myTeam;
 
-  // Exact Endgame Micro-DDS Solver for tricks 10-13 (<= 4 cards in hand)
+  // Exact Mid & Endgame Micro-DDS Solver for tricks 8-13 (<= 6 cards in hand)
   const maxOtherCards = Math.max(
     ...(['North', 'West', 'South', 'East'] as Seat[])
       .filter((s) => s !== seat)
       .map((s) => gameState.cardsCount?.[s] ?? gameState.hands?.[s]?.length ?? hand.length)
   );
-  if (hand.length <= 4 && maxOtherCards <= 4) {
+  if (hand.length <= 6 && maxOtherCards <= 6) {
     const microDdsPlay = getMicroDDSCardPlay(gameState, seat, trumpSuit);
     if (microDdsPlay) {
       let isMicroDdsBlunder = false;
@@ -1245,19 +1294,41 @@ export function getSuperBotCardPlay(
         }
       }
 
-      // Invariant Guard 2: Leading trick - NEVER lead trump if opponents have 0 trumps or trumps were already drawn
+      // Invariant Guard 2: Leading trick - NEVER lead trump if opponents have 0 trumps
       if (isOpeningLead && !isNT && microDdsPlay.suit === trumpSuit) {
         if (nonTrumpCards.length > 0) {
           const oppTrumpsEst = countRemainingOpponentTrumps(gameState, seat, trumpSuit);
-          const trumpsLedBefore = (gameState.tricksHistory || []).some((t) => t.ledSuit === trumpSuit);
-          if (oppTrumpsEst === 0 || trumpsLedBefore) {
+          if (oppTrumpsEst === 0) {
+            isMicroDdsBlunder = true;
+          }
+        }
+      }
+
+      // Invariant Guard 3: Second hand holding A-K - NEVER duck!
+      if (isSecondHand && inLedSuit.length >= 2) {
+        const ranks = new Set(inLedSuit.map((c) => c.rank));
+        if (ranks.has('A') && ranks.has('K') && microDdsPlay.rank !== 'K') {
+          isMicroDdsBlunder = true;
+        }
+      }
+
+      // Invariant Guard 4: Declarer with master trumps while opponents hold trumps - NEVER lead side suits before stripping trumps!
+      if (isOpeningLead && !isNT && isDeclarerTeam && microDdsPlay.suit !== trumpSuit) {
+        const oppTrumpsEst = countRemainingOpponentTrumps(gameState, seat, trumpSuit);
+        const myTrumps = legalCards.filter((c) => c.suit === trumpSuit);
+        if (oppTrumpsEst > 0 && myTrumps.length > 0) {
+          myTrumps.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+          if (isMasterCard(myTrumps[0], gameState)) {
             isMicroDdsBlunder = true;
           }
         }
       }
 
       if (!isMicroDdsBlunder) {
-        return microDdsPlay;
+        return {
+          card: microDdsPlay,
+          reason: `Micro-DDS minimax line: played ${microDdsPlay.id} (${hand.length} tricks remaining)`,
+        };
       }
     }
   }
@@ -1268,20 +1339,30 @@ export function getSuperBotCardPlay(
   if (isOpeningLead) {
     // Trick 1 Opening Lead: Grandmaster Opening Lead Engine
     if (gameState.tricksHistory.length === 0) {
-      return getGrandmasterOpeningLead(gameState, seat, trumpSuit);
+      const lead = getGrandmasterOpeningLead(gameState, seat, trumpSuit);
+      return { card: lead, reason: `Grandmaster trick 1 opening lead: ${lead.id}` };
     }
 
     // Subsequent Trick Leads (Tricks 2-13):
-    // A. Declarer Trump Extraction:
+    // A. Declarer Continuous Trump Extraction:
     if (!isNT && isDeclarerTeam) {
-      const trumpsLedBefore = (gameState.tricksHistory || []).some((t) => t.ledSuit === trumpSuit);
       const opponentTrumpsLeft = countRemainingOpponentTrumps(gameState, seat, trumpSuit);
       const myTrumps = legalCards.filter((c) => c.suit === trumpSuit);
 
-      // Extract trumps ONLY on the first trump lead of the hand, and only if opponents hold trumps
-      if (!trumpsLedBefore && opponentTrumpsLeft > 0 && myTrumps.length > 0) {
+      // Continuous extraction: as long as opponents hold trumps, keep pulling if we have master trump or length surplus
+      if (opponentTrumpsLeft > 0 && myTrumps.length > 0) {
         myTrumps.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-        return myTrumps[0];
+        const highestTrump = myTrumps[0];
+        const isMaster = isMasterCard(highestTrump, gameState);
+        const hasSurplus = myTrumps.length >= opponentTrumpsLeft;
+        const hasTouching = myTrumps.length >= 2 && RANK_VALUES[myTrumps[0].rank] - RANK_VALUES[myTrumps[1].rank] === 1;
+
+        if (isMaster || hasSurplus || hasTouching) {
+          return {
+            card: highestTrump,
+            reason: `Continuous declarer trump extraction: ${highestTrump.id} (${opponentTrumpsLeft} opp trumps left)`,
+          };
+        }
       }
     }
 
@@ -1296,7 +1377,7 @@ export function getSuperBotCardPlay(
               const leadCards = legalCards.filter((c) => c.suit === suit);
               if (leadCards.length > 0) {
                 leadCards.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
-                return leadCards[0]; // Partner ruffs and kills declarer trick!
+                return { card: leadCards[0], reason: `Led partner's void suit ${suit} for immediate defensive ruff` };
               }
             }
           }
@@ -1304,7 +1385,6 @@ export function getSuperBotCardPlay(
       }
 
       // B2. Partner Attitude Continuation:
-      // If we led an honor recently and partner encouraged, continue the suit!
       const lastTrick = gameState.tricksHistory[gameState.tricksHistory.length - 1];
       if (lastTrick && lastTrick.cards.length > 0 && lastTrick.cards[0].seat === seat) {
         const lastSuit = lastTrick.cards[0].card.suit;
@@ -1314,7 +1394,7 @@ export function getSuperBotCardPlay(
             const inSuit = legalCards.filter((c) => c.suit === lastSuit);
             if (inSuit.length > 0) {
               inSuit.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-              return inSuit[0];
+              return { card: inSuit[0], reason: `Continued partner's encouraged suit ${lastSuit} with ${inSuit[0].id}` };
             }
           }
         }
@@ -1326,24 +1406,24 @@ export function getSuperBotCardPlay(
         const inPref = legalCards.filter((c) => c.suit === prefSuit);
         if (inPref.length > 0) {
           inPref.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-          return inPref[0];
+          return { card: inPref[0], reason: `Led partner's preferred discard suit ${prefSuit} with ${inPref[0].id}` };
         }
       }
 
       // B4. NT Defense Lead on Trick 2+:
-      // If defending against NT and this is our first lead, employ Grandmaster NT opening lead principles:
       if (isNT) {
-        return getGrandmasterOpeningLead(gameState, seat, 'NT');
+        const ntLead = getGrandmasterOpeningLead(gameState, seat, 'NT');
+        return { card: ntLead, reason: `Grandmaster NT defensive lead: ${ntLead.id}` };
       }
     }
 
-    // C. Cash Guaranteed Winners (Aces/Kings) with Bayesian Void Verification:
+    // C. Cash Guaranteed Winners (Aces and Promoted Master Cards) with Bayesian Void Verification:
     const opponentTrumpsLeft = isNT ? 0 : countRemainingOpponentTrumps(gameState, seat, trumpSuit);
-    const safeAces = legalCards.filter((c) => {
-      if (c.rank !== 'A') return false;
+    const safeMasterCards = legalCards.filter((c) => {
+      if (!isMasterCard(c, gameState)) return false;
       if (isNT) return true;
-      if (c.suit === trumpSuit) return false;
-      // Use Bayesian void probabilities: if any opponent is void and has trumps, avoid cashing!
+      if (c.suit === trumpSuit) return true;
+      // Bayesian void check: avoid cashing side honors if opponent is likely void and holds trumps
       const opp1VoidProb = bayesian.playerDistributions[opp1]?.suitVoidProbabilities[c.suit] || 0;
       const opp2VoidProb = bayesian.playerDistributions[opp2]?.suitVoidProbabilities[c.suit] || 0;
       if (opponentTrumpsLeft > 0 && (opp1VoidProb > 0.6 || opp2VoidProb > 0.6 || beliefs[opp1].voids[c.suit] || beliefs[opp2].voids[c.suit])) {
@@ -1352,8 +1432,14 @@ export function getSuperBotCardPlay(
       return true;
     });
 
-    if (safeAces.length > 0) {
-      return safeAces[0];
+    if (safeMasterCards.length > 0) {
+      safeMasterCards.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+      const card = safeMasterCards[0];
+      const isAce = card.rank === 'A';
+      return {
+        card,
+        reason: isAce ? `Cashed guaranteed winner: Ace of ${card.suit}` : `Cashed promoted master card: ${card.id}`,
+      };
     }
 
     // D. Lead Top of Honor Sequence (K from KQ, Q from QJ, J from J10)
@@ -1361,19 +1447,20 @@ export function getSuperBotCardPlay(
       if (!isNT && suit === trumpSuit) continue;
       const inSuit = legalCards.filter((c) => c.suit === suit);
       if (inSuit.some((c) => c.rank === 'K') && inSuit.some((c) => c.rank === 'Q')) {
-        return inSuit.find((c) => c.rank === 'K')!;
+        const card = inSuit.find((c) => c.rank === 'K')!;
+        return { card, reason: `Led King from touching sequence K-Q in ${suit}` };
       }
       if (inSuit.some((c) => c.rank === 'Q') && inSuit.some((c) => c.rank === 'J')) {
-        return inSuit.find((c) => c.rank === 'Q')!;
+        const card = inSuit.find((c) => c.rank === 'Q')!;
+        return { card, reason: `Led Queen from touching sequence Q-J in ${suit}` };
       }
       if (inSuit.some((c) => c.rank === 'J') && inSuit.some((c) => c.rank === '10')) {
-        return inSuit.find((c) => c.rank === 'J')!;
+        const card = inSuit.find((c) => c.rank === 'J')!;
+        return { card, reason: `Led Jack from touching sequence J-10 in ${suit}` };
       }
     }
 
-    // E. Lead highest card in strongest suit
-    // CRITICAL TACTICAL INVARIANT: NEVER lead trump in Section E when holding non-trump cards!
-    // Section A already handles active declarer trump drawing. Section E is dedicated to establishing side suits.
+    // E. Lead Side Suit to Establish It (with Low Lead from Unsupported Honors)
     const nonTrumpCards = legalCards.filter((c) => isNT || c.suit !== trumpSuit);
     if (!isNT && nonTrumpCards.length > 0) {
       const nonTrumpHand = hand.filter((c) => c.suit !== trumpSuit);
@@ -1381,20 +1468,32 @@ export function getSuperBotCardPlay(
       const inSideSuit = nonTrumpCards.filter((c) => c.suit === strongestSide.suit);
       if (inSideSuit.length > 0) {
         inSideSuit.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-        return inSideSuit[0];
+        const topCard = inSideSuit[0];
+        const isHonor = ['K', 'Q', 'J'].includes(topCard.rank);
+        const isTouching = inSideSuit.length >= 2 && RANK_VALUES[inSideSuit[0].rank] - RANK_VALUES[inSideSuit[1].rank] === 1;
+        const isMaster = isMasterCard(topCard, gameState);
+
+        // If holding an unsupported non-master honor with length >= 3 (e.g. K-8-3 or Q-9-4),
+        // lead low (4th-best or lowest spot) to protect the honor and develop suit!
+        if (isHonor && !isTouching && !isMaster && inSideSuit.length >= 3) {
+          const spotIndex = inSideSuit.length >= 4 ? 3 : inSideSuit.length - 1;
+          const chosen = inSideSuit[spotIndex];
+          return { card: chosen, reason: `Led 4th-best/low ${chosen.id} to protect unsupported ${topCard.id} and develop suit` };
+        }
+        return { card: topCard, reason: `Led ${topCard.id} in strongest side suit ${strongestSide.suit}` };
       }
       nonTrumpCards.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-      return nonTrumpCards[0];
+      return { card: nonTrumpCards[0], reason: `Led ${nonTrumpCards[0].id} to establish side suit` };
     }
 
     const strongest = getStrongestSuit(hand);
     const inStrongest = legalCards.filter((c) => c.suit === strongest.suit);
     if (inStrongest.length > 0) {
       inStrongest.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-      return inStrongest[0];
+      return { card: inStrongest[0], reason: `Led top card ${inStrongest[0].id} in strongest suit` };
     }
 
-    return legalCards[0];
+    return { card: legalCards[0], reason: `Led ${legalCards[0].id}` };
   }
 
   // =========================================================
@@ -1402,10 +1501,6 @@ export function getSuperBotCardPlay(
   // =========================================================
   const currentLeaderWinner = evaluateTrickWinner(trick, trumpSuit);
   const partnerIsWinning = currentLeaderWinner.winner === partner;
-  const inLedSuit = legalCards.filter((c) => c.suit === ledSuit);
-  const isFourthHand = trick.length === 3;
-  const isSecondHand = trick.length === 1;
-  const isThirdHand = trick.length === 2;
 
   // A. Partner is currently winning the trick:
   if (partnerIsWinning) {
@@ -1419,17 +1514,18 @@ export function getSuperBotCardPlay(
       // Attitude signal: if partner led an honor (A, K, Q):
       if (isPartnerHonorLead) {
         const trumps = hand.filter((c) => c.suit === trumpSuit);
-        return getAttitudeSignalCard(inLedSuit, trick[0].card, isNT, trumps.length > 0);
+        const sig = getAttitudeSignalCard(inLedSuit, trick[0].card, isNT, trumps.length > 0);
+        return { card: sig, reason: `Attitude signal (${sig.id}) to partner's honor lead` };
       }
 
       // If 4th hand, partner has already won the trick! Duck lowest card in led suit.
       if (isFourthHand) {
-        return inLedSuitAsc[0];
+        return { card: inLedSuitAsc[0], reason: `Partner already won trick: ducked lowest card ${inLedSuitAsc[0].id} in 4th hand` };
       }
 
-      // If partner's winning card is Ace, King, or Queen: duck lowest card to conserve honors and avoid overtaking partner
+      // If partner's winning card is Ace, King, or Queen: duck lowest card to conserve honors
       if (['A', 'K', 'Q'].includes(partnerWinningRank)) {
-        return inLedSuitAsc[0];
+        return { card: inLedSuitAsc[0], reason: `Partner winning with ${partnerWinningRank}: ducked ${inLedSuitAsc[0].id} to conserve strength` };
       }
 
       // Third Hand High when partner led spot card (3rd hand):
@@ -1446,61 +1542,59 @@ export function getSuperBotCardPlay(
             const prev = winningInSuit[i - 1];
             const curr = winningInSuit[i];
             if (RANK_VALUES[prev.rank] - RANK_VALUES[curr.rank] === 1) {
-              if (chosenCard === prev) {
-                chosenCard = curr;
-              }
+              if (chosenCard === prev) chosenCard = curr;
             } else {
               break;
             }
           }
-          return chosenCard;
+          return { card: chosenCard, reason: `Third hand high: played ${chosenCard.id} to secure trick for partnership` };
         }
       }
 
-      return inLedSuitAsc[0];
+      return { card: inLedSuitAsc[0], reason: `Partner winning: ducked lowest spot ${inLedSuitAsc[0].id}` };
     } else {
       // 2. Void in led suit (Partner is winning!):
       const nonTrumpCards = legalCards.filter((c) => isNT || c.suit !== trumpSuit);
 
       // On 4th hand: Partner ALREADY WON the trick! NEVER ruff partner's trick!
-      // Discard an off-suit loser using Suit-Preference Discard (or lowest non-trump)
       if (isFourthHand) {
         if (nonTrumpCards.length > 0) {
-          return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+          const discard = getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+          return { card: discard, reason: `Partner won trick: discarded off-suit loser ${discard.id}` };
         }
-        // Only trumps remain: must play lowest trump
         const trumpsAsc = [...legalCards].sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
-        return trumpsAsc[0];
+        return { card: trumpsAsc[0], reason: `Partner won trick: forced lowest trump discard ${trumpsAsc[0].id}` };
       }
 
       // On 3rd hand:
       // INVARIANT 1: If partner is winning with a TRUMP, NEVER overtrump partner!
       if (currentLeaderWinner.winningCard.suit === trumpSuit) {
         if (nonTrumpCards.length > 0) {
-          return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+          const discard = getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+          return { card: discard, reason: `Partner winning with trump: discarded loser ${discard.id}` };
         }
         const trumpsAsc = [...legalCards].sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
-        return trumpsAsc[0];
+        return { card: trumpsAsc[0], reason: `Partner winning with trump: lowest trump ${trumpsAsc[0].id}` };
       }
 
-      // INVARIANT 2: If partner is winning with an honor (A, K, Q, J): NEVER RUFF! Discard off-suit loser.
+      // INVARIANT 2: If partner is winning with an honor (A, K, Q, J): NEVER RUFF!
       if (['A', 'K', 'Q', 'J'].includes(partnerWinningRank)) {
         if (nonTrumpCards.length > 0) {
-          return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+          const discard = getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+          return { card: discard, reason: `Partner winning with ${partnerWinningRank}: discarded loser ${discard.id}` };
         }
       }
 
-      // INVARIANT 3: If 4th hand opponent cannot beat partner's card, DO NOT RUFF! Discard off-suit loser.
+      // INVARIANT 3: If 4th hand opponent cannot beat partner's card, DO NOT RUFF!
       const opp4 = getNextSeat(seat);
       const opp4IsVoidInTrump = !isNT ? beliefs[opp4]?.voids?.[trumpSuit] : false;
       const opp4IsVoidInLed = ledSuit ? beliefs[opp4]?.voids?.[ledSuit] : false;
       if (opp4IsVoidInTrump && opp4IsVoidInLed && nonTrumpCards.length > 0) {
-        return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+        const discard = getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+        return { card: discard, reason: `4th hand cannot beat partner: discarded loser ${discard.id}` };
       }
 
-      // INVARIANT 4: Only if partner led a weak spot card (<= 9) and 4th hand might beat it,
-      // consider ruffing with a cheap trump (rank <= 10). NEVER waste honor trumps (J, Q, K, A)
-      // over partner's winning card if we have off-suit cards to discard!
+      // INVARIANT 4: Only if partner led a weak spot card (<= 9) and 4th hand might beat it:
       if (!isNT) {
         const trumps = legalCards.filter((c) => c.suit === trumpSuit);
         const winningTrumps = trumps.filter((c) => {
@@ -1512,16 +1606,17 @@ export function getSuperBotCardPlay(
           if (nonTrumpCards.length > 0) {
             const cheapWinningTrumps = winningTrumps.filter((c) => RANK_VALUES[c.rank] <= 10);
             if (cheapWinningTrumps.length > 0) {
-              return cheapWinningTrumps[0];
+              return { card: cheapWinningTrumps[0], reason: `Ruffed with cheap trump ${cheapWinningTrumps[0].id} to protect weak lead` };
             }
-            // Discard off-suit loser instead of squandering high honor trump!
-            return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+            const discard = getSuitPreferenceDiscard(gameState, seat, nonTrumpCards, trumpSuit);
+            return { card: discard, reason: `Preserved honor trump; discarded loser ${discard.id}` };
           }
-          return winningTrumps[0];
+          return { card: winningTrumps[0], reason: `Ruffed with trump ${winningTrumps[0].id}` };
         }
       }
 
-      return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards.length > 0 ? nonTrumpCards : legalCards, trumpSuit);
+      const fallback = getSuitPreferenceDiscard(gameState, seat, nonTrumpCards.length > 0 ? nonTrumpCards : legalCards, trumpSuit);
+      return { card: fallback, reason: `Partner winning: discarded ${fallback.id}` };
     }
   }
 
@@ -1533,38 +1628,52 @@ export function getSuperBotCardPlay(
       const inLedSuitAsc = [...inLedSuit].sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
       const ledCardRank = trick[0].card.rank;
 
-      // 1. Cover an honor with an honor!
-      // When opponent leads Q, J, or 10:
+      // 1. Holding touching top master honors (e.g. A and K):
+      // Win with King immediately! Guarantees the trick, confirms Ace to partner, and avoids ducking blunders.
+      const ranks = new Set(inLedSuit.map((c) => c.rank));
+      if (ranks.has('A') && ranks.has('K')) {
+        const kCard = inLedSuit.find((c) => c.rank === 'K')!;
+        return { card: kCard, reason: `Second hand: played King from A-K to secure immediate trick` };
+      }
+
+      // 2. Cover an honor with an honor!
       if (['Q', 'J', '10'].includes(ledCardRank)) {
         const covers = inLedSuit.filter((c) => RANK_VALUES[c.rank] > RANK_VALUES[ledCardRank]);
         if (covers.length > 0) {
           covers.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
-          return covers[0]; // Lowest covering honor
+          return { card: covers[0], reason: `Second hand: covered opponent's ${ledCardRank} with honor ${covers[0].id}` };
         }
       }
 
-      // 2. Second Hand Low on spot leads (rank <= 9):
-      // Check for splitting touching honors (e.g. Q-J-10 -> play 10; K-Q -> play Q; J-10 -> play 10)
+      // 3. Second Hand Low on spot leads: check for splitting touching honors
       if (inLedSuit.length >= 2) {
-        const ranks = new Set(inLedSuit.map((c) => c.rank));
-        if (ranks.has('K') && ranks.has('Q')) return inLedSuit.find((c) => c.rank === 'Q')!;
-        if (ranks.has('Q') && ranks.has('J')) return inSuitSplit(inLedSuit, 'J', '10');
-        if (ranks.has('J') && ranks.has('10')) return inSuitSplit(inLedSuit, '10', '9');
+        if (ranks.has('K') && ranks.has('Q')) {
+          const qCard = inLedSuit.find((c) => c.rank === 'Q')!;
+          return { card: qCard, reason: `Second hand: split touching honors K-Q with ${qCard.id}` };
+        }
+        if (ranks.has('Q') && ranks.has('J')) {
+          const split = inSuitSplit(inLedSuit, 'J', '10');
+          return { card: split, reason: `Second hand: split touching honors Q-J with ${split.id}` };
+        }
+        if (ranks.has('J') && ranks.has('10')) {
+          const split = inSuitSplit(inLedSuit, '10', '9');
+          return { card: split, reason: `Second hand: split touching honors J-10 with ${split.id}` };
+        }
       }
 
       // Default Second Hand Low: play lowest spot card to protect honors & let partner in 4th hand win!
-      return inLedSuitAsc[0];
+      return { card: inLedSuitAsc[0], reason: `Second hand low: ducked spot card ${inLedSuitAsc[0].id} to conserve honors` };
     } else {
       // Void in led suit as Second Hand:
       if (!isNT) {
         const trumps = legalCards.filter((c) => c.suit === trumpSuit);
-        // If opponent led an honor (e.g. King, Ace, Queen), ruffing is valuable:
         if (trumps.length > 0 && ['A', 'K', 'Q'].includes(trick[0].card.rank)) {
           trumps.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
-          return trumps[0];
+          return { card: trumps[0], reason: `Second hand: ruffed opponent's high honor lead with trump ${trumps[0].id}` };
         }
       }
-      return getSuitPreferenceDiscard(gameState, seat, legalCards, trumpSuit);
+      const discard = getSuitPreferenceDiscard(gameState, seat, legalCards, trumpSuit);
+      return { card: discard, reason: `Second hand void: discarded off-suit loser ${discard.id}` };
     }
   }
 
@@ -1589,16 +1698,17 @@ export function getSuperBotCardPlay(
             break;
           }
         }
-        return chosenCard;
+        return { card: chosenCard, reason: `Third hand high: contested trick with ${chosenCard.id}` };
       }
 
-      // Cannot beat 2nd hand: give Count Signal (High-Low Echo on even length)
+      // Cannot beat 2nd hand: give Count Signal
       let playedCountInSuit = 0;
       for (const t of gameState.tricksHistory) {
         const p = t.cards.find((c) => c.seat === seat);
         if (p && p.card.suit === ledSuit) playedCountInSuit++;
       }
-      return getCountSignalCard(inLedSuit, playedCountInSuit);
+      const countCard = getCountSignalCard(inLedSuit, playedCountInSuit);
+      return { card: countCard, reason: `Third hand: signaled count echo with ${countCard.id}` };
     } else {
       // Void in led suit as 3rd hand:
       if (!isNT) {
@@ -1609,10 +1719,11 @@ export function getSuperBotCardPlay(
         });
         if (winningTrumps.length > 0) {
           winningTrumps.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
-          return winningTrumps[0];
+          return { card: winningTrumps[0], reason: `Third hand: ruffed opponent card with trump ${winningTrumps[0].id}` };
         }
       }
-      return getSuitPreferenceDiscard(gameState, seat, legalCards, trumpSuit);
+      const discard = getSuitPreferenceDiscard(gameState, seat, legalCards, trumpSuit);
+      return { card: discard, reason: `Third hand void: discarded off-suit loser ${discard.id}` };
     }
   }
 
@@ -1628,7 +1739,8 @@ export function getSuperBotCardPlay(
 
   if (winningPlays.length > 0) {
     winningPlays.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
-    return winningPlays[0]; // Win trick as cheaply as possible!
+    const winner = winningPlays[0];
+    return { card: winner, reason: `Fourth hand: won trick as cheaply as possible with ${winner.id}` };
   }
 
   // Cannot win trick:
@@ -1638,12 +1750,22 @@ export function getSuperBotCardPlay(
       const p = t.cards.find((c) => c.seat === seat);
       if (p && p.card.suit === ledSuit) playedCountInSuit++;
     }
-    return getCountSignalCard(inLedSuit, playedCountInSuit);
+    const countCard = getCountSignalCard(inLedSuit, playedCountInSuit);
+    return { card: countCard, reason: `Fourth hand: signaled count with ${countCard.id}` };
   }
 
   // Void: discard lowest off-suit card via suit-preference
   const nonTrumpCards = legalCards.filter((c) => isNT || c.suit !== trumpSuit);
-  return getSuitPreferenceDiscard(gameState, seat, nonTrumpCards.length > 0 ? nonTrumpCards : legalCards, trumpSuit);
+  const discard = getSuitPreferenceDiscard(gameState, seat, nonTrumpCards.length > 0 ? nonTrumpCards : legalCards, trumpSuit);
+  return { card: discard, reason: `Fourth hand void: discarded off-suit loser ${discard.id}` };
+}
+
+export function getSuperBotCardPlay(
+  gameState: GameState,
+  seat: Seat,
+  trumpSuit: TrumpSuit
+): Card {
+  return getSuperBotCardPlayWithReason(gameState, seat, trumpSuit).card;
 }
 
 // Check if hand is balanced (no singletons or voids, suitable for No Trump)
@@ -1815,7 +1937,12 @@ export function analyzePartnerBiddingIntention(
 // Tournament Super Bot Bidding Engine (Expected Value Optimization)
 // -------------------------------------------------------------
 
-export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
+export interface BotBidDecision {
+  bid: Bid;
+  reason: string;
+}
+
+export function getSuperBotBidWithReason(gameState: GameState, seat: Seat): BotBidDecision {
   const hand = gameState.hands[seat] || [];
   const hcp = calculateHCP(hand);
   const strongest = getStrongestSuit(hand);
@@ -1863,7 +1990,7 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
 
     // If partner already holds the winning bid, PASS to protect partner's contract!
     if (gameState.highestBidder === partner) {
-      return { seat, type: 'pass' };
+      return { bid: { seat, type: 'pass' }, reason: `Passed on Turn 4: partner holds the winning bid` };
     }
 
     // Opponent holds highest bid on Turn 4: Dealer evaluates Match Privileges
@@ -1879,11 +2006,14 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
 
       if ((partnerHasOpening && dealerCanSupport) || dealerHasOwnSuit || combinedPower >= 19.5) {
         return {
-          seat,
-          type: 'bid',
-          level: privileges.matchedSuitLevel,
-          contractType: 'Suit',
-          isDealerPrivilegeMatch: true,
+          bid: {
+            seat,
+            type: 'bid',
+            level: privileges.matchedSuitLevel,
+            contractType: 'Suit',
+            isDealerPrivilegeMatch: true,
+          },
+          reason: `Turn 4 Dealer privilege: matched ${privileges.matchedSuitLevel} Suit at same level`,
         };
       }
     }
@@ -1893,16 +2023,19 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
       const partnerHasOpening = partnerAnalysis.intention === 'open_suit' || partnerAnalysis.intention === 'open_nt';
       if ((partnerHasOpening && hcp >= 9) || hcp >= 13 || combinedHCP >= 23) {
         return {
-          seat,
-          type: 'bid',
-          level: privileges.matchedNTLevel,
-          contractType: 'NT',
-          isDealerPrivilegeMatch: true,
+          bid: {
+            seat,
+            type: 'bid',
+            level: privileges.matchedNTLevel,
+            contractType: 'NT',
+            isDealerPrivilegeMatch: true,
+          },
+          reason: `Turn 4 Dealer privilege: matched ${privileges.matchedNTLevel} NT for doubled points`,
         };
       }
     }
 
-    return { seat, type: 'pass' };
+    return { bid: { seat, type: 'pass' }, reason: `Turn 4 Dealer passed: values insufficient to match` };
   }
 
   // 4. Partner is Currently Winning the Bid: Upgrades & Protection
@@ -1914,66 +2047,48 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
     // Upgrade 4A: Partner is winning 1 Suit.
     if (pLevel === 1 && pType === 'Suit') {
       // 4A-1: Game-winning 2 NT when close to victory or holding strong opening values:
-      // If team has +7 points, winning 4 points (+4) reaches +11 and WINS THE MATCH!
-      // With 12+ HCP and NT-eligible hand, or 14+ HCP, seize the match with 2 NT!
       if (ntReady && (hcp >= 14 || (hcp >= 12 && isCloseToVictory))) {
         return {
-          seat,
-          type: 'bid',
-          level: 2,
-          contractType: 'NT',
+          bid: { seat, type: 'bid', level: 2, contractType: 'NT' },
+          reason: `Raised partner's 1 Suit to 2 NT to seal match victory (+4 pts)`,
         };
       }
 
       // 4A-2: High-Reward 1 NT Upgrade:
-      // Requires the EXACT SAME 7 tricks as 1 Suit, but DOUBLES scoring (+2 pts vs +1 pt)!
-      // Responder with 10+ HCP (or 9 HCP with a 5-card suit) and NT-eligible hand MUST NEVER PASS!
       if (ntReady && (hcp >= 10 || (hcp >= 9 && strongest.count >= 5))) {
         return {
-          seat,
-          type: 'bid',
-          level: 1,
-          contractType: 'NT',
+          bid: { seat, type: 'bid', level: 1, contractType: 'NT' },
+          reason: `Upgraded partner's 1 Suit to 1 NT for doubled points (+2 pts)`,
         };
       }
 
       // 4A-3: Dominant Suit Overcall with 13+ HCP:
-      // If not NT-ready (e.g. holding a void), but holds 13+ HCP and a dominant 6+ card suit:
       if (!ntReady && strongest.count >= 6 && hcp >= 13) {
         return {
-          seat,
-          type: 'bid',
-          level: 2,
-          contractType: 'Suit',
+          bid: { seat, type: 'bid', level: 2, contractType: 'Suit' },
+          reason: `Shifted to dominant ${strongest.suit} suit at level 2 with 13+ HCP`,
         };
       }
     }
 
     // Upgrade 4B: Partner is winning 1 NT (14-16 HCP balanced, doubled points).
     if (pType === 'NT' && pLevel === 1) {
-      // 8-11 HCP -> 22-27 combined HCP -> Bid 2 NT (needs 8 tricks, awards +4 pts)!
       if (hcp >= 8 && hcp <= 11 && (ntReady || strongest.count >= 5)) {
         return {
-          seat,
-          type: 'bid',
-          level: 2,
-          contractType: 'NT',
+          bid: { seat, type: 'bid', level: 2, contractType: 'NT' },
+          reason: `Raised partner's 1 NT to 2 NT (+4 pts) with ${hcp} HCP`,
         };
       }
-      // 12+ HCP -> 26+ combined HCP -> Bid 3 NT (needs 9 tricks, awards +6 pts)!
       if (hcp >= 12) {
         return {
-          seat,
-          type: 'bid',
-          level: 3,
-          contractType: 'NT',
+          bid: { seat, type: 'bid', level: 3, contractType: 'NT' },
+          reason: `Raised partner's 1 NT to 3 NT (+6 pts) with powerhouse ${hcp} HCP`,
         };
       }
     }
 
     // In all other cases: Partner already holds the winning bid!
-    // PASS to let partner win the contract at the lowest, safest level!
-    return { seat, type: 'pass' };
+    return { bid: { seat, type: 'pass' }, reason: `Passed to protect partner's winning contract at lowest level` };
   }
 
   // 4. Candidate Bids Generation (Governed by Partner Intention & Policy Matrix)
@@ -2081,7 +2196,7 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
   );
 
   if (validCandidates.length === 0) {
-    return { seat, type: 'pass' };
+    return { bid: { seat, type: 'pass' }, reason: `Passed: no legal or viable candidate bids` };
   }
 
   // 5. Expected Value (EV) Evaluation (Calibrated Bridge/Tarneeb Expectation Formula)
@@ -2097,20 +2212,13 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
       continue;
     }
 
-    // Calibrated Bridge/Tarneeb trick expectation:
-    // Base tricks from HCP: 1.5 + (combinedHCP * 0.26)
     let expectedTricks = 1.5 + (combinedHCP * 0.26);
 
     if (cand.type === 'Suit') {
-      // Long suit bonus
       expectedTricks += Math.max(0, strongest.count - 4) * 0.5;
-
-      // Shortness/ruffing value
       if (dop > 0) {
         expectedTricks += Math.min(1.5, dop * 0.35);
       }
-
-      // Partnership fit bonus if partner opened suit
       if (partnerOpened) {
         const fitBonus = strongest.count >= 5
           ? policy.partnershipCoefficients.fitBonus9PlusTrumps
@@ -2118,7 +2226,6 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
         expectedTricks += fitBonus;
       }
     } else {
-      // NT: relies on high cards and running long suits
       if (strongest.count >= 5) {
         expectedTricks += (strongest.count - 4) * 0.4;
       }
@@ -2147,9 +2254,6 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
       const penaltyIfSet = -cand.level - defTricksOverSix;
       calculatedEV = winProb * rewardIfMade + (1 - winProb) * penaltyIfSet;
     } else {
-      // Doubled NT contract:
-      // When made: (L * 2) + extra overtricks
-      // When set: -(L * 2) penalty AND defenders get doubled points for tricks over 6!
       const rewardIfMade = cand.level * 2 + Math.max(0, expectedTricks - tricksNeeded);
       const defDoubledTricks = Math.min(cand.level, defTricksOverSix);
       const defRegularTricks = Math.max(0, defTricksOverSix - cand.level);
@@ -2158,7 +2262,6 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
       calculatedEV = winProb * rewardIfMade + (1 - winProb) * penaltyIfSet;
     }
 
-    // Blend situational calculated EV with learned empirical EV from policy
     const empiricalBaseEV = matrixEntry ? matrixEntry.empiricalEV : calculatedEV;
     const empiricalWinRate = matrixEntry ? matrixEntry.empiricalWinRate : 0.80;
     const evAdjustmentRatio = empiricalWinRate > 0 ? winProb / empiricalWinRate : 1.0;
@@ -2175,14 +2278,21 @@ export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
 
   if (bestBidOption) {
     return {
-      seat,
-      type: 'bid',
-      level: bestBidOption.level,
-      contractType: bestBidOption.type,
+      bid: {
+        seat,
+        type: 'bid',
+        level: bestBidOption.level,
+        contractType: bestBidOption.type,
+      },
+      reason: `Bid ${bestBidOption.level} ${bestBidOption.type} (Expected Value: +${maxEV.toFixed(2)})`,
     };
   }
 
-  return { seat, type: 'pass' };
+  return { bid: { seat, type: 'pass' }, reason: `Passed: expected value below threshold` };
+}
+
+export function getSuperBotBid(gameState: GameState, seat: Seat): Bid {
+  return getSuperBotBidWithReason(gameState, seat).bid;
 }
 
 // -------------------------------------------------------------

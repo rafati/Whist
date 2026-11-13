@@ -17,6 +17,7 @@ import {
   TrumpSuit,
   VoicePeer,
   ThrownObjectEvent,
+  BotEngineType,
 } from './src/types.ts';
 import {
   calculateRoundScores,
@@ -45,7 +46,9 @@ import {
 import { getBotBid, getBotCardPlay, getBotDeclaredSuit } from './src/logic/botAi.ts';
 import {
   getSuperBotBid,
+  getSuperBotBidWithReason,
   getSuperBotCardPlay,
+  getSuperBotCardPlayWithReason,
   getSuperBotDeclaredSuit,
 } from './src/logic/superBot.ts';
 import { runBatchSimulation } from './src/logic/simulator.ts';
@@ -55,6 +58,15 @@ import {
   resetBotPolicy,
 } from './src/data/botPolicy.ts';
 import { RoomSummary } from './src/types.ts';
+import {
+  checkApiHealth,
+  initBotSession,
+  requestBotBid,
+  requestBotPlay,
+  broadcastActionToApiBots,
+  cleanupBotSessions,
+  seatToPlayerIndex,
+} from './src/logic/tadfeeaApiClient.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 const app = express();
@@ -126,6 +138,26 @@ function getBotNameForSeat(currentSeats: Record<Seat, UserProfile | null>, seat:
     }
   }
   return preferred;
+}
+
+export function getSeatBotEngine(room: Room, seat: Seat): BotEngineType {
+  if (room.botEngines && room.botEngines[seat]) {
+    return room.botEngines[seat]!;
+  }
+  if (room.seats[seat]?.botEngine) {
+    return room.seats[seat]!.botEngine!;
+  }
+  return room.defaultBotEngine || 'builtin';
+}
+
+export function getActiveApiBotSeats(room: Room): Seat[] {
+  const apiSeats: Seat[] = [];
+  for (const s of SEATS) {
+    if (room.seats[s]?.isBot && getSeatBotEngine(room, s) === 'api') {
+      apiSeats.push(s);
+    }
+  }
+  return apiSeats;
 }
 
 function clearTurnTimeoutTimer(roomId: string) {
@@ -418,14 +450,53 @@ function scheduleBotActionIfNeeded(roomId: string) {
   gameState.turnDurationMs = null;
 }
 
-function handleBotBid(roomId: string, seat: Seat, isHumanTimeoutAutoPlay = false) {
+async function handleBotBid(roomId: string, seat: Seat, isHumanTimeoutAutoPlay = false) {
   const room = rooms.get(roomId);
   if (!room || room.gameState.phase !== 'bidding' || room.gameState.currentBidder !== seat) return;
 
-  const isSuper = room.botDifficulty !== 'casual'; // default to super bot
-  const bid = isSuper
-    ? getSuperBotBid(room.gameState, seat)
-    : getBotBid(room.gameState, seat);
+  const engine = getSeatBotEngine(room, seat);
+  let bid: Bid | null = null;
+
+  if (!isHumanTimeoutAutoPlay && engine === 'api') {
+    try {
+      bid = await requestBotBid({
+        roomId: room.id,
+        seat,
+        turnIndex: room.gameState.auctionTurnsCount,
+        hand: room.gameState.hands[seat],
+        dealer: room.gameState.dealer,
+      });
+      if (bid) {
+        console.log(`[TadfeeaAPI] Bot bid received for ${seat}: ${bid.type} ${bid.level || ''}${bid.contractType || ''}`);
+      }
+    } catch (err) {
+      console.warn(`[TadfeeaAPI] Failed to get bid from API bot at seat ${seat}, falling back to built-in:`, err);
+    }
+  }
+
+  let botReason: string | undefined;
+
+  if (!bid) {
+    const isSuper = room.botDifficulty !== 'casual'; // default to super bot
+    if (isSuper) {
+      const decision = getSuperBotBidWithReason(room.gameState, seat);
+      bid = decision.bid;
+      botReason = decision.reason;
+    } else {
+      bid = getBotBid(room.gameState, seat);
+      botReason = 'Casual heuristic bid';
+    }
+  }
+
+  if (bid && botReason) {
+    room.gameState.lastBotReasoning = {
+      seat,
+      action: 'bid',
+      bidText: bid.type === 'pass' ? 'Pass' : `${bid.level} ${bid.contractType}`,
+      reason: botReason,
+      timestamp: Date.now(),
+    };
+  }
 
   if (isHumanTimeoutAutoPlay) {
     const playerName = room.seats[seat]?.name || seat;
@@ -471,17 +542,75 @@ function handleBotDeclareTrump(roomId: string, seat: Seat, isHumanTimeoutAutoPla
   processDeclareTrump(room, suit, isHumanTimeoutAutoPlay);
 }
 
-function handleBotPlayCard(roomId: string, seat: Seat, isHumanTimeoutAutoPlay = false) {
+async function handleBotPlayCard(roomId: string, seat: Seat, isHumanTimeoutAutoPlay = false) {
   const room = rooms.get(roomId);
   if (!room || room.gameState.phase !== 'playing' || room.gameState.currentTurn !== seat) return;
 
   const trump = room.gameState.trumpSuit;
   if (!trump) return;
 
-  const isSuper = room.botDifficulty !== 'casual';
-  const card = isSuper
-    ? getSuperBotCardPlay(room.gameState, seat, trump)
-    : getBotCardPlay(room.gameState, seat, trump);
+  const engine = getSeatBotEngine(room, seat);
+  let card: Card | undefined;
+
+  if (!isHumanTimeoutAutoPlay && engine === 'api') {
+    try {
+      const hand = room.gameState.hands[seat] || [];
+      const leadSuit = room.gameState.currentTrick[0]?.card?.suit || null;
+      const legalCards = hand.filter((c) => isCardLegal(c, hand, leadSuit));
+
+      const cardId = await requestBotPlay({
+        roomId: room.id,
+        seat,
+        trickNum: room.gameState.tricksHistory.length + 1,
+        contract: {
+          level: room.gameState.winningBid?.level || 1,
+          type: room.gameState.trumpSuit === 'NT' ? 'NT' : 'Suit',
+          trump: room.gameState.trumpSuit,
+          declarer: room.gameState.declarer || seat,
+        },
+        hand,
+        legalCards,
+      });
+
+      if (cardId) {
+        const candidate = hand.find((c) => c.id === cardId);
+        if (candidate) {
+          if (isCardLegal(candidate, hand, leadSuit)) {
+            card = candidate;
+            console.log(`[TadfeeaAPI] Bot play received for ${seat}: ${card.id}`);
+          } else {
+            console.warn(`[TadfeeaAPI] Bot suggested illegal card ${cardId} for ${seat}, falling back to built-in`);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[TadfeeaAPI] Failed to get play from API bot at seat ${seat}, falling back to built-in:`, err);
+    }
+  }
+
+  let botReason: string | undefined;
+
+  if (!card) {
+    const isSuper = room.botDifficulty !== 'casual';
+    if (isSuper) {
+      const decision = getSuperBotCardPlayWithReason(room.gameState, seat, trump);
+      card = decision.card;
+      botReason = decision.reason;
+    } else {
+      card = getBotCardPlay(room.gameState, seat, trump);
+      botReason = 'Casual heuristic play';
+    }
+  }
+
+  if (card && botReason) {
+    room.gameState.lastBotReasoning = {
+      seat,
+      action: 'play',
+      cardId: card.id,
+      reason: botReason,
+      timestamp: Date.now(),
+    };
+  }
 
   if (isHumanTimeoutAutoPlay) {
     const playerName = room.seats[seat]?.name || seat;
@@ -543,6 +672,23 @@ function processBid(room: Room, bid: Bid) {
     state.highestBidder = currentSeat;
   }
 
+  // Broadcast bid to any active API bots in the room
+  const apiSeats = getActiveApiBotSeats(room);
+  if (apiSeats.length > 0) {
+    const bType = bid.type === 'pass' ? 'PASS' : (bid.isDealerPrivilegeMatch ? 'MATCH' : 'BID');
+    broadcastActionToApiBots({
+      roomId: room.id,
+      botSeats: apiSeats,
+      actionType: 'BID',
+      payload: {
+        player: seatToPlayerIndex(currentSeat),
+        bid_type: bType,
+        level: bid.level || null,
+        contract_type: bid.contractType ? (bid.contractType === 'Suit' ? 'SUIT' : 'NT') : null,
+      },
+    }).catch((e) => console.warn('Could not broadcast bid to API bots:', e));
+  }
+
   state.auctionTurnsCount++;
 
   if (state.auctionTurnsCount < 4) {
@@ -595,6 +741,19 @@ function processDeclareTrump(room: Room, suit: Suit, isBotAutoPlay = false) {
   state.isTrumpAutoDeclared = isBotAutoPlay;
   state.phase = 'playing';
 
+  // Broadcast trump selection to any active API bots in the room
+  const apiSeats = getActiveApiBotSeats(room);
+  if (apiSeats.length > 0) {
+    broadcastActionToApiBots({
+      roomId: room.id,
+      botSeats: apiSeats,
+      actionType: 'TRUMP_SELECTION',
+      payload: {
+        trump_suit: suit,
+      },
+    }).catch((e) => console.warn('Could not broadcast trump selection to API bots:', e));
+  }
+
   // Suit Game: Player to the Right of the Declarer leads first
   // Right of Declarer = getNextSeat(declarer) in counter-clockwise order
   state.currentTurn = getNextSeat(state.declarer);
@@ -626,6 +785,20 @@ function processPlayCard(room: Room, seat: Seat, card: Card, isBotAutoPlay = fal
   state.cardsCount[seat] = hand.length;
 
   state.currentTrick.push({ seat, card: playedCard, isBotAutoPlay });
+
+  // Broadcast played card to any active API bots in the room
+  const apiSeats = getActiveApiBotSeats(room);
+  if (apiSeats.length > 0) {
+    broadcastActionToApiBots({
+      roomId: room.id,
+      botSeats: apiSeats,
+      actionType: 'PLAY_CARD',
+      payload: {
+        player: seatToPlayerIndex(seat),
+        card: playedCard.id,
+      },
+    }).catch((e) => console.warn('Could not broadcast card play to API bots:', e));
+  }
 
   if (state.currentTrick.length < 4) {
     // Next player counter-clockwise
@@ -741,13 +914,17 @@ function fillBotsAndStartRoom(room: Room, callerUser?: UserProfile) {
 
   for (const s of SEATS) {
     if (!room.seats[s]) {
+      const engine = (room.botEngines && room.botEngines[s]) || room.defaultBotEngine || 'builtin';
       room.seats[s] = {
         id: `bot_${s.toLowerCase()}`,
         name: getBotNameForSeat(room.seats, s),
         email: `${s.toLowerCase()}@ai.studio`,
         avatar: BOT_AVATARS[s],
         isBot: true,
+        botEngine: engine,
       };
+      if (!room.botEngines) room.botEngines = {};
+      room.botEngines[s] = engine;
     }
   }
 
@@ -825,6 +1002,18 @@ function executeDealRound(room: Room, dealerSeat: Seat, roundNumber?: number) {
   room.gameState = startDealRound(room.gameState, dealerSeat, hands);
   if (typeof roundNumber === 'number') {
     room.gameState.roundNumber = roundNumber;
+  }
+
+  // Initialize AI Bot sessions on port 8008 for any bot seat configured as 'api'
+  const apiSeats = getActiveApiBotSeats(room);
+  for (const s of apiSeats) {
+    initBotSession({
+      roomId: room.id,
+      seat: s,
+      dealer: dealerSeat,
+      hand: hands[s],
+      matchScores: room.gameState.matchScores,
+    }).catch((err) => console.warn(`Failed to init API bot session for room ${room.id} seat ${s}:`, err));
   }
 
   scheduleBotActionIfNeeded(room.id);
@@ -980,16 +1169,72 @@ wss.on('connection', (ws) => {
         if (!room) return;
         const seat = msg.seat;
         clearDisconnectTimer(room.id, seat);
+        const engine = getSeatBotEngine(room, seat);
         room.seats[seat] = {
           id: `bot_${seat.toLowerCase()}`,
           name: getBotNameForSeat(room.seats, seat),
           email: `${seat.toLowerCase()}@ai.studio`,
           avatar: BOT_AVATARS[seat],
           isBot: true,
+          botEngine: engine,
         };
+        if (engine === 'api' && room.gameState.phase !== 'waiting') {
+          initBotSession({
+            roomId: room.id,
+            seat,
+            dealer: room.gameState.dealer,
+            hand: room.gameState.hands[seat] || [],
+            matchScores: room.gameState.matchScores,
+          }).catch((e) => console.warn('Could not init API bot session:', e));
+        }
         scheduleBotActionIfNeeded(room.id);
         broadcastRoom(room.id);
         broadcastRoomList();
+        return;
+      }
+
+      if (msg.type === 'set_seat_bot_engine') {
+        const room = rooms.get(msg.roomId);
+        if (!room) return;
+        if (!room.botEngines) room.botEngines = {};
+        room.botEngines[msg.seat] = msg.engine;
+        if (room.seats[msg.seat]) {
+          room.seats[msg.seat]!.botEngine = msg.engine;
+        }
+        if (msg.engine === 'api' && room.gameState.phase !== 'waiting') {
+          initBotSession({
+            roomId: room.id,
+            seat: msg.seat,
+            dealer: room.gameState.dealer,
+            hand: room.gameState.hands[msg.seat] || [],
+            matchScores: room.gameState.matchScores,
+          }).catch((e) => console.warn('Could not init API bot session:', e));
+        }
+        broadcastRoom(room.id);
+        return;
+      }
+
+      if (msg.type === 'set_default_bot_engine') {
+        const room = rooms.get(msg.roomId);
+        if (!room) return;
+        room.defaultBotEngine = msg.engine;
+        if (!room.botEngines) room.botEngines = {};
+        for (const s of SEATS) {
+          if (room.seats[s]?.isBot) {
+            room.botEngines[s] = msg.engine;
+            room.seats[s]!.botEngine = msg.engine;
+            if (msg.engine === 'api' && room.gameState.phase !== 'waiting') {
+              initBotSession({
+                roomId: room.id,
+                seat: s,
+                dealer: room.gameState.dealer,
+                hand: room.gameState.hands[s] || [],
+                matchScores: room.gameState.matchScores,
+              }).catch((e) => console.warn('Could not init API bot session:', e));
+            }
+          }
+        }
+        broadcastRoom(room.id);
         return;
       }
 
@@ -1089,6 +1334,7 @@ wss.on('connection', (ws) => {
           clearTurnTimeoutTimer(roomId);
           clearMatchmakingTimer(roomId);
           clearAllRoomDisconnectTimers(roomId);
+          cleanupBotSessions({ roomId }).catch(() => {});
           rooms.delete(roomId);
           roomVoicePeers.delete(roomId);
           for (const [socket, info] of clientSockets.entries()) {
@@ -1333,21 +1579,23 @@ app.post('/api/rooms', (req, res) => {
       : null;
 
   const shouldAutoFill = Boolean(autoFillBots || watchBots);
+  const defEngine: BotEngineType = req.body.defaultBotEngine === 'api' ? 'api' : 'builtin';
+  const customEngines: Partial<Record<Seat, BotEngineType>> = req.body.botEngines || {};
 
   const seats: Record<Seat, UserProfile | null> = {
     North: shouldAutoFill
-      ? { id: 'bot_north', name: BOT_NAMES.North, email: 'north@ai.studio', avatar: BOT_AVATARS.North, isBot: true }
+      ? { id: 'bot_north', name: BOT_NAMES.North, email: 'north@ai.studio', avatar: BOT_AVATARS.North, isBot: true, botEngine: customEngines.North || defEngine }
       : null,
     West: shouldAutoFill
-      ? { id: 'bot_west', name: BOT_NAMES.West, email: 'west@ai.studio', avatar: BOT_AVATARS.West, isBot: true }
+      ? { id: 'bot_west', name: BOT_NAMES.West, email: 'west@ai.studio', avatar: BOT_AVATARS.West, isBot: true, botEngine: customEngines.West || defEngine }
       : null,
     South:
       initialSouth ||
       (shouldAutoFill
-        ? { id: 'bot_south', name: BOT_NAMES.South, email: 'south@ai.studio', avatar: BOT_AVATARS.South, isBot: true }
+        ? { id: 'bot_south', name: BOT_NAMES.South, email: 'south@ai.studio', avatar: BOT_AVATARS.South, isBot: true, botEngine: customEngines.South || defEngine }
         : null),
     East: shouldAutoFill
-      ? { id: 'bot_east', name: BOT_NAMES.East, email: 'east@ai.studio', avatar: BOT_AVATARS.East, isBot: true }
+      ? { id: 'bot_east', name: BOT_NAMES.East, email: 'east@ai.studio', avatar: BOT_AVATARS.East, isBot: true, botEngine: customEngines.East || defEngine }
       : null,
   };
 
@@ -1365,6 +1613,8 @@ app.post('/api/rooms', (req, res) => {
     seats,
     gameState: createInitialGameState(randomDealer),
     botDifficulty: botDifficulty === 'casual' ? 'casual' : 'super',
+    defaultBotEngine: defEngine,
+    botEngines: customEngines,
   };
 
   rooms.set(roomId, newRoom);
@@ -1550,6 +1800,7 @@ app.delete('/api/rooms/:roomId', (req, res) => {
   clearTurnTimeoutTimer(roomId);
   clearMatchmakingTimer(roomId);
   clearAllRoomDisconnectTimers(roomId);
+  cleanupBotSessions({ roomId }).catch(() => {});
 
   rooms.delete(roomId);
   roomVoicePeers.delete(roomId);
@@ -1563,6 +1814,12 @@ app.delete('/api/rooms/:roomId', (req, res) => {
 
   broadcastRoomList();
   res.json({ success: true, roomId });
+});
+
+// AI Engine Health Check (WhistAPI on port 8008)
+app.get('/api/engine/health', async (_req, res) => {
+  const status = await checkApiHealth();
+  res.json(status);
 });
 
 // Simulation Benchmarking & Training Endpoint

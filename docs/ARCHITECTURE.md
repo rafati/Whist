@@ -214,3 +214,4 @@ flowchart TD
 * **Trump Extraction**: If declarer, counts remaining opponent trumps (`countRemainingOpponentTrumps()`). Pulls trumps while opponents still hold them; immediately switches to cashing side-suit winners once opponents are void of trumps.
 * **Partner Cross-Ruffing**: When defending against a Suit contract, leads suits where the partner is confirmed void to give the partner a ruff.
 * **Third Hand High / Cheap Winners**: Plays highest winning card when partner led; plays the cheapest winning card when following an opponent's card.
+* **Tactical Invariants & Decision Inspector**: See [SUPERBOT_TACTICAL_INTELLIGENCE.md](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/docs/SUPERBOT_TACTICAL_INTELLIGENCE.md) for full documentation on 6-card Micro-DDS lookahead, master card promotion, continuous declarer trump extraction, second-hand $A-K$ play, and real-time reasoning telemetry.

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { ClientMessage, Room, RoomSummary, ServerMessage, UserProfile, Seat, ThrowableObjectType } from '../types.ts';
+import { ClientMessage, Room, RoomSummary, ServerMessage, UserProfile, Seat, ThrowableObjectType, BotEngineType } from '../types.ts';
 
 interface SocketContextType {
   isConnected: boolean;
@@ -14,6 +14,8 @@ interface SocketContextType {
   switchToBot: (roomId: string, seat: Seat) => void;
   fillBots: (roomId: string) => void;
   setBotDifficulty: (roomId: string, difficulty: 'casual' | 'super') => void;
+  setSeatBotEngine: (roomId: string, seat: Seat, engine: BotEngineType) => void;
+  setDefaultBotEngine: (roomId: string, engine: BotEngineType) => void;
   setTurnTimeout: (roomId: string, turnTimeoutMs: number) => void;
   makeBid: (roomId: string, bid: any) => void;
   declareTrump: (roomId: string, suit: any) => void;
@@ -216,6 +218,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     send({ type: 'set_bot_difficulty', roomId, difficulty });
   }, [send]);
 
+  const setSeatBotEngine = useCallback((roomId: string, seat: Seat, engine: BotEngineType) => {
+    send({ type: 'set_seat_bot_engine', roomId, seat, engine });
+  }, [send]);
+
+  const setDefaultBotEngine = useCallback((roomId: string, engine: BotEngineType) => {
+    send({ type: 'set_default_bot_engine', roomId, engine });
+  }, [send]);
+
   const setTurnTimeout = useCallback((roomId: string, turnTimeoutMs: number) => {
     send({ type: 'set_turn_timeout', roomId, turnTimeoutMs });
   }, [send]);
@@ -286,6 +296,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         switchToBot,
         fillBots,
         setBotDifficulty,
+        setSeatBotEngine,
+        setDefaultBotEngine,
         setTurnTimeout,
         makeBid,
         declareTrump,

@@ -1233,11 +1233,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
                 </div>
               )}
 
-              {/* Subtle Bot Indicator */}
+              {/* Subtle Bot Indicator with Tactical Tooltip */}
               {player.isBot && (
                 <div
-                  className="absolute -top-1 -left-1 rounded-full p-0.5 bg-slate-900 border border-slate-600 text-slate-300 shadow flex items-center justify-center"
-                  title="AI Partner / Opponent"
+                  className="absolute -top-1 -left-1 rounded-full p-0.5 bg-slate-900 border border-slate-600 text-slate-300 shadow flex items-center justify-center cursor-help"
+                  title={gameState.lastBotReasoning?.seat === seat ? `AI Strategic Reasoning: ${gameState.lastBotReasoning.reason}` : "AI Partner / Opponent"}
                 >
                   <Bot className="w-2 h-2 text-slate-300" />
                 </div>
@@ -1292,6 +1292,15 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ room, onLeaveRoom })
               </div>
             </div>
           </div>
+          {player.isBot && gameState.lastBotReasoning?.seat === seat && (
+            <div
+              className="mt-0.5 max-w-[130px] sm:max-w-[150px] bg-slate-950/90 border border-amber-500/40 rounded-md px-1.5 py-0.5 text-[7px] sm:text-[8px] text-amber-200/90 shadow truncate flex items-center gap-1 cursor-help pointer-events-auto"
+              title={`AI Reasoning: ${gameState.lastBotReasoning.reason}`}
+            >
+              <span className="text-[9px]">💡</span>
+              <span className="truncate">{gameState.lastBotReasoning.reason}</span>
+            </div>
+          )}
           {isAllBots && seat !== bottomSeat && gameState.phase !== 'waiting' && (
             <button
               type="button"
