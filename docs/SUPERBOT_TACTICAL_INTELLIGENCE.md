@@ -116,9 +116,10 @@ Explains the exact rule, signal, or minimax line executed, including:
 - `"Second hand: played King from A-K to secure immediate trick"`
 - `"Micro-DDS minimax line: played AS (6 tricks remaining)"`
 
-### 4.3 UI Presentation ([VirtualTable.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/VirtualTable.tsx))
-- **Live Decision Pill:** When a bot takes an action, a floating pill appears below its player pod displaying `💡 <reason>`.
-- **Pod Tooltip:** Hovering over the bot icon in any pod displays the full tactical rationale of its latest action.
+### 4.3 UI Presentation & Telemetry Decoupling ([VirtualTable.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/components/VirtualTable.tsx))
+- **Clean Gameplay UI**: The temporary floating decision pill below player pods was removed to ensure a clean, distraction-free visual table experience during active gameplay.
+- **Subtle Tooltip**: Hovering over the bot avatar in any pod displays `title="AI Bot"`.
+- **Flight Recorder Integration**: Full decision rationales (`reason`, `cardId`, `bidText`) continue to be recorded asynchronously in `GameState.lastBotReasoning` and transmitted to the telemetry database whenever players interact or throw objects (shoes/medals).
 
 ---
 
@@ -141,3 +142,13 @@ npx tsx scripts/test_superbot_tactical_phases.ts
 9. **Return Partner's Suit (High from 2):** Partner led Spades on trick 1; bot wins trick 1 and returns $8\spadesuit$ from $8\text{-}2\spadesuit$ to unblock for partner.
 10. **Return Partner's Suit (Low from 3):** Bot holding $Q\text{-}6\text{-}2\spadesuit$ returns $2\spadesuit$ to preserve $Q\spadesuit$ behind the opponent.
 11. **Cash-Out Mode:** When sure winners in hand meet contract target, the bot claims the contract by immediately cashing out.
+
+---
+
+## 6. Remote Analysis & RLHF Runbook
+
+When analyzing production games and human shoe/medal feedback:
+```bash
+# Pull live data from Render PostgreSQL and inspect blunder clusters
+npx tsx scripts/analyze_telemetry.ts --remote
+```

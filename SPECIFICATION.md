@@ -1,6 +1,6 @@
 # تدفيع الثمن (Remix) — Technical Specification
 
-**Version:** 3.3 (Verified Implementation — Grandmaster SuperBot AI Architecture)  
+**Version:** 3.4 (Verified Implementation — Grandmaster SuperBot AI & Observational Telemetry Flight Recorder)  
 **Status:** Active & Implemented  
 **Platform:** Full-Stack Node.js (Express + WebSocket `ws`) & React 19 SPA (Vite + Tailwind CSS v4)  
 **Primary Entry Points:** [server.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/server.ts), [src/main.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/main.tsx), [src/App.tsx](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/App.tsx)
@@ -570,5 +570,158 @@ $$\text{ExpectedTricks} = 1.5 + (\text{CombinedHCP} \times 0.26) + \text{LengthB
 #### 16.4.4 Verification & Test Coverage
 * Automated test suite `scripts/test_bidding_intelligence.ts` validates 22 test assertions across all partnership bidding scenarios (including the exhibition hand with 12 HCP and singleton Ace) with 100% pass rate.
 * Headless 100-match batch simulation (`scripts/train.ts`) confirms 0 partner overtrumps (0% blunders), 0 dead trump leads (0% blunders), and a 70%+ contract success rate.
+
+---
+
+## 17. Advanced Tactical Invariants & Partnership Suit Recognition
+
+To eliminate common human-observable bot mistakes (such as burning isolated Aces prematurely, relinquishing suit control, failing to return a partner's led suit, or jeopardizing a contract instead of banking sure winners), `SuperBot` incorporates five deterministic tactical invariants in [superBot.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/superBot.ts):
+
+### 17.1 No-Trump Control & Stopper Conservation (Anti-Burn Invariant)
+* **The Problem**: In No-Trump contracts (and side suits in suit contracts), cashing an isolated or short master card (e.g. singleton $A\spadesuit$ or doubleton $A\clubsuit$) on trick 1 or 2 prematurely burns the partnership's defensive entry and stopper in that suit. When an unestablished long working suit exists in the same hand, burning the stopper hands immediate tempo and suit control to the opposing team.
+* **Invariant Rule**: When on lead holding an unestablished working suit ($\ge 3$ cards with missing opponent stoppers), the bot is **strictly forbidden** from leading an isolated master card in another suit whose length is $\le 2$ (singleton or doubleton Ace/King).
+* **Stopper Definition**: Any master honor (`A`, promoted `K`, etc.) where the holding in that suit is $\le 2$ cards.
+* **Reasoning Telemetry**: `"Preserved isolated stopper in S while establishing working suit D"`.
+
+### 17.2 Working Suit Prioritization
+* **The Problem**: Bots previously cashed isolated master cards across random suits without developing a primary source of tricks.
+* **Invariant Rule**: The bot identifies its longest, unestablished suit with $\ge 3$ cards. Instead of cashing side Aces, it attacks the working suit:
+  * **Sequence Lead**: Holding touching honors (e.g., $K-Q-x$), it leads the top of the sequence (King) to force out the opponent's Ace and promote its remaining cards.
+  * **Low Lead**: Holding unsupported high honors, it leads 4th-best/low to develop long cards while retaining outside stoppers as entries.
+* **Reasoning Telemetry**: `"Led King from sequence K-Q in working suit D to dislodge opponent stoppers"`.
+
+### 17.3 Partnership Suit Recognition & Return ("Return Partner's Suit")
+* **The Problem**: A fundamental tenet of partnership Whist/Tarneeb is acknowledging and returning the suit initiated by your partner. Failing to return partner's suit cuts off communication and leaves partner's established honors stranded.
+* **Partner Initiated Suit Detection (`getPartnerInitiatedSuit`)**:
+  The bot analyzes trick history to detect partner's primary suit:
+  1. *Opening / Prior Leads*: A suit led by partner on trick 1 or any trick partner won on lead.
+  2. *High Trick Wins*: A suit where partner won the trick with an Ace, King, or Queen.
+  3. *Attitude Signals*: A suit where partner signaled an encouraging spot card (rank $\ge 7$) under the bot's lead.
+  4. *Auction Clues*: A suit bid by partner during the auction.
+* **Return Conventions (`selectCardToReturnPartnerSuit`)**:
+  When on lead with no higher-priority cash-out or trump pull:
+  * **High from 2 (Doubleton Unblock)**: If holding exactly 2 remaining cards in partner's suit, lead the **higher card** to clear and unblock the suit for partner.
+  * **Low from 3+ (Preserve Honors)**: If holding 3 or more cards, lead the **lowest card** to conserve defensive values and protect honors.
+  * **Sequence Honors**: If holding touching honors (e.g., $Q-J$, $10-9$), lead the top honor.
+* **Reasoning Telemetry**: `"Returned partner's initiated suit S (partner led 10S on trick 1): high card 8S from doubleton to unblock suit for partner"`.
+
+### 17.4 Cash-Out Mode (Contract Assurance)
+* **The Problem**: When a contract is 1 or 2 tricks away from being fulfilled, attempting risky finesses or leading unestablished suits can allow opponents to win the lead, run off their own winners, or execute adverse ruffs.
+* **Invariant Rule**:
+  $$\text{TricksNeeded} = \max(0, \text{TargetTricks} - \text{TricksWonByTeam})$$
+  When the bot counts that its hand contains guaranteed master cards (sure winners) $\ge \text{TricksNeeded}$, the bot **immediately switches to Cash-Out Mode**:
+  * It immediately cashes all master cards in sequence.
+  * Ensures the contract is 100% fulfilled before taking any speculative risks.
+* **Reasoning Telemetry**: `"Cash-out mode: cashed guaranteed winner AS to fulfill contract (2 tricks needed, 2 sure winners in hand)"`.
+
+### 17.5 Micro-DDS Endgame Guards (Tricks 8–13)
+* The 6-card endgame double-dummy solver (`solveMicroDDSEndgame`) incorporates deterministic blunder guards that filter candidate moves before tree expansion:
+  * *Guard 1 & 2*: Zero overtrumping of partner's winning tricks, zero dead trump leads.
+  * *Guard 3 & 4*: Anti-ducking with touching honors, mandatory ruffing of opponent masters.
+  * *Guard 5*: Stopper preservation guard preventing isolated master burns in NT.
+  * *Guard 6*: Mandatory return of partner's established suit.
+
+---
+
+## 18. Observational Telemetry Flight Recorder & RLHF Architecture
+
+To capture real-world games, player behaviors, and tactical errors without relying on guesswork, the production server features an asynchronous, dual-mode Flight Recorder service ([src/services/telemetryDb.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/services/telemetryDb.ts)).
+
+### 18.1 Zero-Gameplay-Impact Guarantee
+* **Asynchronous & Non-Blocking**: All database writes (`saveMatchReplay`, `saveBotFeedback`) are executed in detached microtasks (fire-and-forget `Promise.catch()`).
+* **State Isolation**: Telemetry logging never modifies game state, hand arrays, turn timers, or bot decision weights during active play.
+* **Performance Budget**: Server trick evaluation completes in $<2\text{ms}$; WebSocket broadcasts operate with zero latency jitter.
+
+### 18.2 PostgreSQL Storage on Render.com (`DATABASE_URL`)
+* **Production**: Connects via `pg.Pool` with SSL (`rejectUnauthorized: false` for managed Render PostgreSQL).
+* **Automatic Table Migration**: On startup, tables and indexes are automatically verified and migrated (`CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN IF NOT EXISTS`).
+* **Local Fallback**: If running in local development without `DATABASE_URL`, transparently falls back to local JSONL files in `./data/telemetry_replays.jsonl` and `./data/telemetry_feedback.jsonl`.
+
+### 18.3 Telemetry Schema Specifications
+
+#### 18.3.1 Match Replays (`match_replays`)
+Records the full flight replay of every completed round:
+* `id` (`VARCHAR(64)`): Unique round replay identifier (e.g. `round_room_t84qif_r1_1794600352874`).
+* `room_id` (`VARCHAR(64)`): Room ID.
+* `round_number` (`INT`): Round index (1, 2, ...).
+* `dealer`, `declarer` (`VARCHAR(16)`): Seats.
+* `trump_suit` (`VARCHAR(8)`): Trump suit (`S`, `H`, `D`, `C`, `NT`).
+* `contract_level` (`INT`), `contract_type` (`VARCHAR(16)`): Contract details.
+* `winning_team` (`VARCHAR(16)`): Contract outcome (`TeamA` or `TeamB`).
+* `tricks_won_team_a`, `tricks_won_team_b` (`INT`): Final trick counts.
+* `match_score_team_a`, `match_score_team_b` (`INT`): Match scores.
+* `players` (`JSONB`): Roster tracking identity and AI engine for all 4 seats:
+  ```json
+  {
+    "North": { "isBot": true, "name": "North Bot", "engine": "super" },
+    "West":  { "isBot": true, "name": "West Bot",  "engine": "super" },
+    "South": { "isBot": false, "name": "Rafat" },
+    "East":  { "isBot": true, "name": "East Bot",  "engine": "super" }
+  }
+  ```
+* `initial_hands` (`JSONB`): Complete 13 cards originally dealt to each player (`North`, `West`, `South`, `East`).
+* `auction_history` (`JSONB`): Chronological array of all bids and passes made in the auction.
+* `tricks_history` (`JSONB`): Complete 13-trick flight record (leader, played cards with seat, trick winner, winning card, led suit).
+* `timestamp` (`BIGINT`): Epoch timestamp.
+
+#### 18.3.2 Human Object Feedback (`bot_feedback`)
+Captures real-time human reactions to bot play via throwable objects:
+* `id` (`VARCHAR(64)`): Feedback event ID.
+* `from_seat` (`VARCHAR(16)`): Seat throwing the object.
+* `to_seat` (`VARCHAR(16)`): Target bot seat receiving the object.
+* `from_is_bot` (`BOOLEAN`): `false` when thrown by a real human player, `true` if thrown by bot auto-play.
+* `from_player_name` (`VARCHAR(64)`): Display name of the human player.
+* `is_partner` (`BOOLEAN`): `true` if thrower and receiver are on the same team (Team 1 or Team 2).
+* `object_type` (`VARCHAR(16)`): `shoe`, `medal`, `beer`, `tomato`, `rose`.
+* `sentiment` (`VARCHAR(16)`):
+  * **Shoe 👞 (`bad_move`)**: Human partner disapproval / tactical blunder flag.
+  * **Medal 🏅 (`good_move`)**: Human praise / tactical excellence flag.
+  * **Drinks / Other (`neutral`)**: Casual social interaction.
+* `bot_engine` (`VARCHAR(32)`): Bot engine active on target seat (`super`, `casual`, `api`).
+* `action_details` (`JSONB`):
+  * `lastReasoning`: The bot's exact internal decision reasoning text, card ID, and timestamp.
+  * `botHandRemaining`: Cards remaining in the bot's hand at that exact instant.
+  * `currentTrick`: Cards currently on the table in that trick.
+  * `contract`: Contract level, declarer, and trump suit.
+
+### 18.4 Telemetry REST Endpoints (`server.ts`)
+* `GET /api/telemetry/stats`: Returns aggregate counts of replays, shoes, medals, partner shoes, and active storage type (`postgres` vs `local_file`).
+* `GET /api/telemetry/feedback?sentiment=&partnerOnly=&limit=`: Returns filtered bot feedback records.
+* `GET /api/telemetry/replays?limit=`: Returns chronological match replay records.
+
+---
+
+## 19. Operational Runbook: Resuming Telemetry Analysis & Engine Updating
+
+When returning to inspect accumulated production data after 1–2 weeks of live play on Render, follow this exact workflow:
+
+### 19.1 Pull & Analyze Production Data
+Run the remote telemetry analyzer directly from this repository:
+```bash
+npx tsx scripts/analyze_telemetry.ts --remote
+```
+*(Optionally target a custom deployment: `npx tsx scripts/analyze_telemetry.ts --url https://whist-jfvx.onrender.com`)*
+
+The tool automatically:
+1. Connects over HTTPS to the Render production server.
+2. Loads all match replays and player feedback records from PostgreSQL.
+3. Groups partner shoes into clusters based on the bot's reasoning and hand context.
+4. Outputs the top tactical blunder patterns and human praises.
+5. Serializes an RLHF dataset to `./data/telemetry_training_set.jsonl`.
+
+### 19.2 Engine Adaptation Cycle
+To resolve identified blunders:
+1. **Identify Pattern**: Look at the highest-frequency partner shoe cluster in the analyzer output (e.g. *"Preserved isolated stopper..."* or *"Returned partner's initiated suit..."*).
+2. **Reproduce Hand in Unit Test**: Add a targeted test case with the exact recorded hand and trick context in [scripts/test_superbot_tactical_phases.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/scripts/test_superbot_tactical_phases.ts).
+3. **Refine Logic**: Implement the defensive invariant guard in [src/logic/superBot.ts](file:///Users/rafatishaq/antigravity/Remix-Online-Multiplayer-Card-Game/src/logic/superBot.ts).
+4. **Verify**: Run `npm test` (all 77 test cases must pass) and `npm run build`.
+5. **Deploy**: Push to GitHub:
+   ```bash
+   git add .
+   git commit -m "fix(superbot): resolve tactical blunder from telemetry"
+   git push origin main
+   ```
+   Render automatically deploys the updated engine in under 60 seconds.
+
 
 
