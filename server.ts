@@ -40,6 +40,15 @@ import {
   SUIT_SYMBOLS,
 } from './src/logic/gameLogic.ts';
 import {
+  initTelemetryDatabase,
+  saveMatchReplay,
+  saveBotFeedback,
+  getTelemetryStats,
+  getBotFeedbackList,
+  MatchReplayRecord,
+  BotFeedbackRecord,
+} from './src/services/telemetryDb.ts';
+import {
   ANIMATION_CONFIG,
   SERVER_TRICK_RESOLVE_DELAY_MS,
 } from './src/logic/animationConfig.ts';
@@ -887,6 +896,33 @@ function resolveRoundEnd(room: Room) {
     state.phase = 'round_over';
   }
 
+  // Flight Recorder: Save full match round replay (asynchronous and non-blocking)
+  const replayRecord: MatchReplayRecord = {
+    id: `round_${room.id}_r${state.roundNumber}_${Date.now()}`,
+    roomId: room.id,
+    roundNumber: state.roundNumber,
+    dealer: state.dealer,
+    declarer: state.declarer,
+    trumpSuit: state.trumpSuit,
+    contractLevel: winningBid.level,
+    contractType: winningBid.contractType,
+    winningTeam: roundScore.contractTeam === 'TeamA'
+      ? (roundScore.bidSuccess ? 'TeamA' : 'TeamB')
+      : (roundScore.bidSuccess ? 'TeamB' : 'TeamA'),
+    tricksWonTeamA: state.teamTricksWon.TeamA,
+    tricksWonTeamB: state.teamTricksWon.TeamB,
+    matchScoreTeamA: state.matchScores.TeamA,
+    matchScoreTeamB: state.matchScores.TeamB,
+    initialHands: state.hands,
+    auctionHistory: state.bids || [],
+    tricksHistory: state.tricksHistory || [],
+    timestamp: Date.now(),
+  };
+
+  saveMatchReplay(replayRecord).catch((err) => {
+    console.error('[Telemetry] Failed to save round replay:', err);
+  });
+
   broadcastRoom(room.id);
 }
 
@@ -1383,6 +1419,47 @@ wss.on('connection', (ws) => {
           if (info.roomId === msg.roomId && clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(json);
           }
+        }
+
+        // Passive Telemetry Capture: If recipient is a bot, record human feedback (Shoe = bad move, Medal = good move)
+        // Strictly non-blocking: does NOT modify game state, hands, or bot logic!
+        if (room.seats[msg.toSeat]?.isBot) {
+          const isPartner = getTeam(msg.fromSeat) === getTeam(msg.toSeat);
+          const sentiment: 'bad_move' | 'good_move' | 'neutral' =
+            msg.objectType === 'shoe' ? 'bad_move' : msg.objectType === 'medal' ? 'good_move' : 'neutral';
+          const botEngine = room.botEngines?.[msg.toSeat] || room.defaultBotEngine || room.botDifficulty || 'super';
+          const lastReason = room.gameState.lastBotReasoning?.seat === msg.toSeat ? room.gameState.lastBotReasoning : undefined;
+
+          const feedbackRecord: BotFeedbackRecord = {
+            id: `fb_${now}_${Math.random().toString(36).substring(2, 7)}`,
+            roomId: msg.roomId,
+            matchId: room.id,
+            timestamp: now,
+            fromSeat: msg.fromSeat,
+            toSeat: msg.toSeat,
+            isPartner,
+            objectType: msg.objectType,
+            sentiment,
+            botEngine,
+            actionType: (lastReason?.action as any) || 'play_card',
+            actionDetails: {
+              lastReasoning: lastReason,
+              botHandRemaining: room.gameState.hands?.[msg.toSeat] ? [...room.gameState.hands[msg.toSeat]] : undefined,
+              currentTrick: room.gameState.currentTrick ? [...room.gameState.currentTrick] : undefined,
+              contract: room.gameState.winningBid
+                ? {
+                    declarer: room.gameState.declarer,
+                    trumpSuit: room.gameState.trumpSuit,
+                    level: room.gameState.winningBid.level,
+                    contractType: room.gameState.winningBid.contractType,
+                  }
+                : undefined,
+            },
+          };
+
+          saveBotFeedback(feedbackRecord).catch((err) => {
+            console.error('[Telemetry] Error saving bot feedback:', err);
+          });
         }
         return;
       }
@@ -1988,8 +2065,40 @@ if (rooms.size === 0) {
   });
 }
 
+// =========================================================
+// Telemetry & RLHF Analysis Endpoints
+// =========================================================
+
+// Overall stats (matches, shoes, medals, partner shoes)
+app.get('/api/telemetry/stats', async (_req, res) => {
+  try {
+    const stats = await getTelemetryStats();
+    res.json({ success: true, stats });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// List human feedback on bot moves (shoes / medals)
+app.get('/api/telemetry/feedback', async (req, res) => {
+  try {
+    const sentiment = req.query.sentiment as 'bad_move' | 'good_move' | undefined;
+    const partnerOnly = req.query.partnerOnly === 'true';
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+
+    const list = await getBotFeedbackList({ sentiment, partnerOnly, limit });
+    res.json({ success: true, count: list.length, feedback: list });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Vite & Static Middleware Setup
 async function startServer() {
+  await initTelemetryDatabase().catch((err) => {
+    console.warn('[TelemetryDB] Failed to init DB, continuing with local fallback:', err);
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
