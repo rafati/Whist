@@ -62,6 +62,24 @@ A card is considered a "Master Card" if no higher rank in that suit remains unpl
 - However, when second hand holds **both** the Ace and King ($A-K$), ducking risks losing a cheap trick or allowing a singleton/doubleton trick to slip through.
 - SuperBot strictly enforces playing the King from $A-K$ in second position to secure the trick immediately.
 
+### 2.5 Teammate Suit Memory & "Return Partner's Suit"
+In partnership Whist, when your teammate leads a suit or plays a high card in it, they are signaling length and trick potential in that suit.
+- `getPartnerInitiatedSuit`: Scans trick history backwards to detect suits partner led, won with an honor ($K, Q, J, 10$), or encouraged via attitude signals.
+- `selectCardToReturnPartnerSuit`: Adheres to the textbook Whist law:
+  - **Holding 2 cards remaining ($x\text{-}x$):** Returns the **higher** card to unblock the suit for partner.
+  - **Holding 3+ cards remaining ($x\text{-}x\text{-}x$):** Returns the **lowest** card to protect honors behind the fourth-hand opponent.
+  - **Holding touching top honors ($A\text{-}K$ or $K\text{-}Q$):** Leads top honor to secure the trick immediately.
+
+### 2.6 Stopper Conservation Invariant & NT Working Suit Development (Anti-Burn)
+In No-Trump (and side suits), an isolated Ace or master card in a short suit ($\le 2$ cards) is a **stopper and lifeline (entry)**, NOT a lead weapon.
+- **The Anti-Burn Rule:** The bot strictly forbids leading short Aces while an unestablished working suit (length $\ge 3$) exists, unless in Cash-Out Mode.
+- **Working Suit Establishment:** The bot attacks its longest working suit (driving out opponent stoppers with touching sequences like $K\text{-}Q$ or leading 4th-best from unsupported honors) while side stoppers remain intact.
+
+### 2.7 Contract Horizon & Cash-Out Mode
+Tracks distance to contract fulfillment:
+$$\text{Tricks Needed} = \text{Contract Target} - \text{Tricks Won}$$
+- If $\text{Sure Master Winners in Hand} \ge \text{Tricks Needed}$, the bot enters **Cash-Out Mode** and immediately cashes its winners to seal the victory without taking unnecessary risks.
+
 ---
 
 ## 3. Phase 2: Extended Endgame Lookahead (6-Card Micro-DDS)
@@ -75,6 +93,8 @@ The Micro-DDS (Double Dummy Solver) search depth has been expanded from 4 tricks
   - *Guard 2:* Never lead trumps if opponents have 0 remaining trumps.
   - *Guard 3:* Second hand holding $A-K$ never ducks.
   - *Guard 4:* Declarer holding master trumps while opponents hold trumps never leads side suits first.
+  - *Guard 5:* Never burn an isolated stopper ($\le 2$ cards) in NT while an unestablished long working suit exists.
+  - *Guard 6:* On trick 2+ opening lead, return partner's initiated suit rather than switching to an uncoordinated suit.
 
 ---
 
@@ -117,3 +137,7 @@ npx tsx scripts/test_superbot_tactical_phases.ts
 5. **Second-Hand $A-K$ Play:** Playing King from $A-K$ in second position.
 6. **6-Card Micro-DDS Depth:** Minimax evaluation across 6-trick endgame within 15k node budget.
 7. **Bot Bidding Decision Reasoning Telemetry:** EV calculation and rationale broadcasting.
+8. **NT Stopper Preservation & Working Suit Development (Anti-Burn):** Holding isolated $A\spadesuit$ and $A\clubsuit$ alongside 5 Diamonds ($K\text{-}Q\text{-}J\text{-}10\text{-}4\diamondsuit$), the bot leads $K\diamondsuit$ and preserves the Aces as stoppers.
+9. **Return Partner's Suit (High from 2):** Partner led Spades on trick 1; bot wins trick 1 and returns $8\spadesuit$ from $8\text{-}2\spadesuit$ to unblock for partner.
+10. **Return Partner's Suit (Low from 3):** Bot holding $Q\text{-}6\text{-}2\spadesuit$ returns $2\spadesuit$ to preserve $Q\spadesuit$ behind the opponent.
+11. **Cash-Out Mode:** When sure winners in hand meet contract target, the bot claims the contract by immediately cashing out.

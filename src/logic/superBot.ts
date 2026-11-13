@@ -1016,6 +1016,153 @@ export function interpretPartnerDiscard(
 }
 
 // -------------------------------------------------------------
+// Partnership Suit Coordination & Contract Horizon Utilities
+// -------------------------------------------------------------
+
+export function getTricksNeededForContract(gameState: GameState, mySeat: Seat): number {
+  const bid = gameState.winningBid;
+  if (!bid || bid.type === 'pass') return 7;
+  const myTeam = getTeam(mySeat);
+  const isMyTeamDeclarer = gameState.declarer ? getTeam(gameState.declarer) === myTeam : true;
+  const targetTricks = 6 + (bid.level || 1);
+  const myTeamTricksWon = gameState.teamTricksWon?.[myTeam] ?? 0;
+  if (isMyTeamDeclarer) {
+    return Math.max(0, targetTricks - myTeamTricksWon);
+  } else {
+    // Defending team: target is to set declarer (14 - targetTricks)
+    const neededToSet = 14 - targetTricks;
+    return Math.max(0, neededToSet - myTeamTricksWon);
+  }
+}
+
+export interface PartnerSuitClue {
+  suit: Suit;
+  reason: string;
+}
+
+/**
+ * Identifies a suit initiated or preferred by our partner from trick history,
+ * honor trick wins, attitude signals, or auction bids.
+ */
+export function getPartnerInitiatedSuit(
+  gameState: GameState,
+  mySeat: Seat,
+  trumpSuit: TrumpSuit
+): PartnerSuitClue | null {
+  const partner = getPartner(mySeat);
+  const beliefs = extractBeliefState(gameState);
+  const myHand = gameState.hands[mySeat] || [];
+
+  // 1. Partner's previous leads (highest priority) - scan from most recent trick backwards
+  for (let t = (gameState.tricksHistory?.length || 0) - 1; t >= 0; t--) {
+    const trick = gameState.tricksHistory[t];
+    if (trick.cards && trick.cards.length > 0 && trick.cards[0].seat === partner) {
+      const ledSuit = trick.cards[0].card.suit;
+      // In suit contract, ignore trump leads unless NT
+      if (trumpSuit !== 'NT' && ledSuit === trumpSuit) continue;
+      // If partner is confirmed void in this suit, skip
+      if (beliefs[partner]?.voids?.[ledSuit]) continue;
+      // If bot holds cards in this suit, return it!
+      if (myHand.some((c) => c.suit === ledSuit)) {
+        return {
+          suit: ledSuit,
+          reason: `partner led ${trick.cards[0].card.id} on trick ${t + 1}`,
+        };
+      }
+    }
+  }
+
+  // 2. Suits partner won with an honor (A, K, Q, J, 10)
+  for (let t = (gameState.tricksHistory?.length || 0) - 1; t >= 0; t--) {
+    const trick = gameState.tricksHistory[t];
+    if (trick.winner === partner && trick.winningCard) {
+      const winningSuit = trick.winningCard.suit;
+      if (trumpSuit !== 'NT' && winningSuit === trumpSuit) continue;
+      if (beliefs[partner]?.voids?.[winningSuit]) continue;
+      if (['A', 'K', 'Q', 'J', '10'].includes(trick.winningCard.rank)) {
+        if (myHand.some((c) => c.suit === winningSuit)) {
+          return {
+            suit: winningSuit,
+            reason: `partner won trick ${t + 1} with honor ${trick.winningCard.id}`,
+          };
+        }
+      }
+    }
+  }
+
+  // 3. Suits partner encouraged via attitude signal
+  for (const s of SUITS) {
+    if (trumpSuit !== 'NT' && s === trumpSuit) continue;
+    if (beliefs[partner]?.voids?.[s]) continue;
+    if (myHand.some((c) => c.suit === s)) {
+      const attitude = interpretPartnerAttitude(gameState, mySeat, s);
+      if (attitude === 'encourage') {
+        return {
+          suit: s,
+          reason: `partner signaled attitude encouragement in ${s}`,
+        };
+      }
+    }
+  }
+
+  // 4. Partner's bid suit during auction
+  if (beliefs[partner]?.bidSuit) {
+    const bidSuit = beliefs[partner].bidSuit!;
+    if (trumpSuit === 'NT' || bidSuit !== trumpSuit) {
+      if (!beliefs[partner]?.voids?.[bidSuit] && myHand.some((c) => c.suit === bidSuit)) {
+        return {
+          suit: bidSuit,
+          reason: `partner bid ${bidSuit} during auction`,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Standard Whist / Bridge card selection for returning partner's suit:
+ * - Holding 2 cards left: lead HIGHER card to unblock the suit for partner.
+ * - Holding 3+ cards left: lead LOWEST card to preserve honors behind opponent.
+ * - Holding touching top honors (A-K or K-Q): lead top to secure immediate trick.
+ */
+export function selectCardToReturnPartnerSuit(
+  cardsInSuit: Card[]
+): { card: Card; rule: string } {
+  if (cardsInSuit.length === 1) {
+    return { card: cardsInSuit[0], rule: `sole card ${cardsInSuit[0].id} in partner's suit` };
+  }
+  const sortedDesc = [...cardsInSuit].sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+
+  // Touching top honors (A-K or K-Q): lead top honor to secure trick
+  if (
+    sortedDesc.length >= 2 &&
+    RANK_VALUES[sortedDesc[0].rank] - RANK_VALUES[sortedDesc[1].rank] === 1 &&
+    RANK_VALUES[sortedDesc[0].rank] >= 13
+  ) {
+    return {
+      card: sortedDesc[0],
+      rule: `top of touching honors ${sortedDesc[0].id}-${sortedDesc[1].id}`,
+    };
+  }
+
+  // Whist Golden Rule: "High from 2, Low from 3"
+  if (sortedDesc.length === 2) {
+    return {
+      card: sortedDesc[0],
+      rule: `high card ${sortedDesc[0].id} from doubleton to unblock suit for partner`,
+    };
+  } else {
+    const lowest = sortedDesc[sortedDesc.length - 1];
+    return {
+      card: lowest,
+      rule: `low card ${lowest.id} from length (${sortedDesc.length} cards) to preserve honors`,
+    };
+  }
+}
+
+// -------------------------------------------------------------
 // Grandmaster Opening Lead Engine (Trick 1)
 // -------------------------------------------------------------
 
@@ -1324,6 +1471,31 @@ export function getSuperBotCardPlayWithReason(
         }
       }
 
+      // Invariant Guard 5: In NT or side leads, NEVER burn an isolated stopper (<= 2 cards) while an unestablished working suit exists
+      if (isOpeningLead && isMasterCard(microDdsPlay, gameState)) {
+        const microPlaySuitCount = hand.filter((c) => c.suit === microDdsPlay.suit).length;
+        if (microPlaySuitCount <= 2 && (isNT || microDdsPlay.suit !== trumpSuit)) {
+          const hasLongWorkingSuit = SUITS.some(
+            (s) => (isNT || s !== trumpSuit) && s !== microDdsPlay.suit && hand.filter((c) => c.suit === s).length >= 3
+          );
+          const tricksNeeded = getTricksNeededForContract(gameState, seat);
+          const sureMastersCount = legalCards.filter((c) => isMasterCard(c, gameState)).length;
+          if (hasLongWorkingSuit && sureMastersCount < tricksNeeded) {
+            isMicroDdsBlunder = true;
+          }
+        }
+      }
+
+      // Invariant Guard 6: In Opening Lead (tricks 2+), return partner's initiated suit rather than switching away
+      if (isOpeningLead && gameState.tricksHistory && gameState.tricksHistory.length > 0) {
+        const pSuit = getPartnerInitiatedSuit(gameState, seat, trumpSuit);
+        if (pSuit && microDdsPlay.suit !== pSuit.suit && legalCards.some((c) => c.suit === pSuit.suit)) {
+          if (!isMasterCard(microDdsPlay, gameState)) {
+            isMicroDdsBlunder = true;
+          }
+        }
+      }
+
       if (!isMicroDdsBlunder) {
         return {
           card: microDdsPlay,
@@ -1366,64 +1538,31 @@ export function getSuperBotCardPlayWithReason(
       }
     }
 
-    // B. Defensive Partnership Signals & Discard Intelligence (both Suit & NT):
-    if (!isDeclarerTeam) {
-      // B1. Partner Void Ruffing (Confirmed void + partner has trumps in suit contract):
-      if (!isNT) {
-        const partnerHasTrumps = !beliefs[partner].voids[trumpSuit] && (gameState.cardsCount?.[partner] ?? gameState.hands?.[partner]?.length ?? 0) > 0;
-        if (partnerHasTrumps) {
-          for (const suit of SUITS) {
-            if (suit !== trumpSuit && beliefs[partner].voids[suit]) {
-              const leadCards = legalCards.filter((c) => c.suit === suit);
-              if (leadCards.length > 0) {
-                leadCards.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
-                return { card: leadCards[0], reason: `Led partner's void suit ${suit} for immediate defensive ruff` };
-              }
+    // B. Defensive Partner Void Ruffing (Confirmed void + partner has trumps in suit contract):
+    if (!isNT && !isDeclarerTeam) {
+      const partnerHasTrumps = !beliefs[partner].voids[trumpSuit] && (gameState.cardsCount?.[partner] ?? gameState.hands?.[partner]?.length ?? 0) > 0;
+      if (partnerHasTrumps) {
+        for (const suit of SUITS) {
+          if (suit !== trumpSuit && beliefs[partner].voids[suit]) {
+            const leadCards = legalCards.filter((c) => c.suit === suit);
+            if (leadCards.length > 0) {
+              leadCards.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
+              return { card: leadCards[0], reason: `Led partner's void suit ${suit} for immediate defensive ruff` };
             }
           }
         }
-      }
-
-      // B2. Partner Attitude Continuation:
-      const lastTrick = gameState.tricksHistory[gameState.tricksHistory.length - 1];
-      if (lastTrick && lastTrick.cards.length > 0 && lastTrick.cards[0].seat === seat) {
-        const lastSuit = lastTrick.cards[0].card.suit;
-        if (isNT || lastSuit !== trumpSuit) {
-          const attitude = interpretPartnerAttitude(gameState, seat, lastSuit);
-          if (attitude === 'encourage') {
-            const inSuit = legalCards.filter((c) => c.suit === lastSuit);
-            if (inSuit.length > 0) {
-              inSuit.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-              return { card: inSuit[0], reason: `Continued partner's encouraged suit ${lastSuit} with ${inSuit[0].id}` };
-            }
-          }
-        }
-      }
-
-      // B3. Partner Suit-Preference Discard:
-      const prefSuit = interpretPartnerDiscard(gameState, seat, trumpSuit);
-      if (prefSuit) {
-        const inPref = legalCards.filter((c) => c.suit === prefSuit);
-        if (inPref.length > 0) {
-          inPref.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-          return { card: inPref[0], reason: `Led partner's preferred discard suit ${prefSuit} with ${inPref[0].id}` };
-        }
-      }
-
-      // B4. NT Defense Lead on Trick 2+:
-      if (isNT) {
-        const ntLead = getGrandmasterOpeningLead(gameState, seat, 'NT');
-        return { card: ntLead, reason: `Grandmaster NT defensive lead: ${ntLead.id}` };
       }
     }
 
-    // C. Cash Guaranteed Winners (Aces and Promoted Master Cards) with Bayesian Void Verification:
+    // C. CONTRACT GOAL & CASH-OUT EVALUATION:
+    const tricksNeeded = getTricksNeededForContract(gameState, seat);
     const opponentTrumpsLeft = isNT ? 0 : countRemainingOpponentTrumps(gameState, seat, trumpSuit);
+
+    // Guaranteed winners with Bayesian void verification in suit contracts
     const safeMasterCards = legalCards.filter((c) => {
       if (!isMasterCard(c, gameState)) return false;
       if (isNT) return true;
       if (c.suit === trumpSuit) return true;
-      // Bayesian void check: avoid cashing side honors if opponent is likely void and holds trumps
       const opp1VoidProb = bayesian.playerDistributions[opp1]?.suitVoidProbabilities[c.suit] || 0;
       const opp2VoidProb = bayesian.playerDistributions[opp2]?.suitVoidProbabilities[c.suit] || 0;
       if (opponentTrumpsLeft > 0 && (opp1VoidProb > 0.6 || opp2VoidProb > 0.6 || beliefs[opp1].voids[c.suit] || beliefs[opp2].voids[c.suit])) {
@@ -1432,17 +1571,105 @@ export function getSuperBotCardPlayWithReason(
       return true;
     });
 
-    if (safeMasterCards.length > 0) {
+    // C1. Cash-Out Mode: If sure master winners in hand >= tricks needed to make contract / set opponents:
+    if (safeMasterCards.length >= tricksNeeded && tricksNeeded > 0) {
       safeMasterCards.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
       const card = safeMasterCards[0];
-      const isAce = card.rank === 'A';
       return {
         card,
-        reason: isAce ? `Cashed guaranteed winner: Ace of ${card.suit}` : `Cashed promoted master card: ${card.id}`,
+        reason: `Cash-out mode: cashed guaranteed winner ${card.id} to fulfill contract (${tricksNeeded} tricks needed, ${safeMasterCards.length} sure winners in hand)`,
       };
     }
 
-    // D. Lead Top of Honor Sequence (K from KQ, Q from QJ, J from J10)
+    // D. PARTNERSHIP SUIT COORDINATION: "Return Partner's Suit"
+    // Inspect trick history to see if partner initiated or encouraged a suit!
+    const partnerSuitInfo = getPartnerInitiatedSuit(gameState, seat, trumpSuit);
+    if (partnerSuitInfo) {
+      const inPartnerSuit = legalCards.filter((c) => c.suit === partnerSuitInfo.suit);
+      if (inPartnerSuit.length > 0) {
+        const ret = selectCardToReturnPartnerSuit(inPartnerSuit);
+        return {
+          card: ret.card,
+          reason: `Returned partner's initiated suit ${partnerSuitInfo.suit} (${partnerSuitInfo.reason}): ${ret.rule}`,
+        };
+      }
+    }
+
+    // E. STOPPER CONSERVATION INVARIANT (Anti-Burn) & WORKING SUIT DEVELOPMENT:
+    // In Development Mode, isolated master cards in short suits (length <= 2) are STOPPERS/ENTRIES.
+    // They must NEVER be cashed out while an unestablished long working suit exists!
+    const nonTrumpHand = isNT ? hand : hand.filter((c) => c.suit !== trumpSuit);
+    const suitLengths: Record<Suit, number> = { S: 0, H: 0, D: 0, C: 0 };
+    for (const c of nonTrumpHand) suitLengths[c.suit]++;
+
+    // Suits with length >= 3 available to develop
+    const developableSuits = SUITS
+      .filter((s) => (isNT || s !== trumpSuit) && suitLengths[s] >= 3 && legalCards.some((c) => c.suit === s))
+      .sort((a, b) => suitLengths[b] - suitLengths[a]);
+
+    // F. DEVELOP PRIMARY WORKING SUIT (Longest & Strongest Suit with Length >= 3)
+    if (developableSuits.length > 0) {
+      const targetSuit = developableSuits[0];
+      const inSuit = legalCards.filter((c) => c.suit === targetSuit);
+      inSuit.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+
+      // F1. Touching honors sequence in working suit: lead top honor to dislodge opponent stoppers!
+      if (inSuit.some((c) => c.rank === 'K') && inSuit.some((c) => c.rank === 'Q')) {
+        const kCard = inSuit.find((c) => c.rank === 'K')!;
+        return { card: kCard, reason: `Led King from sequence K-Q in working suit ${targetSuit} to dislodge opponent stoppers` };
+      }
+      if (inSuit.some((c) => c.rank === 'Q') && inSuit.some((c) => c.rank === 'J')) {
+        const qCard = inSuit.find((c) => c.rank === 'Q')!;
+        return { card: qCard, reason: `Led Queen from sequence Q-J in working suit ${targetSuit} to dislodge opponent stoppers` };
+      }
+      if (inSuit.some((c) => c.rank === 'J') && inSuit.some((c) => c.rank === '10')) {
+        const jCard = inSuit.find((c) => c.rank === 'J')!;
+        return { card: jCard, reason: `Led Jack from sequence J-10 in working suit ${targetSuit} to dislodge opponent stoppers` };
+      }
+
+      // F2. Master card in working suit with length: cash master to run suit
+      if (isMasterCard(inSuit[0], gameState)) {
+        const isPromoted = inSuit[0].rank !== 'A';
+        return {
+          card: inSuit[0],
+          reason: isPromoted
+            ? `Cashed promoted master card: ${inSuit[0].id} in established working suit ${targetSuit}`
+            : `Cashed master ${inSuit[0].id} in established long suit ${targetSuit}`,
+        };
+      }
+
+      // F3. Unsupported non-master honor with length (e.g. K-x-x or Q-x-x):
+      // Lead low (4th-best or lowest spot) to protect honor and develop suit!
+      const topCard = inSuit[0];
+      const isHonor = ['K', 'Q', 'J'].includes(topCard.rank);
+      if (isHonor) {
+        const spotIndex = inSuit.length >= 4 ? 3 : inSuit.length - 1;
+        const chosen = inSuit[spotIndex];
+        return { card: chosen, reason: `Led 4th-best/low ${chosen.id} to protect unsupported ${topCard.id} and develop working suit ${targetSuit}` };
+      }
+
+      // Default in working suit: lead low to develop
+      return { card: inSuit[inSuit.length - 1], reason: `Led low card ${inSuit[inSuit.length - 1].id} to develop working suit ${targetSuit}` };
+    }
+
+    // G. CASH REMAINING MASTERS (When no working suits left to develop, or length >= 3)
+    const cashableMasters = safeMasterCards.filter((c) => {
+      // In suit contract, trumps are always cashable
+      if (!isNT && c.suit === trumpSuit) return true;
+      // If no developable suits exist, or if we have length >= 3 in this suit, cashing is safe
+      return developableSuits.length === 0 || hand.filter((h) => h.suit === c.suit).length >= 3;
+    });
+
+    if (cashableMasters.length > 0) {
+      cashableMasters.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+      const card = cashableMasters[0];
+      return {
+        card,
+        reason: card.rank === 'A' ? `Cashed guaranteed winner: Ace of ${card.suit}` : `Cashed promoted master card: ${card.id}`,
+      };
+    }
+
+    // H. SAFE PASSIVE EXIT / SECONDARY SEQUENCE:
     for (const suit of SUITS) {
       if (!isNT && suit === trumpSuit) continue;
       const inSuit = legalCards.filter((c) => c.suit === suit);
@@ -1460,37 +1687,18 @@ export function getSuperBotCardPlayWithReason(
       }
     }
 
-    // E. Lead Side Suit to Establish It (with Low Lead from Unsupported Honors)
-    const nonTrumpCards = legalCards.filter((c) => isNT || c.suit !== trumpSuit);
-    if (!isNT && nonTrumpCards.length > 0) {
-      const nonTrumpHand = hand.filter((c) => c.suit !== trumpSuit);
-      const strongestSide = getStrongestSuit(nonTrumpHand.length > 0 ? nonTrumpHand : hand);
-      const inSideSuit = nonTrumpCards.filter((c) => c.suit === strongestSide.suit);
-      if (inSideSuit.length > 0) {
-        inSideSuit.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-        const topCard = inSideSuit[0];
-        const isHonor = ['K', 'Q', 'J'].includes(topCard.rank);
-        const isTouching = inSideSuit.length >= 2 && RANK_VALUES[inSideSuit[0].rank] - RANK_VALUES[inSideSuit[1].rank] === 1;
-        const isMaster = isMasterCard(topCard, gameState);
-
-        // If holding an unsupported non-master honor with length >= 3 (e.g. K-8-3 or Q-9-4),
-        // lead low (4th-best or lowest spot) to protect the honor and develop suit!
-        if (isHonor && !isTouching && !isMaster && inSideSuit.length >= 3) {
-          const spotIndex = inSideSuit.length >= 4 ? 3 : inSideSuit.length - 1;
-          const chosen = inSideSuit[spotIndex];
-          return { card: chosen, reason: `Led 4th-best/low ${chosen.id} to protect unsupported ${topCard.id} and develop suit` };
-        }
-        return { card: topCard, reason: `Led ${topCard.id} in strongest side suit ${strongestSide.suit}` };
-      }
-      nonTrumpCards.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-      return { card: nonTrumpCards[0], reason: `Led ${nonTrumpCards[0].id} to establish side suit` };
+    // I. FALLBACK: If only short masters remain, cash whatever remains
+    if (safeMasterCards.length > 0) {
+      safeMasterCards.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+      const card = safeMasterCards[0];
+      return { card, reason: `Cashed master card: ${card.id}` };
     }
 
-    const strongest = getStrongestSuit(hand);
-    const inStrongest = legalCards.filter((c) => c.suit === strongest.suit);
-    if (inStrongest.length > 0) {
-      inStrongest.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
-      return { card: inStrongest[0], reason: `Led top card ${inStrongest[0].id} in strongest suit` };
+    // J. Passive spot lead (avoid leading unsupported honors into opponent tenaces)
+    const passiveSpots = legalCards.filter((c) => !['A', 'K', 'Q'].includes(c.rank));
+    if (passiveSpots.length > 0) {
+      passiveSpots.sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
+      return { card: passiveSpots[0], reason: `Safe passive exit: led low spot ${passiveSpots[0].id}` };
     }
 
     return { card: legalCards[0], reason: `Led ${legalCards[0].id}` };

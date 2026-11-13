@@ -359,6 +359,223 @@ const bidDecision = getSuperBotBidWithReason(stateBid, 'North');
 assert(bidDecision.bid.type === 'bid', `North opened auction: got ${bidDecision.bid.level} ${bidDecision.bid.contractType}`);
 assert(bidDecision.reason.length > 5, `Bid decision includes telemetry reason: "${bidDecision.reason}"`);
 
+// -------------------------------------------------------------
+// Test 8: NT Stopper Preservation & Working Suit Development (Anti-Burn)
+// -------------------------------------------------------------
+console.log('\n--- Test 8: NT Stopper Preservation & Working Suit Development ---');
+// North is declarer in 1 NT. Needs 7 tricks. North won 1 trick, so needs 6 more.
+// North holds:
+// - Isolated singleton AS (length 1: STOPPER)
+// - Isolated doubleton AC, 3C (length 2: STOPPER)
+// - Long working suit KD, QD, JD, 10D, 4D (length 5: WORKING SUIT)
+// North MUST NOT burn AS or AC! North MUST lead KD to establish the diamond suit!
+const stateStopper = createInitialGameState('North');
+stateStopper.phase = 'playing';
+stateStopper.trumpSuit = 'NT';
+stateStopper.declarer = 'North';
+stateStopper.winningBid = { seat: 'North', type: 'bid', level: 1, contractType: 'NT' };
+stateStopper.teamTricksWon = { TeamA: 1, TeamB: 0 };
+stateStopper.currentTurn = 'North';
+stateStopper.currentTrick = [];
+stateStopper.tricksHistory = [
+  {
+    trickNumber: 1,
+    leader: 'West',
+    cards: [
+      { seat: 'West', card: { id: '2H', suit: 'H', rank: '2' } },
+      { seat: 'North', card: { id: 'AH', suit: 'H', rank: 'A' } },
+      { seat: 'East', card: { id: '3H', suit: 'H', rank: '3' } },
+      { seat: 'South', card: { id: '4H', suit: 'H', rank: '4' } },
+    ],
+    winner: 'North',
+    winningCard: { id: 'AH', suit: 'H', rank: 'A' },
+    ledSuit: 'H',
+  },
+];
+stateStopper.cardsCount = { North: 8, West: 8, South: 8, East: 8 };
+stateStopper.hands = {
+  North: [
+    { id: 'AS', suit: 'S', rank: 'A' },
+    { id: 'AC', suit: 'C', rank: 'A' },
+    { id: '3C', suit: 'C', rank: '3' },
+    { id: 'KD', suit: 'D', rank: 'K' },
+    { id: 'QD', suit: 'D', rank: 'Q' },
+    { id: 'JD', suit: 'D', rank: 'J' },
+    { id: '10D', suit: 'D', rank: '10' },
+    { id: '4D', suit: 'D', rank: '4' },
+  ],
+  West: [
+    { id: 'KS', suit: 'S', rank: 'K' }, { id: 'QS', suit: 'S', rank: 'Q' },
+    { id: 'KC', suit: 'C', rank: 'K' }, { id: 'QC', suit: 'C', rank: 'Q' },
+    { id: 'AD', suit: 'D', rank: 'A' }, { id: '5D', suit: 'D', rank: '5' },
+    { id: '5H', suit: 'H', rank: '5' }, { id: '6H', suit: 'H', rank: '6' },
+  ],
+  South: [
+    { id: '2S', suit: 'S', rank: '2' }, { id: '3S', suit: 'S', rank: '3' },
+    { id: '2C', suit: 'C', rank: '2' }, { id: '4C', suit: 'C', rank: '4' },
+    { id: '2D', suit: 'D', rank: '2' }, { id: '3D', suit: 'D', rank: '3' },
+    { id: '7H', suit: 'H', rank: '7' }, { id: '8H', suit: 'H', rank: '8' },
+  ],
+  East: [
+    { id: 'JS', suit: 'S', rank: 'J' }, { id: '10S', suit: 'S', rank: '10' },
+    { id: 'JC', suit: 'C', rank: 'J' }, { id: '10C', suit: 'C', rank: '10' },
+    { id: '6D', suit: 'D', rank: '6' }, { id: '7D', suit: 'D', rank: '7' },
+    { id: '9H', suit: 'H', rank: '9' }, { id: '10H', suit: 'H', rank: '10' },
+  ],
+};
+
+const decisionStopper = getSuperBotCardPlayWithReason(stateStopper, 'North', 'NT');
+assert(decisionStopper.card.suit === 'D', `Preserved isolated Aces (AS & AC) and attacked working suit Diamonds: led ${decisionStopper.card.id}`);
+assert(decisionStopper.card.rank === 'K', `Led King from K-Q sequence to dislodge opponent stopper: led ${decisionStopper.card.id}`);
+assert(decisionStopper.reason.includes('working suit'), `Reason mentions working suit: "${decisionStopper.reason}"`);
+
+// -------------------------------------------------------------
+// Test 9: Return Partner's Suit (High from Doubleton to Unblock)
+// -------------------------------------------------------------
+console.log("\n--- Test 9: Return Partner's Suit (High from 2 to Unblock) ---");
+// Partner (South) led Spades (10S) on Trick 1.
+// North won Trick 1 with QS. North also holds an outside Ace (AH).
+// North has 2 Spades left (8S, 2S).
+// Golden Rule of Whist: North MUST return partner's suit Spades, NOT cash AH!
+// And North must return 8S (higher card from doubleton to unblock)!
+const stateReturn2 = createInitialGameState('North');
+stateReturn2.phase = 'playing';
+stateReturn2.trumpSuit = 'NT';
+stateReturn2.declarer = 'North';
+stateReturn2.winningBid = { seat: 'North', type: 'bid', level: 1, contractType: 'NT' };
+stateReturn2.teamTricksWon = { TeamA: 1, TeamB: 0 };
+stateReturn2.currentTurn = 'North';
+stateReturn2.currentTrick = [];
+stateReturn2.tricksHistory = [
+  {
+    trickNumber: 1,
+    leader: 'South',
+    cards: [
+      { seat: 'South', card: { id: '10S', suit: 'S', rank: '10' } },
+      { seat: 'East', card: { id: 'JS', suit: 'S', rank: 'J' } },
+      { seat: 'North', card: { id: 'QS', suit: 'S', rank: 'Q' } },
+      { seat: 'West', card: { id: '3S', suit: 'S', rank: '3' } },
+    ],
+    winner: 'North',
+    winningCard: { id: 'QS', suit: 'S', rank: 'Q' },
+    ledSuit: 'S',
+  },
+];
+stateReturn2.cardsCount = { North: 7, West: 7, South: 7, East: 7 };
+stateReturn2.hands = {
+  North: [
+    { id: '8S', suit: 'S', rank: '8' },
+    { id: '2S', suit: 'S', rank: '2' },
+    { id: 'AH', suit: 'H', rank: 'A' },
+    { id: '4C', suit: 'C', rank: '4' },
+    { id: '5C', suit: 'C', rank: '5' },
+    { id: '6C', suit: 'C', rank: '6' },
+    { id: '7C', suit: 'C', rank: '7' },
+  ],
+  West: [
+    { id: 'KS', suit: 'S', rank: 'K' }, { id: 'KH', suit: 'H', rank: 'K' },
+    { id: '8C', suit: 'C', rank: '8' }, { id: '9C', suit: 'C', rank: '9' },
+    { id: '10C', suit: 'C', rank: '10' }, { id: 'JC', suit: 'C', rank: 'J' },
+    { id: 'QC', suit: 'C', rank: 'Q' },
+  ],
+  South: [
+    { id: 'AS', suit: 'S', rank: 'A' }, { id: '9S', suit: 'S', rank: '9' },
+    { id: '7S', suit: 'S', rank: '7' }, { id: '6S', suit: 'S', rank: '6' },
+    { id: '2H', suit: 'H', rank: '2' }, { id: '3H', suit: 'H', rank: '3' },
+    { id: '2C', suit: 'C', rank: '2' },
+  ],
+  East: [
+    { id: '4S', suit: 'S', rank: '4' }, { id: '5S', suit: 'S', rank: '5' },
+    { id: 'QH', suit: 'H', rank: 'Q' }, { id: 'JH', suit: 'H', rank: 'J' },
+    { id: '10H', suit: 'H', rank: '10' }, { id: '9H', suit: 'H', rank: '9' },
+    { id: '3C', suit: 'C', rank: '3' },
+  ],
+};
+
+const decisionReturn2 = getSuperBotCardPlayWithReason(stateReturn2, 'North', 'NT');
+assert(decisionReturn2.card.suit === 'S', `Returned partner's initiated suit Spades instead of cashing AH: led ${decisionReturn2.card.id}`);
+assert(decisionReturn2.card.rank === '8', `Returned HIGHER card (8S) from doubleton to unblock: got ${decisionReturn2.card.id}`);
+assert(decisionReturn2.reason.includes("partner's initiated suit"), `Reason acknowledges returning partner's suit: "${decisionReturn2.reason}"`);
+
+// -------------------------------------------------------------
+// Test 10: Return Partner's Suit (Low from 3+ to Preserve Honors)
+// -------------------------------------------------------------
+console.log("\n--- Test 10: Return Partner's Suit (Low from 3 to Preserve Honors) ---");
+// Same as Test 9, but North holds [QS, 6S, 2S] in partner's suit (3 cards remaining).
+// North must return 2S (low from 3) to protect QS behind opponent!
+const stateReturn3 = { ...stateReturn2, hands: { ...stateReturn2.hands } };
+stateReturn3.hands.North = [
+  { id: 'QS', suit: 'S', rank: 'Q' },
+  { id: '6S', suit: 'S', rank: '6' },
+  { id: '2S', suit: 'S', rank: '2' },
+  { id: 'AH', suit: 'H', rank: 'A' },
+  { id: '4C', suit: 'C', rank: '4' },
+  { id: '5C', suit: 'C', rank: '5' },
+  { id: '6C', suit: 'C', rank: '6' },
+];
+const decisionReturn3 = getSuperBotCardPlayWithReason(stateReturn3, 'North', 'NT');
+assert(decisionReturn3.card.suit === 'S', `Returned partner's initiated suit Spades: led ${decisionReturn3.card.id}`);
+assert(decisionReturn3.card.rank === '2', `Returned LOW card (2S) from 3 remaining to preserve honors: got ${decisionReturn3.card.id}`);
+
+// -------------------------------------------------------------
+// Test 11: Cash-Out Mode (Claiming Contract Victories)
+// -------------------------------------------------------------
+console.log('\n--- Test 11: Cash-Out Mode ---');
+// North & South have won 5 tricks. Contract is 1 NT (needs 7 tricks total).
+// Tricks needed = 2.
+// North holds [AS, AC, 4D] (2 sure masters in hand >= 2 needed).
+// North MUST enter Cash-Out Mode and cash AS / AC immediately to secure contract!
+const stateCashOut = createInitialGameState('North');
+stateCashOut.phase = 'playing';
+stateCashOut.trumpSuit = 'NT';
+stateCashOut.declarer = 'North';
+stateCashOut.winningBid = { seat: 'North', type: 'bid', level: 1, contractType: 'NT' };
+stateCashOut.teamTricksWon = { TeamA: 5, TeamB: 1 };
+stateCashOut.currentTurn = 'North';
+stateCashOut.currentTrick = [];
+stateCashOut.tricksHistory = [
+  { trickNumber: 1, leader: 'North', cards: [{ seat: 'North', card: { id: '2S', suit: 'S', rank: '2' } }], winner: 'North', winningCard: { id: '2S', suit: 'S', rank: '2' }, ledSuit: 'S' },
+  { trickNumber: 2, leader: 'North', cards: [{ seat: 'North', card: { id: '3S', suit: 'S', rank: '3' } }], winner: 'North', winningCard: { id: '3S', suit: 'S', rank: '3' }, ledSuit: 'S' },
+  { trickNumber: 3, leader: 'North', cards: [{ seat: 'North', card: { id: '4S', suit: 'S', rank: '4' } }], winner: 'North', winningCard: { id: '4S', suit: 'S', rank: '4' }, ledSuit: 'S' },
+  { trickNumber: 4, leader: 'North', cards: [{ seat: 'North', card: { id: '5S', suit: 'S', rank: '5' } }], winner: 'North', winningCard: { id: '5S', suit: 'S', rank: '5' }, ledSuit: 'S' },
+  { trickNumber: 5, leader: 'North', cards: [{ seat: 'North', card: { id: '6S', suit: 'S', rank: '6' } }], winner: 'North', winningCard: { id: '6S', suit: 'S', rank: '6' }, ledSuit: 'S' },
+  { trickNumber: 6, leader: 'West', cards: [{ seat: 'West', card: { id: 'AH', suit: 'H', rank: 'A' } }], winner: 'West', winningCard: { id: 'AH', suit: 'H', rank: 'A' }, ledSuit: 'H' },
+];
+stateCashOut.cardsCount = { North: 7, West: 7, South: 7, East: 7 };
+stateCashOut.hands = {
+  North: [
+    { id: 'AS', suit: 'S', rank: 'A' },
+    { id: 'AC', suit: 'C', rank: 'A' },
+    { id: '4D', suit: 'D', rank: '4' },
+    { id: '5D', suit: 'D', rank: '5' },
+    { id: '6D', suit: 'D', rank: '6' },
+    { id: '7D', suit: 'D', rank: '7' },
+    { id: '8D', suit: 'D', rank: '8' },
+  ],
+  West: [
+    { id: 'KS', suit: 'S', rank: 'K' }, { id: 'KC', suit: 'C', rank: 'K' },
+    { id: '2D', suit: 'D', rank: '2' }, { id: '3D', suit: 'D', rank: '3' },
+    { id: '2H', suit: 'H', rank: '2' }, { id: '3H', suit: 'H', rank: '3' },
+    { id: '4H', suit: 'H', rank: '4' },
+  ],
+  South: [
+    { id: 'QS', suit: 'S', rank: 'Q' }, { id: 'QC', suit: 'C', rank: 'Q' },
+    { id: '9D', suit: 'D', rank: '9' }, { id: '10D', suit: 'D', rank: '10' },
+    { id: '5H', suit: 'H', rank: '5' }, { id: '6H', suit: 'H', rank: '6' },
+    { id: '7H', suit: 'H', rank: '7' },
+  ],
+  East: [
+    { id: 'JS', suit: 'S', rank: 'J' }, { id: 'JC', suit: 'C', rank: 'J' },
+    { id: 'AD', suit: 'D', rank: 'A' }, { id: 'KD', suit: 'D', rank: 'K' },
+    { id: '8H', suit: 'H', rank: '8' }, { id: '9H', suit: 'H', rank: '9' },
+    { id: '10H', suit: 'H', rank: '10' },
+  ],
+};
+
+const decisionCashOut = getSuperBotCardPlayWithReason(stateCashOut, 'North', 'NT');
+assert(decisionCashOut.card.rank === 'A', `Cashed out master Ace to fulfill contract: got ${decisionCashOut.card.id}`);
+assert(decisionCashOut.reason.includes('Cash-out mode'), `Reason acknowledges cash-out mode: "${decisionCashOut.reason}"`);
+
 console.log('\n============================================================');
 console.log(`🎉 TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED`);
 console.log('============================================================\n');
