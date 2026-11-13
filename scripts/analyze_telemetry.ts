@@ -78,6 +78,7 @@ async function runAnalysis() {
         initialHands: typeof r.initial_hands === 'string' ? JSON.parse(r.initial_hands) : r.initial_hands,
         auctionHistory: typeof r.auction_history === 'string' ? JSON.parse(r.auction_history) : r.auction_history,
         tricksHistory: typeof r.tricks_history === 'string' ? JSON.parse(r.tricks_history) : r.tricks_history,
+        players: r.players ? (typeof r.players === 'string' ? JSON.parse(r.players) : r.players) : undefined,
         timestamp: Number(r.timestamp),
       }));
       feedback = feedbackRes.rows.map((f: any) => ({
@@ -87,6 +88,8 @@ async function runAnalysis() {
         timestamp: Number(f.timestamp),
         fromSeat: f.from_seat,
         toSeat: f.to_seat,
+        fromIsBot: f.from_is_bot,
+        fromPlayerName: f.from_player_name,
         isPartner: f.is_partner,
         objectType: f.object_type,
         sentiment: f.sentiment,
@@ -154,7 +157,9 @@ async function runAnalysis() {
       const sample = sampleDetails[pattern];
       if (sample && sample.actionDetails) {
         console.log(`   Bot Seat : ${sample.toSeat} (${sample.botEngine})`);
-        console.log(`   Thrower  : ${sample.fromSeat} (Human Partner)`);
+        const throwerType = sample.fromIsBot ? 'Bot' : 'Human';
+        const throwerName = sample.fromPlayerName || sample.fromSeat;
+        console.log(`   Thrower  : ${throwerName} (${throwerType} ${sample.isPartner ? 'Partner' : 'Opponent'})`);
         if (sample.actionDetails.lastReasoning?.cardId) {
           console.log(`   Card Played: ${sample.actionDetails.lastReasoning.cardId}`);
         }
